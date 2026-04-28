@@ -217,6 +217,20 @@ def detect_exercise_phase(joint_angles, predicted_exercise, selected_exercise=No
     return new_phase
 
 
+@app.errorhandler(500)
+def handle_internal_server_error(e):
+    import traceback
+    error_details = traceback.format_exc()
+    print(f"Internal Server Error: {error_details}")
+    return jsonify(
+        {
+            "error": str(e.original_exception) if hasattr(e, 'original_exception') else str(e),
+            "type": "Internal Server Error",
+            "traceback": error_details.split('\n')
+        }
+    ), 500
+
+
 @app.route("/", methods=["GET"])
 def index():
     return jsonify(

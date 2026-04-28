@@ -26,6 +26,8 @@ This file records the system audit, fixes, cleanup, and follow-up recommendation
 - Updated frontend [frontend/src/services/api.ts](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/services/api.ts) and [frontend/src/components/ExerciseMonitor.tsx](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/components/ExerciseMonitor.tsx) to send raw landmarks for higher prediction accuracy.
 - Moved Firebase configuration to environment variables in [frontend/.env](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/.env) and updated [frontend/src/firebase.ts](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/firebase.ts).
 - Added a root route (`/`) to the backend to provide a status message and prevent 404 logs during deployment health checks.
+- Implemented a **Global Error Handler** (`@app.errorhandler(500)`) in the backend to provide detailed JSON tracebacks for production debugging.
+- Added **Email/Password Authentication** alongside Google Sign-In, including registration and password reset support.
 
 ## Removed Unnecessary Files
 

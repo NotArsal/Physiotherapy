@@ -64,6 +64,8 @@ Before starting, ensure you have a `.env` file in the `frontend` directory with 
 - **Persistence**: Session history is persisted in a local **SQLite database** (`physio_sessions.db`).
 - **Feature Alignment**: The system uses raw landmarks (33 points) for the BiLSTM classifier to match the original training data distribution.
 - **Environment Variables**: Firebase configuration and API base URLs are managed via environment variables.
+- **Authentication**: Supports both Google Sign-In and traditional Email/Password accounts.
+- **Debugging**: Backend includes a global error handler for detailed production traceback reporting.
 - **MediaPipe**: Pose detection assets load from the jsDelivr CDN at runtime.
 - **Repetition Counting**: Follows the user-selected exercise flow, ensuring stability even with noisy classifier predictions.
 
