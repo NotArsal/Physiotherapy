@@ -82,6 +82,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
 
   const [isActive, setIsActive] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [repCount, setRepCount] = useState(0);
   const [currentPhase, setCurrentPhase] = useState('');
   const [confidence, setConfidence] = useState(0);
@@ -166,7 +167,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
     stopVideoStream(webcamRef.current?.video);
   }, []);
 
-  const onPoseResultsRef = useRef<(results: any) => Promise<void>>(async () => {});
+  const onPoseResultsRef = useRef<(results: any) => Promise<void>>(async () => { });
 
   useEffect(() => {
     onPoseResultsRef.current = async (results: any) => {
@@ -238,12 +239,12 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         // Client-side phase detection and rep counting
         const previousPhase = currentPhaseRef.current || 'down';
         const newPhase = detectExercisePhase(jointAngles, selectedExerciseRef.current, previousPhase);
-        
+
         if (newPhase !== 'hold' && previousPhase !== newPhase) {
           if (previousPhase === 'down' && newPhase === 'up') {
             const newRepCount = repCountRef.current + 1;
             setRepCount(newRepCount);
-            
+
             // Trigger voice feedback on new rep
             if (voiceEnabledRef.current) {
               const feedback =

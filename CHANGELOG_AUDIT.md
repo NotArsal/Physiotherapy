@@ -28,7 +28,14 @@ This file records the system audit, fixes, cleanup, and follow-up recommendation
 - Added a root route (`/`) to the backend to provide a status message and prevent 404 logs during deployment health checks.
 - Implemented a **Global Error Handler** (`@app.errorhandler(500)`) in the backend to provide detailed JSON tracebacks for production debugging.
 - Added **Email/Password Authentication** alongside Google Sign-In, including registration and password reset support.
-- Migrated backend hosting to a new Render project: [https://physiotherapy-backend-gw5s.onrender.com](https://physiotherapy-backend-gw5s.onrender.com).
+- Implemented a **Stateless Backend Architecture** in [backend/app.py](backend/app.py) to support production scaling (Gunicorn multi-worker).
+- Migrated repetition counting and exercise phase detection logic to the frontend [frontend/src/utils/poseDetection.ts](frontend/src/utils/poseDetection.ts).
+- Integrated `localStorage` caching in the frontend to mitigate Render backend cold starts.
+- Implemented **Hysteresis-based counting** for robust repetition detection across different body types.
+- Fixed anatomical angle mapping (Shoulder vs Elbow) to ensure accurate classification.
+- Resolved a critical `NameError` in the backend `/predict` endpoint.
+- Fixed a TypeScript `setLoading` reference error in `ExerciseMonitor.tsx` to unblock Vercel builds.
+- Added a resilient start-up sequence with retry logic and server wake-up feedback.
 
 ## Removed Unnecessary Files
 
