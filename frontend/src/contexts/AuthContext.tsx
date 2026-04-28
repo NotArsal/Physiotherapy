@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { 
   User, 
-  signInWithPopup, 
+  signInWithPopup,
+  signInWithRedirect,
   signOut, 
   onAuthStateChanged 
 } from 'firebase/auth';
@@ -35,9 +36,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signInWithGoogle = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error('Error signing in with Google:', error);
-      throw error;
+    } catch (error: any) {
+      if (error.code === 'auth/popup-blocked') {
+        console.log('Popup blocked, falling back to redirect...');
+        await signInWithRedirect(auth, googleProvider);
+      } else {
+        console.error('Error signing in with Google:', error);
+        throw error;
+      }
     }
   };
 
