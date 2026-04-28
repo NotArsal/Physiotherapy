@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -16,6 +16,10 @@ export interface PredictionResponse {
   rep_count: number;
   joint_angles: number[];
   timestamp: string;
+  exercise_match?: boolean;
+  selected_exercise?: string | null;
+  success?: boolean;
+  error?: string;
 }
 
 export interface SessionData {

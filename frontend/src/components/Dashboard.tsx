@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Container,
   Typography,
@@ -49,27 +49,28 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'all'>('week');
 
-  useEffect(() => {
-    if (currentUser) {
-      fetchUserSessions();
+  const fetchUserSessions = useCallback(async () => {
+    if (!currentUser) {
+      setLoading(false);
+      return;
     }
-  }, [currentUser]);
-
-  const fetchUserSessions = async () => {
-    if (!currentUser) return;
 
     try {
       setLoading(true);
       setError('');
       const data = await apiService.getUserSessions(currentUser.uid);
       setSessionData(data);
-    } catch (error) {
+    } catch (fetchError) {
       setError('Failed to load dashboard data. Please make sure the backend is running.');
-      console.error('Error fetching user sessions:', error);
+      console.error('Error fetching user sessions:', fetchError);
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser]);
+
+  useEffect(() => {
+    fetchUserSessions();
+  }, [fetchUserSessions]);
 
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
@@ -83,7 +84,7 @@ const Dashboard: React.FC = () => {
   const filterSessionsByPeriod = (sessions: UserSession[]) => {
     const now = new Date();
     const cutoff = new Date();
-    
+
     switch (selectedPeriod) {
       case 'week':
         cutoff.setDate(now.getDate() - 7);
@@ -93,37 +94,69 @@ const Dashboard: React.FC = () => {
         break;
       case 'all':
         return sessions;
+      default:
+        return sessions;
     }
-    
-    return sessions.filter(session => new Date(session.timestamp) >= cutoff);
+
+    return sessions.filter((session) => new Date(session.timestamp) >= cutoff);
+  };
+
+  const getFilteredSummary = (sessions: UserSession[]) => {
+    const exerciseBreakdown: UserSessionsResponse['summary']['exercise_breakdown'] = {};
+
+    sessions.forEach((session) => {
+      if (!exerciseBreakdown[session.exercise]) {
+        exerciseBreakdown[session.exercise] = {
+          sessions: 0,
+          total_reps: 0,
+          total_duration: 0
+        };
+      }
+      exerciseBreakdown[session.exercise].sessions += 1;
+      exerciseBreakdown[session.exercise].total_reps += session.total_reps;
+      exerciseBreakdown[session.exercise].total_duration += session.duration;
+    });
+
+    return {
+      total_sessions: sessions.length,
+      total_reps: sessions.reduce((sum, session) => sum + session.total_reps, 0),
+      total_duration: sessions.reduce((sum, session) => sum + session.duration, 0),
+      exercise_breakdown: exerciseBreakdown
+    };
   };
 
   const getChartData = () => {
-    if (!sessionData) return { dailyReps: [], exerciseBreakdown: [], progressData: [] };
+    if (!sessionData) {
+      return {
+        filteredSessions: [],
+        summary: null,
+        dailyReps: [],
+        exerciseBreakdown: [],
+        progressData: []
+      };
+    }
 
     const filteredSessions = filterSessionsByPeriod(sessionData.sessions);
-    
-    // Daily reps data
+    const summary = getFilteredSummary(filteredSessions);
+
     const dailyRepsMap: { [date: string]: number } = {};
-    filteredSessions.forEach(session => {
+    filteredSessions.forEach((session) => {
       const date = new Date(session.timestamp).toLocaleDateString();
       dailyRepsMap[date] = (dailyRepsMap[date] || 0) + session.total_reps;
     });
 
-    const dailyReps = Object.entries(dailyRepsMap).map(([date, reps]) => ({
-      date,
-      reps
-    })).slice(-7); // Last 7 days
+    const dailyReps = Object.entries(dailyRepsMap)
+      .map(([date, reps]) => ({ date, reps }))
+      .slice(-7);
 
-    // Exercise breakdown for pie chart
-    const exerciseBreakdown = Object.entries(sessionData.summary.exercise_breakdown).map(([exercise, data]) => ({
-      name: exercise.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+    const exerciseBreakdown = Object.entries(summary.exercise_breakdown).map(([exercise, data]) => ({
+      name: exercise.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
       value: data.total_reps,
       sessions: data.sessions
     }));
 
-    // Progress data (reps over time)
     const progressData = filteredSessions
+      .slice()
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
       .map((session, index) => ({
         session: index + 1,
@@ -132,12 +165,10 @@ const Dashboard: React.FC = () => {
         exercise: session.exercise
       }));
 
-    return { dailyReps, exerciseBreakdown, progressData };
+    return { filteredSessions, summary, dailyReps, exerciseBreakdown, progressData };
   };
 
-  const { dailyReps, exerciseBreakdown, progressData } = getChartData();
-
-  // Colors for charts
+  const { filteredSessions, summary, dailyReps, exerciseBreakdown, progressData } = getChartData();
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
   if (loading) {
@@ -175,7 +206,7 @@ const Dashboard: React.FC = () => {
           <Select
             value={selectedPeriod}
             label="Period"
-            onChange={(e) => setSelectedPeriod(e.target.value as 'week' | 'month' | 'all')}
+            onChange={(event) => setSelectedPeriod(event.target.value as 'week' | 'month' | 'all')}
           >
             <MenuItem value="week">Last Week</MenuItem>
             <MenuItem value="month">Last Month</MenuItem>
@@ -190,66 +221,66 @@ const Dashboard: React.FC = () => {
         </Alert>
       )}
 
-      {/* Summary Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <FitnessCenterIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h4" color="primary">
-                {sessionData.summary.total_sessions}
-              </Typography>
-              <Typography variant="subtitle1" color="text.secondary">
-                Total Sessions
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <TrendingUpIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
-              <Typography variant="h4" color="success.main">
-                {sessionData.summary.total_reps}
-              </Typography>
-              <Typography variant="subtitle1" color="text.secondary">
-                Total Reps
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <TimerIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
-              <Typography variant="h4" color="info.main">
-                {formatDuration(sessionData.summary.total_duration)}
-              </Typography>
-              <Typography variant="subtitle1" color="text.secondary">
-                Total Time
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <AssessmentIcon sx={{ fontSize: 40, color: 'warning.main', mb: 1 }} />
-              <Typography variant="h4" color="warning.main">
-                {Object.keys(sessionData.summary.exercise_breakdown).length}
-              </Typography>
-              <Typography variant="subtitle1" color="text.secondary">
-                Exercises Done
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      {summary && (
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <FitnessCenterIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+                <Typography variant="h4" color="primary">
+                  {summary.total_sessions}
+                </Typography>
+                <Typography variant="subtitle1" color="text.secondary">
+                  Sessions
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
 
-      {/* Charts */}
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <TrendingUpIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
+                <Typography variant="h4" color="success.main">
+                  {summary.total_reps}
+                </Typography>
+                <Typography variant="subtitle1" color="text.secondary">
+                  Total Reps
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <TimerIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
+                <Typography variant="h4" color="info.main">
+                  {formatDuration(summary.total_duration)}
+                </Typography>
+                <Typography variant="subtitle1" color="text.secondary">
+                  Total Time
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <AssessmentIcon sx={{ fontSize: 40, color: 'warning.main', mb: 1 }} />
+                <Typography variant="h4" color="warning.main">
+                  {Object.keys(summary.exercise_breakdown).length}
+                </Typography>
+                <Typography variant="subtitle1" color="text.secondary">
+                  Exercises Done
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
+
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} md={6}>
           <Card>
@@ -269,7 +300,7 @@ const Dashboard: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
-        
+
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
@@ -289,7 +320,7 @@ const Dashboard: React.FC = () => {
                     dataKey="value"
                   >
                     {exerciseBreakdown.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      <Cell key={`${entry.name}-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -300,7 +331,6 @@ const Dashboard: React.FC = () => {
         </Grid>
       </Grid>
 
-      {/* Progress Chart */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12}>
           <Card>
@@ -314,10 +344,10 @@ const Dashboard: React.FC = () => {
                   <XAxis dataKey="date" />
                   <YAxis />
                   <Tooltip />
-                  <Line 
-                    type="monotone" 
-                    dataKey="reps" 
-                    stroke="#1976d2" 
+                  <Line
+                    type="monotone"
+                    dataKey="reps"
+                    stroke="#1976d2"
                     strokeWidth={2}
                     dot={{ fill: '#1976d2' }}
                   />
@@ -328,7 +358,6 @@ const Dashboard: React.FC = () => {
         </Grid>
       </Grid>
 
-      {/* Recent Sessions Table */}
       <Grid container spacing={3}>
         <Grid item xs={12}>
           <Card>
@@ -336,48 +365,47 @@ const Dashboard: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 Recent Sessions
               </Typography>
-              <TableContainer component={Paper} variant="outlined">
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Date</TableCell>
-                      <TableCell>Exercise</TableCell>
-                      <TableCell>Reps</TableCell>
-                      <TableCell>Duration</TableCell>
-                      <TableCell>Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {sessionData.sessions
-                      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                      .slice(0, 10)
-                      .map((session, index) => (
-                        <TableRow key={index}>
-                          <TableCell>
-                            {new Date(session.timestamp).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={session.exercise.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                              size="small"
-                              color="primary"
-                              variant="outlined"
-                            />
-                          </TableCell>
-                          <TableCell>{session.total_reps}</TableCell>
-                          <TableCell>{formatDuration(session.duration)}</TableCell>
-                          <TableCell>
-                            <Chip 
-                              label="Completed"
-                              size="small"
-                              color="success"
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              {filteredSessions.length === 0 ? (
+                <Alert severity="info">No sessions found for the selected period.</Alert>
+              ) : (
+                <TableContainer component={Paper} variant="outlined">
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Date</TableCell>
+                        <TableCell>Exercise</TableCell>
+                        <TableCell>Reps</TableCell>
+                        <TableCell>Duration</TableCell>
+                        <TableCell>Status</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filteredSessions
+                        .slice()
+                        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                        .slice(0, 10)
+                        .map((session, index) => (
+                          <TableRow key={`${session.timestamp}-${index}`}>
+                            <TableCell>{new Date(session.timestamp).toLocaleDateString()}</TableCell>
+                            <TableCell>
+                              <Chip
+                                label={session.exercise.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())}
+                                size="small"
+                                color="primary"
+                                variant="outlined"
+                              />
+                            </TableCell>
+                            <TableCell>{session.total_reps}</TableCell>
+                            <TableCell>{formatDuration(session.duration)}</TableCell>
+                            <TableCell>
+                              <Chip label="Completed" size="small" color="success" />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -386,4 +414,4 @@ const Dashboard: React.FC = () => {
   );
 };
 
-export default Dashboard; 
+export default Dashboard;

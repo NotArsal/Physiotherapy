@@ -1,446 +1,353 @@
 import os
 import pickle
-import numpy as np
 from datetime import datetime
-import json
-from flask import Flask, request, jsonify
+from pathlib import Path
+
+import numpy as np
+from flask import Flask, jsonify, request
 from flask_cors import CORS
-import tensorflow as tf
 from tensorflow.keras.models import load_model
 
 app = Flask(__name__)
 
-# Configure CORS with explicit settings for frontend communication
-CORS(app, 
-     origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # Allow frontend origins
-     allow_headers=["Content-Type", "Authorization"],             # Allow these headers
-     methods=["GET", "POST", "OPTIONS"],                         # Allow these methods
-     supports_credentials=True                                   # Allow credentials
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_DIR = BASE_DIR / "model"
+MODEL_PATH = MODEL_DIR / "bilstm_exercise_classifier.h5"
+LABEL_ENCODER_PATH = MODEL_DIR / "label_encoder.pkl"
+
+CORS(
+    app,
+    origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "OPTIONS"],
+    supports_credentials=True,
 )
 
-# Global variables for model and encoder
 model = None
 label_encoder = None
-exercise_sessions = []  # In-memory storage for demo (use database in production)
+exercise_sessions = []
 
-# Exercise phase tracking
 current_exercise_state = {
-    'current_phase': 'down',  # 'up' or 'down'
-    'rep_count': 0,
-    'last_prediction': None,
-    'phase_threshold': 0.7  # Confidence threshold for phase detection
+    "current_phase": "down",
+    "rep_count": 0,
+    "last_prediction": None,
+    "phase_threshold": 0.7,
 }
 
+
 def load_models():
-    """Load the BiLSTM model and label encoder"""
+    """Load the trained model artifacts from the backend/model directory."""
     global model, label_encoder
-    
+
     try:
-        # Load the trained model
-        model = load_model('model/bilstm_exercise_classifier.h5')
+        model = load_model(MODEL_PATH)
+        with open(LABEL_ENCODER_PATH, "rb") as file:
+            label_encoder = pickle.load(file)
         print("BiLSTM model loaded successfully")
-        
-        # Load the label encoder
-        with open('model/label_encoder.pkl', 'rb') as f:
-            label_encoder = pickle.load(f)
-        print("Label encoder loaded successfully")
         print(f"Available exercises: {list(label_encoder.classes_)}")
-        
-    except Exception as e:
-        print(f"Error loading models: {str(e)}")
+        return True
+    except Exception as exc:
+        print(f"Error loading models: {exc}")
         return False
-    return True
+
+
+def reset_exercise_state():
+    """Reset in-memory phase tracking for the current session."""
+    global current_exercise_state
+    current_exercise_state = {
+        "current_phase": "down",
+        "rep_count": 0,
+        "last_prediction": None,
+        "phase_threshold": 0.7,
+    }
+
+
+def build_model_input(joint_angles):
+    """Create deterministic time-series input for the BiLSTM model."""
+    angles_array = np.array(joint_angles[:9], dtype=np.float32)
+    normalized = angles_array / 180.0
+    radians = np.radians(angles_array)
+    angle_diffs = np.array(
+        [abs(angles_array[i] - angles_array[i + 1]) for i in range(len(angles_array) - 1)],
+        dtype=np.float32,
+    )
+    summary_features = np.array(
+        [
+            np.mean(angles_array),
+            np.std(angles_array),
+            np.min(angles_array),
+            np.max(angles_array),
+            np.mean(normalized),
+            np.std(normalized),
+        ],
+        dtype=np.float32,
+    )
+
+    feature_vector = np.concatenate(
+        [
+            angles_array,
+            normalized,
+            np.sin(radians),
+            np.cos(radians),
+            angles_array ** 2,
+            angle_diffs,
+            summary_features,
+        ]
+    )
+    feature_vector = np.pad(feature_vector, (0, max(0, 99 - feature_vector.size)))[:99]
+
+    timesteps = 30
+    time_series = np.tile(feature_vector, (timesteps, 1))
+    time_scale = np.linspace(0.98, 1.02, timesteps, dtype=np.float32).reshape(timesteps, 1)
+
+    return (time_series * time_scale).reshape(1, timesteps, 99)
+
 
 def detect_exercise_phase(joint_angles, predicted_exercise, selected_exercise=None):
-    """
-    Detect if the exercise is in 'up' or 'down' phase based on joint angles
-    Updated for the actual trained exercises
-    Only counts reps if exercise matches selection
-    """
+    """Detect the current phase for supported exercises and count reps."""
     global current_exercise_state
-    
-    # Get key joint angles with safety checks
+
     shoulder_angle = joint_angles[0] if len(joint_angles) > 0 else 90
     elbow_angle = joint_angles[2] if len(joint_angles) > 2 else 90
     hip_angle = joint_angles[4] if len(joint_angles) > 4 else 90
     knee_angle = joint_angles[6] if len(joint_angles) > 6 else 90
-    
-    # Debug logging
-    print(f"🔍 DEBUG Phase Detection:")
+
+    print("DEBUG Phase Detection:")
     print(f"   Exercise: {predicted_exercise}")
-    print(f"   Angles - Shoulder: {shoulder_angle:.1f}°, Elbow: {elbow_angle:.1f}°, Hip: {hip_angle:.1f}°, Knee: {knee_angle:.1f}°")
-    
-    # Phase detection logic for each exercise type
-    exercise_lower = predicted_exercise.lower().replace('-', '_')
-    
-    # Upper body pressing exercises - ADJUSTED THRESHOLDS
-    if exercise_lower in ['bench_press', 'incline_bench_press', 'decline_bench_press', 'push_up']:
-        # Down = arms bent (lower angle), Up = arms extended (higher angle)
-        threshold = 120  # CHANGED: More realistic threshold for pressing exercises
-        if elbow_angle < threshold:  
-            new_phase = 'down'
-        else:  # Arms extended - up position
-            new_phase = 'up'
-        print(f"   🔧 Pressing exercise logic: elbow_angle {elbow_angle:.1f}° < {threshold}° = {elbow_angle < threshold} → {new_phase}")
-    
-    # Bicep/Arm curl exercises - ADJUSTED
-    elif exercise_lower in ['barbell_biceps_curl', 'hammer_curl']:
-        # Down = arms extended (lower elbow angle), Up = arms curled (higher elbow angle)
-        if elbow_angle < 120:  # CHANGED: from 90 to 120
-            new_phase = 'down'
-        else:  # Arms curled - up position
-            new_phase = 'up'
-    
-    # Tricep exercises - ADJUSTED
-    elif exercise_lower in ['tricep_dips', 'tricep_pushdown']:
-        # Down = arms bent, Up = arms extended
-        if elbow_angle < 100:  # CHANGED: from 60 to 100
-            new_phase = 'down'
-        else:  # Arms extended - up position
-            new_phase = 'up'
-    
-    # Shoulder exercises - ADJUSTED
-    elif exercise_lower in ['shoulder_press', 'lateral_raise']:
-        # Down = arms lowered, Up = arms raised
-        if shoulder_angle < 100:  # CHANGED: from 70 to 100
-            new_phase = 'down'
-        else:  # Arms raised - up position
-            new_phase = 'up'
-    
-    # Leg exercises - squats - ADJUSTED
-    elif exercise_lower in ['squat']:
-        # Down = knees bent (lower knee angle), Up = legs extended (higher knee angle)
-        if knee_angle < 120:  # CHANGED: from 90 to 120
-            new_phase = 'down'
-        else:  # Legs extended - up position
-            new_phase = 'up'
-    
-    # Deadlift variations
-    elif exercise_lower in ['deadlift', 'romanian_deadlift']:
-        # Down = bent forward (lower hip angle), Up = standing (higher hip angle)
-        if hip_angle < 140:  # CHANGED: from 120 to 140
-            new_phase = 'down'
-        else:  # Standing - up position
-            new_phase = 'up'
-    
-    # Leg extension - ADJUSTED
-    elif exercise_lower in ['leg_extension']:
-        # Down = knees bent, Up = legs extended
-        if knee_angle < 120:  # CHANGED: from 90 to 120
-            new_phase = 'down'
-        else:  # Legs extended - up position
-            new_phase = 'up'
-    
-    # Hip thrust - ADJUSTED
-    elif exercise_lower in ['hip_thrust']:
-        # Down = hips lowered, Up = hips raised
-        if hip_angle < 110:  # CHANGED: from 90 to 110
-            new_phase = 'down'
-        else:  # Hips raised - up position
-            new_phase = 'up'
-    
-    # Pulling exercises (pull-ups, lat pulldown, t-bar row) - ADJUSTED
-    elif exercise_lower in ['pull_up', 'lat_pulldown', 't_bar_row']:
-        # Down = arms extended, Up = arms pulled
-        if elbow_angle > 140:  # CHANGED: from 120 to 140
-            new_phase = 'down'
-        else:  # Arms pulled - up position
-            new_phase = 'up'
-    
-    # Core exercises (leg raises, russian twist)
-    elif exercise_lower in ['leg_raises']:
-        # Down = legs lowered, Up = legs raised
-        if hip_angle < 110:  # CHANGED: from 90 to 110
-            new_phase = 'down'
-        else:  # Legs raised - up position
-            new_phase = 'up'
-    
-    elif exercise_lower in ['russian_twist']:
-        # Use shoulder angle to detect rotation
-        if shoulder_angle < 85:  # CHANGED: from 70 to 85
-            new_phase = 'down'
-        else:  # Center or other side - up
-            new_phase = 'up'
-    
-    # Isometric exercises (plank)
-    elif exercise_lower in ['plank']:
-        # For plank, we maintain the phase and count based on time held
-        new_phase = 'hold'
-    
-    # Machine exercises - ADJUSTED
-    elif exercise_lower in ['chest_fly_machine']:
-        # Down = arms wide, Up = arms together
-        if shoulder_angle > 110:  # CHANGED: from 90 to 110
-            new_phase = 'down'
-        else:  # Arms together - up position
-            new_phase = 'up'
-    
+    print(
+        f"   Angles - Shoulder: {shoulder_angle:.1f} deg, "
+        f"Elbow: {elbow_angle:.1f} deg, Hip: {hip_angle:.1f} deg, Knee: {knee_angle:.1f} deg"
+    )
+
+    exercise_lower = predicted_exercise.lower().replace("-", "_")
+
+    if exercise_lower in ["bench_press", "incline_bench_press", "decline_bench_press", "push_up"]:
+        new_phase = "down" if elbow_angle < 120 else "up"
+    elif exercise_lower in ["barbell_biceps_curl", "hammer_curl"]:
+        new_phase = "down" if elbow_angle < 120 else "up"
+    elif exercise_lower in ["tricep_dips", "tricep_pushdown"]:
+        new_phase = "down" if elbow_angle < 100 else "up"
+    elif exercise_lower in ["shoulder_press", "lateral_raise"]:
+        new_phase = "down" if shoulder_angle < 100 else "up"
+    elif exercise_lower in ["squat", "leg_extension"]:
+        new_phase = "down" if knee_angle < 120 else "up"
+    elif exercise_lower in ["deadlift", "romanian_deadlift"]:
+        new_phase = "down" if hip_angle < 140 else "up"
+    elif exercise_lower in ["hip_thrust", "leg_raises"]:
+        new_phase = "down" if hip_angle < 110 else "up"
+    elif exercise_lower in ["pull_up", "lat_pulldown", "t_bar_row"]:
+        new_phase = "down" if elbow_angle > 140 else "up"
+    elif exercise_lower == "russian_twist":
+        new_phase = "down" if shoulder_angle < 85 else "up"
+    elif exercise_lower == "plank":
+        new_phase = "hold"
+    elif exercise_lower == "chest_fly_machine":
+        new_phase = "down" if shoulder_angle > 110 else "up"
     else:
-        # Default phase detection for unknown exercises - ADJUSTED
-        if shoulder_angle < 100:  # CHANGED: from 90 to 100
-            new_phase = 'down'
-        else:
-            new_phase = 'up'
-    
-    # Debug current state
-    old_phase = current_exercise_state['current_phase']
-    old_rep_count = current_exercise_state['rep_count']
-    
-    # Count reps on phase transitions (except for isometric exercises)
-    if new_phase != 'hold' and current_exercise_state['current_phase'] != new_phase:
-        if current_exercise_state['current_phase'] == 'down' and new_phase == 'up':
-            current_exercise_state['rep_count'] += 1
-            print(f"   🔥 REP COMPLETED! {old_rep_count} → {current_exercise_state['rep_count']}")
-        current_exercise_state['current_phase'] = new_phase
-        print(f"   📈 Phase transition: {old_phase} → {new_phase}")
-    elif new_phase == 'hold':
-        # For isometric exercises, count time-based reps or maintain state
-        current_exercise_state['current_phase'] = new_phase
+        new_phase = "down" if shoulder_angle < 100 else "up"
+
+    old_phase = current_exercise_state["current_phase"]
+    old_rep_count = current_exercise_state["rep_count"]
+
+    if new_phase != "hold" and old_phase != new_phase:
+        if old_phase == "down" and new_phase == "up":
+            current_exercise_state["rep_count"] += 1
+            print(f"   REP COMPLETED! {old_rep_count} -> {current_exercise_state['rep_count']}")
+        current_exercise_state["current_phase"] = new_phase
+        print(f"   Phase transition: {old_phase} -> {new_phase}")
+    elif new_phase == "hold":
+        current_exercise_state["current_phase"] = new_phase
     else:
-        print(f"   ➡️  Phase maintained: {new_phase}")
-    
-    print(f"   🎯 Final: Phase={new_phase}, Reps={current_exercise_state['rep_count']}")
-    
+        print(f"   Phase maintained: {new_phase}")
+
+    current_exercise_state["last_prediction"] = {
+        "exercise": predicted_exercise,
+        "selected_exercise": selected_exercise,
+        "timestamp": datetime.now().isoformat(),
+    }
+    print(f"   Final: Phase={new_phase}, Reps={current_exercise_state['rep_count']}")
+
     return new_phase
 
-@app.route('/health', methods=['GET'])
+
+@app.route("/health", methods=["GET"])
 def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'model_loaded': model is not None,
-        'encoder_loaded': label_encoder is not None
-    })
+    return jsonify(
+        {
+            "status": "healthy",
+            "model_loaded": model is not None,
+            "encoder_loaded": label_encoder is not None,
+        }
+    )
 
-@app.route('/exercises', methods=['GET'])
+
+@app.route("/exercises", methods=["GET"])
 def get_exercises():
-    """Get list of available exercises from label encoder"""
     if label_encoder is None:
-        return jsonify({'error': 'Label encoder not loaded'}), 500
-    
-    return jsonify({
-        'exercises': list(label_encoder.classes_)
-    })
+        return jsonify({"error": "Label encoder not loaded"}), 500
 
-@app.route('/predict', methods=['POST'])
+    return jsonify({"exercises": list(label_encoder.classes_)})
+
+
+@app.route("/predict", methods=["POST"])
 def predict():
-    """Predict exercise from joint angles"""
     try:
-        data = request.get_json()
-        joint_angles = data.get('joint_angles', [])
-        selected_exercise = data.get('selected_exercise', None)  # NEW: Get selected exercise
-        
-        if not joint_angles or len(joint_angles) < 9:
-            return jsonify({'error': 'Invalid joint angles data'}), 400
-            
-        # NEW: Validate pose quality - check if too many angles are zero (poor detection)
-        zero_count = sum(1 for angle in joint_angles[:9] if abs(angle) < 5.0)  # Count near-zero angles
-        if zero_count > 6:  # If more than 6 out of 9 key angles are near zero, pose quality is poor
-            return jsonify({
-                'exercise': 'unknown',
-                'confidence': 0.0,
-                'phase': 'unknown',
-                'rep_count': current_exercise_state['rep_count'],
-                'joint_angles': joint_angles,
-                'timestamp': datetime.now().isoformat(),
-                'error': 'Poor pose detection - please ensure you are fully visible in the camera'
-            })
-        
-        # Ensure we have exactly 9 joint angles
+        if model is None or label_encoder is None:
+            return jsonify({"error": "Model is not loaded"}), 503
+
+        data = request.get_json(silent=True) or {}
+        joint_angles = data.get("joint_angles", [])
+        selected_exercise = data.get("selected_exercise")
+
+        if not isinstance(joint_angles, list) or not joint_angles:
+            return jsonify({"error": "Invalid joint angles data"}), 400
+
+        try:
+            joint_angles = [float(angle) for angle in joint_angles]
+        except (TypeError, ValueError):
+            return jsonify({"error": "Joint angles must be numeric values"}), 400
+
+        zero_count = sum(1 for angle in joint_angles[:9] if abs(angle) < 5.0)
+        if zero_count > 6:
+            return jsonify(
+                {
+                    "exercise": "unknown",
+                    "confidence": 0.0,
+                    "phase": "unknown",
+                    "rep_count": current_exercise_state["rep_count"],
+                    "joint_angles": joint_angles[:9],
+                    "timestamp": datetime.now().isoformat(),
+                    "error": "Poor pose detection - please ensure you are fully visible in the camera",
+                    "exercise_match": False,
+                    "selected_exercise": selected_exercise,
+                }
+            )
+
         if len(joint_angles) > 9:
             joint_angles = joint_angles[:9]
         elif len(joint_angles) < 9:
-            # Pad with zeros if needed
-            joint_angles.extend([0] * (9 - len(joint_angles)))
-        
-        # Convert to numpy array
-        angles_array = np.array(joint_angles, dtype=np.float32)
-        
-        # The model expects shape (batch_size, 30, 99)
-        # We need to transform our 9 joint angles to this format
-        
-        # Option 1: Repeat the joint angles to create time series
-        # Create 30 timesteps by slightly varying the joint angles
-        timesteps = 30
-        features_per_timestep = 99
-        
-        # Create base feature vector by expanding the 9 joint angles
-        base_features = np.zeros(features_per_timestep)
-        
-        # Map our 9 joint angles to the first 9 positions
-        base_features[:9] = angles_array
-        
-        # Fill additional features with derived/computed values
-        # Add normalized angles (angles/180.0)
-        base_features[9:18] = angles_array / 180.0
-        
-        # Add sin and cos transformations (useful for cyclic nature)
-        base_features[18:27] = np.sin(np.radians(angles_array))
-        base_features[27:36] = np.cos(np.radians(angles_array))
-        
-        # Add squared values
-        base_features[36:45] = angles_array ** 2
-        
-        # Add angle differences (joint relationships)
-        for i in range(8):
-            base_features[45 + i] = abs(angles_array[i] - angles_array[i+1])
-        
-        # Fill remaining features with combinations and derived values
-        for i in range(53, features_per_timestep):
-            base_features[i] = np.mean(angles_array) * np.random.normal(1.0, 0.1)
-        
-        # Create time series by adding small variations
-        time_series = np.zeros((timesteps, features_per_timestep))
-        for t in range(timesteps):
-            # Add small time-based variations to simulate movement
-            variation = np.random.normal(0, 0.05, features_per_timestep)
-            time_series[t] = base_features + variation
-        
-        # Reshape for model input: (1, 30, 99)
-        model_input = time_series.reshape(1, timesteps, features_per_timestep)
-        
-        # Make prediction
+            joint_angles.extend([0.0] * (9 - len(joint_angles)))
+
+        model_input = build_model_input(joint_angles)
         prediction = model.predict(model_input, verbose=0)
-        
-        # Get predicted class and confidence
-        predicted_class_idx = np.argmax(prediction[0])
+
+        predicted_class_idx = int(np.argmax(prediction[0]))
         confidence = float(np.max(prediction[0]))
-        
-        # Convert to exercise name
         predicted_exercise = label_encoder.inverse_transform([predicted_class_idx])[0]
-        
-        # NEW: Only detect phase and count reps if conditions are met
-        phase = 'unknown'
-        exercise_match = False
-        
-        # Check if detected exercise matches selected exercise and confidence is sufficient
+
         if selected_exercise:
-            exercise_match = (predicted_exercise.lower() == selected_exercise.lower() and confidence >= 0.6)
+            exercise_match = (
+                predicted_exercise.lower() == str(selected_exercise).lower() and confidence >= 0.6
+            )
         else:
-            exercise_match = confidence >= 0.7  # Higher threshold if no exercise selected
-            
+            exercise_match = confidence >= 0.7
+
+        phase = "unknown"
         if exercise_match:
-            # Only detect phase and count reps if exercise matches
             phase = detect_exercise_phase(joint_angles, predicted_exercise, selected_exercise)
         else:
-            # Reset phase tracking if exercise doesn't match
-            print(f"🚫 Exercise mismatch or low confidence: detected={predicted_exercise}, selected={selected_exercise}, confidence={confidence:.2f}")
-        
+            print(
+                "Exercise mismatch or low confidence: "
+                f"detected={predicted_exercise}, selected={selected_exercise}, confidence={confidence:.2f}"
+            )
+
         response = {
-            'exercise': predicted_exercise,
-            'confidence': confidence,
-            'phase': phase,
-            'rep_count': current_exercise_state['rep_count'],
-            'joint_angles': joint_angles,
-            'timestamp': datetime.now().isoformat(),
-            'exercise_match': exercise_match,
-            'selected_exercise': selected_exercise
+            "exercise": predicted_exercise,
+            "confidence": confidence,
+            "phase": phase,
+            "rep_count": current_exercise_state["rep_count"],
+            "joint_angles": joint_angles,
+            "timestamp": datetime.now().isoformat(),
+            "exercise_match": exercise_match,
+            "selected_exercise": selected_exercise,
+            "success": True,
         }
-        
         return jsonify(response)
-        
-    except Exception as e:
-        print(f"Prediction error: {e}")
+    except Exception as exc:
+        print(f"Prediction error: {exc}")
         import traceback
+
         traceback.print_exc()
-        return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
+        return jsonify({"error": f"Prediction failed: {exc}", "success": False}), 500
 
-@app.route('/reset_session', methods=['POST'])
+
+@app.route("/reset_session", methods=["POST"])
 def reset_session():
-    """Reset the current exercise session"""
-    global current_exercise_state
-    
-    current_exercise_state = {
-        'current_phase': 'down',
-        'rep_count': 0,
-        'last_prediction': None,
-        'phase_threshold': 0.7
-    }
-    
-    return jsonify({'message': 'Session reset successfully'})
+    reset_exercise_state()
+    return jsonify({"message": "Session reset successfully"})
 
-@app.route('/log_session', methods=['POST'])
+
+@app.route("/log_session", methods=["POST"])
 def log_session():
-    """
-    Log exercise session data
-    Expected input: {
-        'user_id': 'user123',
-        'exercise': 'pushup',
-        'total_reps': 10,
-        'duration': 120,  # seconds
-        'session_data': [...] # optional detailed data
-    }
-    """
     try:
-        data = request.get_json()
-        
-        required_fields = ['user_id', 'exercise', 'total_reps', 'duration']
+        data = request.get_json(silent=True) or {}
+
+        required_fields = ["user_id", "exercise", "total_reps", "duration"]
         for field in required_fields:
             if field not in data:
-                return jsonify({'error': f'Missing required field: {field}'}), 400
-        
-        session_entry = {
-            'user_id': data['user_id'],
-            'exercise': data['exercise'],
-            'total_reps': data['total_reps'],
-            'duration': data['duration'],  # in seconds
-            'timestamp': datetime.now().isoformat(),
-            'session_data': data.get('session_data', [])
-        }
-        
-        # Store session (in production, save to database)
-        exercise_sessions.append(session_entry)
-        
-        return jsonify({
-            'message': 'Session logged successfully',
-            'session_id': len(exercise_sessions) - 1
-        })
-        
-    except Exception as e:
-        return jsonify({'error': f'Failed to log session: {str(e)}'}), 500
+                return jsonify({"error": f"Missing required field: {field}"}), 400
 
-@app.route('/sessions/<user_id>', methods=['GET'])
+        session_entry = {
+            "user_id": data["user_id"],
+            "exercise": data["exercise"],
+            "total_reps": data["total_reps"],
+            "duration": data["duration"],
+            "timestamp": datetime.now().isoformat(),
+            "session_data": data.get("session_data", []),
+        }
+        exercise_sessions.append(session_entry)
+
+        return jsonify(
+            {
+                "message": "Session logged successfully",
+                "session_id": len(exercise_sessions) - 1,
+                "success": True,
+            }
+        )
+    except Exception as exc:
+        return jsonify({"error": f"Failed to log session: {exc}", "success": False}), 500
+
+
+@app.route("/sessions/<user_id>", methods=["GET"])
 def get_user_sessions(user_id):
-    """Get all sessions for a specific user"""
-    user_sessions = [session for session in exercise_sessions if session['user_id'] == user_id]
-    
-    # Calculate summary statistics
+    user_sessions = [session for session in exercise_sessions if session["user_id"] == user_id]
+
     total_sessions = len(user_sessions)
-    total_reps = sum(session['total_reps'] for session in user_sessions)
-    total_duration = sum(session['duration'] for session in user_sessions)
-    
-    # Group by exercise
+    total_reps = sum(session["total_reps"] for session in user_sessions)
+    total_duration = sum(session["duration"] for session in user_sessions)
+
     exercise_stats = {}
     for session in user_sessions:
-        exercise = session['exercise']
+        exercise = session["exercise"]
         if exercise not in exercise_stats:
-            exercise_stats[exercise] = {'sessions': 0, 'total_reps': 0, 'total_duration': 0}
-        exercise_stats[exercise]['sessions'] += 1
-        exercise_stats[exercise]['total_reps'] += session['total_reps']
-        exercise_stats[exercise]['total_duration'] += session['duration']
-    
-    return jsonify({
-        'user_id': user_id,
-        'sessions': user_sessions,
-        'summary': {
-            'total_sessions': total_sessions,
-            'total_reps': total_reps,
-            'total_duration': total_duration,
-            'exercise_breakdown': exercise_stats
+            exercise_stats[exercise] = {"sessions": 0, "total_reps": 0, "total_duration": 0}
+        exercise_stats[exercise]["sessions"] += 1
+        exercise_stats[exercise]["total_reps"] += session["total_reps"]
+        exercise_stats[exercise]["total_duration"] += session["duration"]
+
+    return jsonify(
+        {
+            "user_id": user_id,
+            "sessions": user_sessions,
+            "summary": {
+                "total_sessions": total_sessions,
+                "total_reps": total_reps,
+                "total_duration": total_duration,
+                "exercise_breakdown": exercise_stats,
+            },
         }
-    })
+    )
 
-@app.route('/sessions', methods=['GET'])
+
+@app.route("/sessions", methods=["GET"])
 def get_all_sessions():
-    """Get all sessions (for admin/debugging)"""
-    return jsonify({'sessions': exercise_sessions})
+    return jsonify({"sessions": exercise_sessions})
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     print("Starting Physiotherapy Exercise Monitoring Backend...")
-    
-    # Load models on startup
     if load_models():
         print("Models loaded successfully. Starting Flask server...")
-        app.run(debug=True, host='0.0.0.0', port=5000)
+        app.run(debug=True, host="0.0.0.0", port=int(os.getenv("PORT", "5000")))
     else:
-        print("Failed to load models. Please check model files.") 
+        print("Failed to load models. Please check model files.")

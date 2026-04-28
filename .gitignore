@@ -74,6 +74,7 @@ yarn-error.log*
 
 # Build output
 frontend/build/
+build/
 
 # Environment variables
 .env
@@ -88,5 +89,6 @@ Desktop.ini
 
 # Others
 *.log
+venv/
 backend/venv/
-
+backend/.venv/

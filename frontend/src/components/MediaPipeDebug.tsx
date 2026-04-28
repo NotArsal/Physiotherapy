@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Container,
   Typography,
@@ -15,10 +15,9 @@ import {
   FormControlLabel
 } from '@mui/material';
 import Webcam from 'react-webcam';
-import { Pose } from '@mediapipe/pose';
+import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose';
 import { Camera } from '@mediapipe/camera_utils';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
-import { POSE_CONNECTIONS } from '@mediapipe/pose';
 import { extractJointAngles } from '../utils/poseDetection';
 
 const MediaPipeDebug: React.FC = () => {
@@ -28,7 +27,7 @@ const MediaPipeDebug: React.FC = () => {
   const cameraRef = useRef<Camera | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState('');
   const [poseDetected, setPoseDetected] = useState(false);
   const [landmarkCount, setLandmarkCount] = useState(0);
   const [confidence, setConfidence] = useState(0);
@@ -38,19 +37,77 @@ const MediaPipeDebug: React.FC = () => {
   const [showLandmarks, setShowLandmarks] = useState(true);
   const [showConnections, setShowConnections] = useState(true);
 
-  // Initialize MediaPipe Pose
+  const onPoseResults = useCallback((results: any) => {
+    if (!canvasRef.current) {
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (results.image) {
+      ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+    }
+
+    if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
+      setPoseDetected(false);
+      setLandmarkCount(0);
+      setConfidence(0);
+      setJointAngles([]);
+      setDebugInfo(null);
+      return;
+    }
+
+    setPoseDetected(true);
+    setLandmarkCount(results.poseLandmarks.length);
+
+    const avgConfidence =
+      results.poseLandmarks.reduce((sum: number, landmark: any) => sum + (landmark.visibility || 0), 0) /
+      results.poseLandmarks.length;
+    setConfidence(avgConfidence);
+
+    if (showConnections) {
+      drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
+        color: '#00FF00',
+        lineWidth: 2
+      });
+    }
+
+    if (showLandmarks) {
+      drawLandmarks(ctx, results.poseLandmarks, {
+        color: '#FF0000',
+        lineWidth: 1,
+        radius: 3
+      });
+    }
+
+    try {
+      const angles = extractJointAngles(results.poseLandmarks);
+      setJointAngles(angles);
+    } catch (angleError) {
+      console.error('Error extracting joint angles:', angleError);
+    }
+
+    setDebugInfo({
+      landmarkCount: results.poseLandmarks.length,
+      avgConfidence,
+      firstLandmark: results.poseLandmarks[0],
+      lastLandmark: results.poseLandmarks[results.poseLandmarks.length - 1],
+      imageSize: results.image ? { width: results.image.width, height: results.image.height } : null
+    });
+  }, [showConnections, showLandmarks]);
+
   useEffect(() => {
     const initializePose = async () => {
       try {
-        console.log('🔄 Initializing MediaPipe Pose...');
         setError('');
-        
         const pose = new Pose({
-          locateFile: (file) => {
-            const url = `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
-            console.log(`📦 Loading MediaPipe file: ${url}`);
-            return url;
-          }
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
         });
 
         pose.setOptions({
@@ -58,19 +115,16 @@ const MediaPipeDebug: React.FC = () => {
           smoothLandmarks: true,
           enableSegmentation: false,
           smoothSegmentation: false,
-          minDetectionConfidence: 0.3,  // Lower threshold for testing
+          minDetectionConfidence: 0.3,
           minTrackingConfidence: 0.3
         });
 
         pose.onResults(onPoseResults);
         poseRef.current = pose;
-        
-        console.log('✅ MediaPipe Pose initialized successfully');
         setIsLoading(false);
-        
-      } catch (error) {
-        console.error('❌ Error initializing pose detection:', error);
-        setError(`Failed to initialize pose detection: ${error}`);
+      } catch (initError) {
+        console.error('Error initializing pose detection:', initError);
+        setError(`Failed to initialize pose detection: ${String(initError)}`);
         setIsLoading(false);
       }
     };
@@ -79,95 +133,21 @@ const MediaPipeDebug: React.FC = () => {
 
     return () => {
       if (cameraRef.current) {
-        console.log('🛑 Stopping camera');
         cameraRef.current.stop();
       }
     };
-  }, []);
+  }, [onPoseResults]);
 
-  const onPoseResults = useCallback((results: any) => {
-    console.log('📊 Pose results received:', results);
-    
-    if (!canvasRef.current) {
-      console.warn('⚠️ Canvas ref not available');
-      return;
+  useEffect(() => {
+    if (poseRef.current) {
+      poseRef.current.onResults(onPoseResults);
     }
-
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      console.warn('⚠️ Canvas context not available');
-      return;
-    }
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Draw the video frame
-    if (results.image) {
-      ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-    }
-
-    if (results.poseLandmarks && results.poseLandmarks.length > 0) {
-      console.log(`✅ Pose detected! ${results.poseLandmarks.length} landmarks`);
-      
-      setPoseDetected(true);
-      setLandmarkCount(results.poseLandmarks.length);
-      
-      // Calculate overall confidence (visibility average)
-      const avgConfidence = results.poseLandmarks.reduce((sum: number, landmark: any) => 
-        sum + (landmark.visibility || 0), 0) / results.poseLandmarks.length;
-      setConfidence(avgConfidence);
-
-      // Draw pose landmarks if enabled
-      if (showConnections) {
-        drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
-          color: '#00FF00',
-          lineWidth: 2
-        });
-      }
-      
-      if (showLandmarks) {
-        drawLandmarks(ctx, results.poseLandmarks, {
-          color: '#FF0000',
-          lineWidth: 1,
-          radius: 3
-        });
-      }
-
-      // Extract joint angles
-      try {
-        const angles = extractJointAngles(results.poseLandmarks);
-        setJointAngles(angles);
-        console.log('📐 Joint angles extracted:', angles);
-      } catch (error) {
-        console.error('❌ Error extracting joint angles:', error);
-      }
-
-      // Store debug info
-      setDebugInfo({
-        landmarkCount: results.poseLandmarks.length,
-        avgConfidence: avgConfidence,
-        firstLandmark: results.poseLandmarks[0],
-        lastLandmark: results.poseLandmarks[results.poseLandmarks.length - 1],
-        imageSize: results.image ? { width: results.image.width, height: results.image.height } : null
-      });
-
-    } else {
-      console.log('❌ No pose landmarks detected');
-      setPoseDetected(false);
-      setLandmarkCount(0);
-      setConfidence(0);
-      setJointAngles([]);
-      setDebugInfo(null);
-    }
-  }, [showLandmarks, showConnections]);
+  }, [onPoseResults]);
 
   const startCamera = useCallback(async () => {
     try {
-      console.log('📹 Starting camera...');
       setError('');
-      
+
       if (!poseRef.current) {
         throw new Error('Pose not initialized');
       }
@@ -176,58 +156,44 @@ const MediaPipeDebug: React.FC = () => {
         throw new Error('Webcam video element not available');
       }
 
-      // Request camera permissions explicitly
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          width: 640, 
+      await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: 640,
           height: 480,
           facingMode: 'user'
-        } 
+        }
       });
-      
-      console.log('✅ Camera permissions granted');
 
       const camera = new Camera(webcamRef.current.video, {
         onFrame: async () => {
           if (webcamRef.current?.video && poseRef.current) {
-            try {
-              await poseRef.current.send({ image: webcamRef.current.video });
-            } catch (error) {
-              console.error('❌ Error sending frame to pose detection:', error);
-            }
+            await poseRef.current.send({ image: webcamRef.current.video });
           }
         },
         width: 640,
         height: 480
       });
-      
+
       cameraRef.current = camera;
       await camera.start();
-      
-      console.log('✅ Camera started successfully');
       setIsActive(true);
-      
-    } catch (error) {
-      console.error('❌ Error starting camera:', error);
-      setError(`Failed to start camera: ${error}`);
+    } catch (cameraError) {
+      console.error('Error starting camera:', cameraError);
+      setError(`Failed to start camera: ${String(cameraError)}`);
     }
   }, []);
 
   const stopCamera = useCallback(() => {
-    console.log('🛑 Stopping camera...');
-    
     if (cameraRef.current) {
       cameraRef.current.stop();
       cameraRef.current = null;
     }
-    
+
     setIsActive(false);
     setPoseDetected(false);
-    console.log('✅ Camera stopped');
   }, []);
 
   const resetTest = useCallback(() => {
-    console.log('🔄 Resetting test...');
     stopCamera();
     setError('');
     setPoseDetected(false);
@@ -242,37 +208,30 @@ const MediaPipeDebug: React.FC = () => {
       <Typography variant="h4" gutterBottom>
         MediaPipe Debug Console
       </Typography>
-      
+
       <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
         This tool helps diagnose MediaPipe pose detection issues and verify keypoint tracking.
       </Typography>
 
-      {/* Status Cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
               <Typography variant="h6">Status</Typography>
-              <Chip 
-                label={isLoading ? 'Loading' : isActive ? 'Active' : 'Inactive'} 
-                color={isLoading ? 'default' : isActive ? 'success' : 'default'}
-              />
+              <Chip label={isLoading ? 'Loading' : isActive ? 'Active' : 'Inactive'} color={isLoading ? 'default' : isActive ? 'success' : 'default'} />
             </CardContent>
           </Card>
         </Grid>
-        
+
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
               <Typography variant="h6">Pose Detection</Typography>
-              <Chip 
-                label={poseDetected ? 'Detected' : 'Not Detected'} 
-                color={poseDetected ? 'success' : 'error'}
-              />
+              <Chip label={poseDetected ? 'Detected' : 'Not Detected'} color={poseDetected ? 'success' : 'error'} />
             </CardContent>
           </Card>
         </Grid>
-        
+
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
@@ -282,80 +241,50 @@ const MediaPipeDebug: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
-        
+
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
               <Typography variant="h6">Confidence</Typography>
               <Typography variant="h4">{(confidence * 100).toFixed(1)}%</Typography>
-              <LinearProgress 
-                variant="determinate" 
-                value={confidence * 100} 
-                sx={{ mt: 1 }}
-              />
+              <LinearProgress variant="determinate" value={confidence * 100} sx={{ mt: 1 }} />
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      {/* Error Display */}
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
 
-      {/* Controls */}
       <Paper sx={{ p: 2, mb: 3 }}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={startCamera}
-            disabled={isLoading || isActive}
-          >
+          <Button variant="contained" color="primary" onClick={startCamera} disabled={isLoading || isActive}>
             Start Camera
           </Button>
-          
-          <Button
-            variant="contained"
-            color="secondary"
-            onClick={stopCamera}
-            disabled={!isActive}
-          >
+
+          <Button variant="contained" color="secondary" onClick={stopCamera} disabled={!isActive}>
             Stop Camera
           </Button>
-          
-          <Button
-            variant="outlined"
-            onClick={resetTest}
-          >
+
+          <Button variant="outlined" onClick={resetTest}>
             Reset
           </Button>
-          
+
           <FormControlLabel
-            control={
-              <Switch
-                checked={showLandmarks}
-                onChange={(e) => setShowLandmarks(e.target.checked)}
-              />
-            }
+            control={<Switch checked={showLandmarks} onChange={(event) => setShowLandmarks(event.target.checked)} />}
             label="Show Landmarks"
           />
-          
+
           <FormControlLabel
-            control={
-              <Switch
-                checked={showConnections}
-                onChange={(e) => setShowConnections(e.target.checked)}
-              />
-            }
+            control={<Switch checked={showConnections} onChange={(event) => setShowConnections(event.target.checked)} />}
             label="Show Connections"
           />
         </Box>
       </Paper>
 
-      {/* Video and Canvas */}
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 2 }}>
@@ -382,7 +311,7 @@ const MediaPipeDebug: React.FC = () => {
             </Box>
           </Paper>
         </Grid>
-        
+
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>
@@ -402,7 +331,6 @@ const MediaPipeDebug: React.FC = () => {
         </Grid>
       </Grid>
 
-      {/* Debug Information */}
       {debugInfo && (
         <Paper sx={{ p: 2, mt: 3 }}>
           <Typography variant="h6" gutterBottom>
@@ -419,7 +347,7 @@ const MediaPipeDebug: React.FC = () => {
                 </Typography>
               )}
             </Grid>
-            
+
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle1">Joint Angles</Typography>
               <Typography variant="body2" component="div">
@@ -430,7 +358,7 @@ const MediaPipeDebug: React.FC = () => {
                       'Left Hip', 'Right Hip', 'Left Knee', 'Right Knee', 'Spine'
                     ].map((joint, index) => (
                       <div key={joint}>
-                        {joint}: {jointAngles[index]?.toFixed(1) || 'N/A'}°
+                        {joint}: {jointAngles[index]?.toFixed(1) || 'N/A'} deg
                       </div>
                     ))}
                   </Box>
@@ -443,23 +371,22 @@ const MediaPipeDebug: React.FC = () => {
         </Paper>
       )}
 
-      {/* Troubleshooting Tips */}
       <Paper sx={{ p: 2, mt: 3 }}>
         <Typography variant="h6" gutterBottom>
           Troubleshooting Tips
         </Typography>
         <Box component="ul" sx={{ pl: 2 }}>
-          <li>Ensure good lighting and clear view of your full body</li>
-          <li>Make sure webcam permissions are granted</li>
-          <li>Try refreshing the page if MediaPipe fails to load</li>
-          <li>Check browser console for detailed error messages</li>
-          <li>Verify internet connection for MediaPipe CDN resources</li>
-          <li>Stand 3-6 feet away from the camera for best detection</li>
-          <li>Wear contrasting clothing against your background</li>
+          <li>Ensure good lighting and a clear view of your full body.</li>
+          <li>Make sure webcam permissions are granted.</li>
+          <li>Try refreshing the page if MediaPipe fails to load.</li>
+          <li>Check the browser console for detailed error messages.</li>
+          <li>Verify internet access for MediaPipe CDN resources.</li>
+          <li>Stand 3 to 6 feet away from the camera for best detection.</li>
+          <li>Wear clothing that contrasts with the background.</li>
         </Box>
       </Paper>
     </Container>
   );
 };
 
-export default MediaPipeDebug; 
+export default MediaPipeDebug;

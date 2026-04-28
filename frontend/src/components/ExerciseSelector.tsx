@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Container,
   Typography,
@@ -29,16 +29,17 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Exercise information for all trained exercises
-  const exerciseInfo: { [key: string]: { 
-    name: string; 
-    description: string; 
-    benefits: string[]; 
-    difficulty: string;
-    category: string;
-    muscleGroups: string[];
-  } } = {
-    'barbell_biceps_curl': {
+  const exerciseInfo: {
+    [key: string]: {
+      name: string;
+      description: string;
+      benefits: string[];
+      difficulty: string;
+      category: string;
+      muscleGroups: string[];
+    };
+  } = {
+    barbell_biceps_curl: {
       name: 'Barbell Biceps Curl',
       description: 'Standing bicep exercise using a barbell to build arm strength',
       benefits: ['Bicep strength', 'Arm definition', 'Grip strength'],
@@ -46,7 +47,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Arms',
       muscleGroups: ['Biceps', 'Forearms']
     },
-    'bench_press': {
+    bench_press: {
       name: 'Bench Press',
       description: 'Classic chest exercise performed lying on a bench',
       benefits: ['Chest strength', 'Tricep development', 'Shoulder stability'],
@@ -54,7 +55,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Chest',
       muscleGroups: ['Chest', 'Triceps', 'Shoulders']
     },
-    'chest_fly_machine': {
+    chest_fly_machine: {
       name: 'Chest Fly Machine',
       description: 'Chest isolation exercise using a fly machine',
       benefits: ['Chest isolation', 'Pectoral definition', 'Shoulder mobility'],
@@ -62,7 +63,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Chest',
       muscleGroups: ['Chest', 'Front Deltoids']
     },
-    'deadlift': {
+    deadlift: {
       name: 'Deadlift',
       description: 'Full body compound exercise lifting weight from the ground',
       benefits: ['Total body strength', 'Posterior chain', 'Core stability'],
@@ -70,7 +71,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Full Body',
       muscleGroups: ['Hamstrings', 'Glutes', 'Back', 'Core']
     },
-    'decline_bench_press': {
+    decline_bench_press: {
       name: 'Decline Bench Press',
       description: 'Chest exercise performed on a decline bench',
       benefits: ['Lower chest focus', 'Tricep strength', 'Core engagement'],
@@ -78,7 +79,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Chest',
       muscleGroups: ['Lower Chest', 'Triceps', 'Shoulders']
     },
-    'hammer_curl': {
+    hammer_curl: {
       name: 'Hammer Curl',
       description: 'Bicep exercise with neutral grip targeting brachialis',
       benefits: ['Bicep peak', 'Forearm strength', 'Grip improvement'],
@@ -86,7 +87,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Arms',
       muscleGroups: ['Biceps', 'Brachialis', 'Forearms']
     },
-    'hip_thrust': {
+    hip_thrust: {
       name: 'Hip Thrust',
       description: 'Glute activation exercise performed with elevated shoulders',
       benefits: ['Glute strength', 'Hip mobility', 'Posterior chain'],
@@ -94,7 +95,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Glutes',
       muscleGroups: ['Glutes', 'Hamstrings', 'Core']
     },
-    'incline_bench_press': {
+    incline_bench_press: {
       name: 'Incline Bench Press',
       description: 'Upper chest focused press on an inclined bench',
       benefits: ['Upper chest development', 'Shoulder strength', 'Core stability'],
@@ -102,7 +103,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Chest',
       muscleGroups: ['Upper Chest', 'Shoulders', 'Triceps']
     },
-    'lat_pulldown': {
+    lat_pulldown: {
       name: 'Lat Pulldown',
       description: 'Back width building exercise using lat pulldown machine',
       benefits: ['Back width', 'Lat development', 'Bicep assistance'],
@@ -110,7 +111,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Back',
       muscleGroups: ['Lats', 'Rhomboids', 'Biceps']
     },
-    'lateral_raise': {
+    lateral_raise: {
       name: 'Lateral Raise',
       description: 'Shoulder isolation exercise for medial deltoid development',
       benefits: ['Shoulder width', 'Deltoid definition', 'Shoulder stability'],
@@ -118,7 +119,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Shoulders',
       muscleGroups: ['Side Deltoids', 'Traps']
     },
-    'leg_extension': {
+    leg_extension: {
       name: 'Leg Extension',
       description: 'Quadriceps isolation exercise using leg extension machine',
       benefits: ['Quad isolation', 'Knee strength', 'Leg definition'],
@@ -126,7 +127,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Legs',
       muscleGroups: ['Quadriceps']
     },
-    'leg_raises': {
+    leg_raises: {
       name: 'Leg Raises',
       description: 'Core and hip flexor exercise lifting legs while lying down',
       benefits: ['Lower abs', 'Hip flexor strength', 'Core stability'],
@@ -134,7 +135,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Core',
       muscleGroups: ['Lower Abs', 'Hip Flexors']
     },
-    'plank': {
+    plank: {
       name: 'Plank',
       description: 'Isometric core exercise holding body in straight line',
       benefits: ['Core strength', 'Posture improvement', 'Stability'],
@@ -142,7 +143,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Core',
       muscleGroups: ['Core', 'Shoulders', 'Glutes']
     },
-    'pull_up': {
+    pull_up: {
       name: 'Pull Up',
       description: 'Upper body compound exercise pulling body weight up',
       benefits: ['Back strength', 'Functional strength', 'Grip strength'],
@@ -150,7 +151,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Back',
       muscleGroups: ['Lats', 'Biceps', 'Rhomboids']
     },
-    'push-up': {
+    push_up: {
       name: 'Push Up',
       description: 'Bodyweight chest exercise in prone position',
       benefits: ['Chest strength', 'Core engagement', 'Functional movement'],
@@ -158,7 +159,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Chest',
       muscleGroups: ['Chest', 'Triceps', 'Core']
     },
-    'romanian_deadlift': {
+    romanian_deadlift: {
       name: 'Romanian Deadlift',
       description: 'Hip hinge movement focusing on hamstrings and glutes',
       benefits: ['Hamstring flexibility', 'Glute strength', 'Hip mobility'],
@@ -166,7 +167,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Legs',
       muscleGroups: ['Hamstrings', 'Glutes', 'Lower Back']
     },
-    'russian_twist': {
+    russian_twist: {
       name: 'Russian Twist',
       description: 'Rotational core exercise targeting obliques',
       benefits: ['Oblique strength', 'Rotational power', 'Core stability'],
@@ -174,7 +175,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Core',
       muscleGroups: ['Obliques', 'Core', 'Hip Flexors']
     },
-    'shoulder_press': {
+    shoulder_press: {
       name: 'Shoulder Press',
       description: 'Overhead pressing movement for shoulder development',
       benefits: ['Shoulder strength', 'Overhead stability', 'Core engagement'],
@@ -182,7 +183,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Shoulders',
       muscleGroups: ['Shoulders', 'Triceps', 'Core']
     },
-    'squat': {
+    squat: {
       name: 'Squat',
       description: 'Fundamental lower body compound exercise',
       benefits: ['Leg strength', 'Hip mobility', 'Functional movement'],
@@ -190,7 +191,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Legs',
       muscleGroups: ['Quadriceps', 'Glutes', 'Hamstrings']
     },
-    't_bar_row': {
+    t_bar_row: {
       name: 'T-Bar Row',
       description: 'Back thickness exercise using T-bar or barbell',
       benefits: ['Back thickness', 'Rhomboid development', 'Posture improvement'],
@@ -198,7 +199,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Back',
       muscleGroups: ['Mid Traps', 'Rhomboids', 'Lats']
     },
-    'tricep_dips': {
+    tricep_dips: {
       name: 'Tricep Dips',
       description: 'Bodyweight tricep exercise using parallel bars or bench',
       benefits: ['Tricep strength', 'Shoulder stability', 'Functional strength'],
@@ -206,7 +207,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       category: 'Arms',
       muscleGroups: ['Triceps', 'Chest', 'Shoulders']
     },
-    'tricep_pushdown': {
+    tricep_pushdown: {
       name: 'Tricep Pushdown',
       description: 'Cable tricep isolation exercise',
       benefits: ['Tricep isolation', 'Arm definition', 'Elbow stability'],
@@ -217,22 +218,22 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
   };
 
   useEffect(() => {
+    const fetchExercises = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const fetchedExercises = await apiService.getExercises();
+        setExercises(fetchedExercises);
+      } catch (fetchError) {
+        setError('Failed to load exercises. Please make sure the backend server is running.');
+        console.error('Error fetching exercises:', fetchError);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchExercises();
   }, []);
-
-  const fetchExercises = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      const fetchedExercises = await apiService.getExercises();
-      setExercises(fetchedExercises);
-    } catch (error) {
-      setError('Failed to load exercises. Please make sure the backend server is running.');
-      console.error('Error fetching exercises:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty.toLowerCase()) {
@@ -249,13 +250,13 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
 
   const getCategoryColor = (category: string) => {
     const colors: { [key: string]: string } = {
-      'Chest': '#e3f2fd',
-      'Back': '#f3e5f5',
-      'Arms': '#fff3e0',
-      'Shoulders': '#e8f5e8',
-      'Legs': '#fff8e1',
-      'Core': '#fce4ec',
-      'Glutes': '#f1f8e9',
+      Chest: '#e3f2fd',
+      Back: '#f3e5f5',
+      Arms: '#fff3e0',
+      Shoulders: '#e8f5e8',
+      Legs: '#fff8e1',
+      Core: '#fce4ec',
+      Glutes: '#f1f8e9',
       'Full Body': '#e0f2f1'
     };
     return colors[category] || '#f5f5f5';
@@ -263,16 +264,16 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
 
   const formatExerciseName = (exercise: string): string => {
     const info = exerciseInfo[exercise];
-    return info ? info.name : exercise.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    return info ? info.name : exercise.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
   };
 
-  const filteredExercises = exercises.filter(exercise => {
+  const filteredExercises = exercises.filter((exercise) => {
     const info = exerciseInfo[exercise];
     const searchLower = searchTerm.toLowerCase();
     return (
       info?.name.toLowerCase().includes(searchLower) ||
       info?.category.toLowerCase().includes(searchLower) ||
-      info?.muscleGroups.some(muscle => muscle.toLowerCase().includes(searchLower)) ||
+      info?.muscleGroups.some((muscle) => muscle.toLowerCase().includes(searchLower)) ||
       exercise.toLowerCase().includes(searchLower)
     );
   });
@@ -304,33 +305,24 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       </Box>
 
       {error && (
-        <Alert 
-          severity="error" 
-          sx={{ mb: 3 }}
-          action={
-            <Button color="inherit" size="small" onClick={fetchExercises}>
-              Retry
-            </Button>
-          }
-        >
+        <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
 
-      {/* Search Bar */}
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center' }}>
         <TextField
           variant="outlined"
           placeholder="Search exercises, muscle groups, or categories..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(event) => setSearchTerm(event.target.value)}
           sx={{ width: '100%', maxWidth: 500 }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
                 <SearchIcon />
               </InputAdornment>
-            ),
+            )
           }}
         />
       </Box>
@@ -348,10 +340,10 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
 
           return (
             <Grid item xs={12} sm={6} md={4} key={exercise}>
-              <Card 
-                sx={{ 
-                  height: '100%', 
-                  display: 'flex', 
+              <Card
+                sx={{
+                  height: '100%',
+                  display: 'flex',
                   flexDirection: 'column',
                   transition: 'transform 0.2s, elevation 0.2s',
                   backgroundColor: getCategoryColor(info.category),
@@ -366,33 +358,28 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
                     <Typography variant="h6" component="h2" sx={{ fontWeight: 600 }}>
                       {info.name}
                     </Typography>
-                    <Chip 
-                      label={info.difficulty} 
-                      color={getDifficultyColor(info.difficulty) as any}
+                    <Chip
+                      label={info.difficulty}
+                      color={getDifficultyColor(info.difficulty) as 'success' | 'warning' | 'error' | 'default'}
                       size="small"
                     />
                   </Box>
 
-                  <Chip 
-                    label={info.category} 
-                    variant="outlined" 
-                    size="small" 
-                    sx={{ mb: 2 }}
-                  />
-                  
+                  <Chip label={info.category} variant="outlined" size="small" sx={{ mb: 2 }} />
+
                   <Typography variant="body2" color="text.secondary" paragraph>
                     {info.description}
                   </Typography>
-                  
+
                   <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
                     Target Muscles:
                   </Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2 }}>
-                    {info.muscleGroups.map((muscle, index) => (
-                      <Chip 
-                        key={index}
-                        label={muscle} 
-                        variant="outlined" 
+                    {info.muscleGroups.map((muscle) => (
+                      <Chip
+                        key={muscle}
+                        label={muscle}
+                        variant="outlined"
                         size="small"
                         sx={{ fontSize: '0.75rem' }}
                       />
@@ -403,11 +390,11 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
                     Benefits:
                   </Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {info.benefits.map((benefit, index) => (
-                      <Chip 
-                        key={index}
-                        label={benefit} 
-                        variant="filled" 
+                    {info.benefits.map((benefit) => (
+                      <Chip
+                        key={benefit}
+                        label={benefit}
+                        variant="filled"
                         size="small"
                         color="primary"
                         sx={{ fontSize: '0.75rem' }}
@@ -415,7 +402,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
                     ))}
                   </Box>
                 </CardContent>
-                
+
                 <CardActions sx={{ p: 2 }}>
                   <Button
                     fullWidth
@@ -423,10 +410,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
                     startIcon={<PlayArrowIcon />}
                     onClick={() => onExerciseSelect(exercise)}
                     size="large"
-                    sx={{ 
-                      fontWeight: 600,
-                      py: 1.5 
-                    }}
+                    sx={{ fontWeight: 600, py: 1.5 }}
                   >
                     Start Exercise
                   </Button>
@@ -442,11 +426,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
           <Typography variant="h6" color="text.secondary">
             No exercises found matching "{searchTerm}"
           </Typography>
-          <Button 
-            variant="outlined" 
-            onClick={() => setSearchTerm('')}
-            sx={{ mt: 2 }}
-          >
+          <Button variant="outlined" onClick={() => setSearchTerm('')} sx={{ mt: 2 }}>
             Clear Search
           </Button>
         </Box>
@@ -463,4 +443,4 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
   );
 };
 
-export default ExerciseSelector; 
+export default ExerciseSelector;
