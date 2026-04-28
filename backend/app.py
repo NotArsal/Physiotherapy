@@ -32,7 +32,9 @@ label_encoder = None
 # Stateless backend - current_exercise_state removed to support multi-worker environments
 
 def init_db():
-    """Initialize the SQLite database for session persistence."""
+    if os.path.exists(DATABASE_PATH):
+        return
+    
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     cursor.execute('''
@@ -71,54 +73,22 @@ def load_models():
 
 def build_model_input(joint_angles, landmarks=None):
     """
-    Create deterministic time-series input for the BiLSTM model.
-    If raw landmarks are provided, they are prioritized to match the original training features.
+    Create deterministic time-series input for the BiLSTM model using raw landmarks.
+    The model expects 33 landmarks (x, y, visibility) totaling 99 features.
     """
-    if landmarks and len(landmarks) >= 33:
-        # Prioritize raw landmarks (x, y, visibility for 33 points = 99 features)
-        # Each landmark expected to be [x, y, visibility] or {x, y, visibility}
-        flat_landmarks = []
-        for lm in landmarks[:33]:
-            if isinstance(lm, dict):
-                flat_landmarks.extend([lm.get('x', 0), lm.get('y', 0), lm.get('visibility', 0)])
-            else:
-                # Assume list or array [x, y, visibility]
-                flat_landmarks.extend(lm[:3])
-        
-        feature_vector = np.array(flat_landmarks, dtype=np.float32)
-    else:
-        # Fallback to engineered features if only angles are available (less accurate)
-        angles_array = np.array(joint_angles[:9], dtype=np.float32)
-        normalized = angles_array / 180.0
-        radians = np.radians(angles_array)
-        angle_diffs = np.array(
-            [abs(angles_array[i] - angles_array[i + 1]) for i in range(len(angles_array) - 1)],
-            dtype=np.float32,
-        )
-        summary_features = np.array(
-            [
-                np.mean(angles_array),
-                np.std(angles_array),
-                np.min(angles_array),
-                np.max(angles_array),
-                np.mean(normalized),
-                np.std(normalized),
-            ],
-            dtype=np.float32,
-        )
+    if not landmarks or len(landmarks) < 33:
+        raise ValueError("Raw MediaPipe landmarks (33 points) are required for accurate inference")
 
-        feature_vector = np.concatenate(
-            [
-                angles_array,
-                normalized,
-                np.sin(radians),
-                np.cos(radians),
-                angles_array ** 2,
-                angle_diffs,
-                summary_features,
-            ]
-        )
-        
+    # Extract raw landmarks (x, y, visibility for 33 points = 99 features)
+    flat_landmarks = []
+    for lm in landmarks[:33]:
+        if isinstance(lm, dict):
+            flat_landmarks.extend([lm.get('x', 0), lm.get('y', 0), lm.get('visibility', 0)])
+        else:
+            # Assume list or array [x, y, visibility]
+            flat_landmarks.extend(lm[:3])
+    
+    feature_vector = np.array(flat_landmarks, dtype=np.float32)
     feature_vector = np.pad(feature_vector, (0, max(0, 99 - feature_vector.size)))[:99]
 
     timesteps = 30
@@ -236,13 +206,15 @@ def predict():
         predicted_exercise_normalized = normalize_exercise_name(predicted_exercise)
         selected_exercise_normalized = normalize_exercise_name(selected_exercise)
 
+        exercise_match = (predicted_exercise_normalized == selected_exercise_normalized) if selected_exercise_normalized else (confidence >= 0.7)
+
         response = {
             "exercise": predicted_exercise,
             "confidence": confidence,
             "rep_count": 0, # Rep counting is now handled on the frontend
             "joint_angles": joint_angles,
             "timestamp": datetime.now().isoformat(),
-            "exercise_match": exercise_match,
+            "exercise_match": bool(exercise_match),
             "selected_exercise": selected_exercise,
             "success": True,
         }
