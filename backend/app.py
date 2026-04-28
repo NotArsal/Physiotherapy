@@ -456,11 +456,11 @@ def get_all_sessions():
         return jsonify({"error": f"Failed to retrieve all sessions: {exc}", "success": False}), 500
 
 
+# Initialize database and load models at module level for Gunicorn compatibility
+init_db()
+load_models()
+
 if __name__ == "__main__":
     print("Starting Physiotherapy Exercise Monitoring Backend...")
-    init_db()
-    if load_models():
-        print("Models loaded successfully. Starting Flask server...")
-        app.run(debug=True, host="0.0.0.0", port=int(os.getenv("PORT", "5000")))
-    else:
-        print("Failed to load models. Please check model files.")
+    print("Models loaded successfully. Starting Flask server...")
+    app.run(debug=True, host="0.0.0.0", port=int(os.getenv("PORT", "5000")))
