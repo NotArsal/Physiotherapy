@@ -81,11 +81,12 @@ class ApiService {
     }
   }
 
-  // Predict exercise from joint angles
-  async predictExercise(jointAngles: number[], selectedExercise?: string): Promise<PredictionResponse> {
+  // Predict exercise from joint angles and raw landmarks
+  async predictExercise(jointAngles: number[], selectedExercise?: string, landmarks?: any[]): Promise<PredictionResponse> {
     try {
       const response = await api.post('/predict', {
         joint_angles: jointAngles,
+        landmarks: landmarks,
         selected_exercise: selectedExercise
       });
       return response.data;

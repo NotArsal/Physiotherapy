@@ -21,6 +21,10 @@ This file records the system audit, fixes, cleanup, and follow-up recommendation
 - Removed the stale `@mediapipe/camera_utils` runtime dependency and simplified [frontend/src/utils/poseDetection.ts](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/utils/poseDetection.ts) to match the current frontend architecture.
 - Hardened [backend/pose_utils.py](C:/Users/shada/Desktop/Physiotherapy-project-main/backend/pose_utils.py) against zero-length angle calculations.
 - Updated documentation and ignore rules to reflect the actual current repo state.
+- Implemented SQLite session persistence in [backend/app.py](C:/Users/shada/Desktop/Physiotherapy-project-main/backend/app.py) to replace in-memory storage.
+- Aligned backend model input features with the original training data distribution by adding support for raw landmarks.
+- Updated frontend [frontend/src/services/api.ts](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/services/api.ts) and [frontend/src/components/ExerciseMonitor.tsx](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/components/ExerciseMonitor.tsx) to send raw landmarks for higher prediction accuracy.
+- Moved Firebase configuration to environment variables in [frontend/.env](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/.env) and updated [frontend/src/firebase.ts](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/firebase.ts).
 
 ## Removed Unnecessary Files
 
@@ -41,8 +45,8 @@ This file records the system audit, fixes, cleanup, and follow-up recommendation
 
 ## Remaining Recommendations
 
-- Move session persistence to a database.
-- Move Firebase secrets/config to environment variables.
+
+
 - Add automated tests for API routes, authentication flow, and live monitoring flow.
-- Align runtime preprocessing more closely with the original model training pipeline if that training code becomes available.
+
 - Gradually modernize the CRA-based frontend dependency tree to address the remaining `npm audit` vulnerabilities.

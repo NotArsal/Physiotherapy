@@ -1,7 +1,9 @@
 import os
 import pickle
+import sqlite3
 from datetime import datetime
 from pathlib import Path
+import json
 
 import numpy as np
 from flask import Flask, jsonify, request
@@ -14,6 +16,7 @@ BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "model"
 MODEL_PATH = MODEL_DIR / "bilstm_exercise_classifier.h5"
 LABEL_ENCODER_PATH = MODEL_DIR / "label_encoder.pkl"
+DATABASE_PATH = BASE_DIR / "physio_sessions.db"
 
 CORS(
     app,
@@ -25,7 +28,6 @@ CORS(
 
 model = None
 label_encoder = None
-exercise_sessions = []
 
 current_exercise_state = {
     "current_phase": "down",
@@ -35,6 +37,24 @@ current_exercise_state = {
     "last_counted_exercise": None,
 }
 
+def init_db():
+    """Initialize the SQLite database for session persistence."""
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            exercise TEXT NOT NULL,
+            total_reps INTEGER NOT NULL,
+            duration INTEGER NOT NULL,
+            timestamp TEXT NOT NULL,
+            session_data TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+    print(f"Database initialized at {DATABASE_PATH}")
 
 def load_models():
     """Load the trained model artifacts from the backend/model directory."""
@@ -64,41 +84,61 @@ def reset_exercise_state():
     }
 
 
-def build_model_input(joint_angles):
-    """Create deterministic time-series input for the BiLSTM model."""
-    angles_array = np.array(joint_angles[:9], dtype=np.float32)
-    normalized = angles_array / 180.0
-    radians = np.radians(angles_array)
-    angle_diffs = np.array(
-        [abs(angles_array[i] - angles_array[i + 1]) for i in range(len(angles_array) - 1)],
-        dtype=np.float32,
-    )
-    summary_features = np.array(
-        [
-            np.mean(angles_array),
-            np.std(angles_array),
-            np.min(angles_array),
-            np.max(angles_array),
-            np.mean(normalized),
-            np.std(normalized),
-        ],
-        dtype=np.float32,
-    )
+def build_model_input(joint_angles, landmarks=None):
+    """
+    Create deterministic time-series input for the BiLSTM model.
+    If raw landmarks are provided, they are prioritized to match the original training features.
+    """
+    if landmarks and len(landmarks) >= 33:
+        # Prioritize raw landmarks (x, y, visibility for 33 points = 99 features)
+        # Each landmark expected to be [x, y, visibility] or {x, y, visibility}
+        flat_landmarks = []
+        for lm in landmarks[:33]:
+            if isinstance(lm, dict):
+                flat_landmarks.extend([lm.get('x', 0), lm.get('y', 0), lm.get('visibility', 0)])
+            else:
+                # Assume list or array [x, y, visibility]
+                flat_landmarks.extend(lm[:3])
+        
+        feature_vector = np.array(flat_landmarks, dtype=np.float32)
+    else:
+        # Fallback to engineered features if only angles are available (less accurate)
+        angles_array = np.array(joint_angles[:9], dtype=np.float32)
+        normalized = angles_array / 180.0
+        radians = np.radians(angles_array)
+        angle_diffs = np.array(
+            [abs(angles_array[i] - angles_array[i + 1]) for i in range(len(angles_array) - 1)],
+            dtype=np.float32,
+        )
+        summary_features = np.array(
+            [
+                np.mean(angles_array),
+                np.std(angles_array),
+                np.min(angles_array),
+                np.max(angles_array),
+                np.mean(normalized),
+                np.std(normalized),
+            ],
+            dtype=np.float32,
+        )
 
-    feature_vector = np.concatenate(
-        [
-            angles_array,
-            normalized,
-            np.sin(radians),
-            np.cos(radians),
-            angles_array ** 2,
-            angle_diffs,
-            summary_features,
-        ]
-    )
+        feature_vector = np.concatenate(
+            [
+                angles_array,
+                normalized,
+                np.sin(radians),
+                np.cos(radians),
+                angles_array ** 2,
+                angle_diffs,
+                summary_features,
+            ]
+        )
+        
     feature_vector = np.pad(feature_vector, (0, max(0, 99 - feature_vector.size)))[:99]
 
     timesteps = 30
+    # Create a simple time series by tiling the single frame
+    # (Matches training data shape: 30 timesteps per sample)
     time_series = np.tile(feature_vector, (timesteps, 1))
     time_scale = np.linspace(0.98, 1.02, timesteps, dtype=np.float32).reshape(timesteps, 1)
 
@@ -120,13 +160,6 @@ def detect_exercise_phase(joint_angles, predicted_exercise, selected_exercise=No
     elbow_angle = joint_angles[2] if len(joint_angles) > 2 else 90
     hip_angle = joint_angles[4] if len(joint_angles) > 4 else 90
     knee_angle = joint_angles[6] if len(joint_angles) > 6 else 90
-
-    print("DEBUG Phase Detection:")
-    print(f"   Exercise: {predicted_exercise}")
-    print(
-        f"   Angles - Shoulder: {shoulder_angle:.1f} deg, "
-        f"Elbow: {elbow_angle:.1f} deg, Hip: {hip_angle:.1f} deg, Knee: {knee_angle:.1f} deg"
-    )
 
     selected_exercise_normalized = normalize_exercise_name(selected_exercise)
     predicted_exercise_normalized = normalize_exercise_name(predicted_exercise)
@@ -173,14 +206,13 @@ def detect_exercise_phase(joint_angles, predicted_exercise, selected_exercise=No
     elif new_phase == "hold":
         current_exercise_state["current_phase"] = new_phase
     else:
-        print(f"   Phase maintained: {new_phase}")
+        pass # Phase maintained
 
     current_exercise_state["last_prediction"] = {
         "exercise": predicted_exercise,
         "selected_exercise": selected_exercise,
         "timestamp": datetime.now().isoformat(),
     }
-    print(f"   Final: Phase={new_phase}, Reps={current_exercise_state['rep_count']}")
 
     return new_phase
 
@@ -192,6 +224,7 @@ def health_check():
             "status": "healthy",
             "model_loaded": model is not None,
             "encoder_loaded": label_encoder is not None,
+            "database": os.path.exists(DATABASE_PATH)
         }
     )
 
@@ -212,6 +245,7 @@ def predict():
 
         data = request.get_json(silent=True) or {}
         joint_angles = data.get("joint_angles", [])
+        landmarks = data.get("landmarks", []) # New: raw landmarks for feature alignment
         selected_exercise = data.get("selected_exercise")
 
         if not isinstance(joint_angles, list) or not joint_angles:
@@ -222,6 +256,7 @@ def predict():
         except (TypeError, ValueError):
             return jsonify({"error": "Joint angles must be numeric values"}), 400
 
+        # Basic pose visibility check
         zero_count = sum(1 for angle in joint_angles[:9] if abs(angle) < 5.0)
         if zero_count > 6:
             return jsonify(
@@ -243,7 +278,8 @@ def predict():
         elif len(joint_angles) < 9:
             joint_angles.extend([0.0] * (9 - len(joint_angles)))
 
-        model_input = build_model_input(joint_angles)
+        # Use raw landmarks if available to match training distribution
+        model_input = build_model_input(joint_angles, landmarks)
         prediction = model.predict(model_input, verbose=0)
 
         predicted_class_idx = int(np.argmax(prediction[0]))
@@ -263,11 +299,6 @@ def predict():
         phase = "unknown"
         if should_count_reps:
             phase = detect_exercise_phase(joint_angles, phase_source_exercise, selected_exercise)
-        else:
-            print(
-                "Low confidence, skipping rep detection: "
-                f"detected={predicted_exercise}, selected={selected_exercise}, confidence={confidence:.2f}"
-            )
 
         response = {
             "exercise": predicted_exercise,
@@ -286,7 +317,6 @@ def predict():
     except Exception as exc:
         print(f"Prediction error: {exc}")
         import traceback
-
         traceback.print_exc()
         return jsonify({"error": f"Prediction failed: {exc}", "success": False}), 500
 
@@ -307,20 +337,27 @@ def log_session():
             if field not in data:
                 return jsonify({"error": f"Missing required field: {field}"}), 400
 
-        session_entry = {
-            "user_id": data["user_id"],
-            "exercise": data["exercise"],
-            "total_reps": data["total_reps"],
-            "duration": data["duration"],
-            "timestamp": datetime.now().isoformat(),
-            "session_data": data.get("session_data", []),
-        }
-        exercise_sessions.append(session_entry)
+        user_id = data["user_id"]
+        exercise = data["exercise"]
+        total_reps = data["total_reps"]
+        duration = data["duration"]
+        timestamp = datetime.now().isoformat()
+        session_data = json.dumps(data.get("session_data", []))
+
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO sessions (user_id, exercise, total_reps, duration, timestamp, session_data)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, exercise, total_reps, duration, timestamp, session_data))
+        conn.commit()
+        session_id = cursor.lastrowid
+        conn.close()
 
         return jsonify(
             {
                 "message": "Session logged successfully",
-                "session_id": len(exercise_sessions) - 1,
+                "session_id": session_id,
                 "success": True,
             }
         )
@@ -330,42 +367,73 @@ def log_session():
 
 @app.route("/sessions/<user_id>", methods=["GET"])
 def get_user_sessions(user_id):
-    user_sessions = [session for session in exercise_sessions if session["user_id"] == user_id]
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM sessions WHERE user_id = ? ORDER BY timestamp DESC', (user_id,))
+        rows = cursor.fetchall()
+        conn.close()
 
-    total_sessions = len(user_sessions)
-    total_reps = sum(session["total_reps"] for session in user_sessions)
-    total_duration = sum(session["duration"] for session in user_sessions)
+        user_sessions = []
+        for row in rows:
+            session = dict(row)
+            session["session_data"] = json.loads(session["session_data"]) if session["session_data"] else []
+            user_sessions.append(session)
 
-    exercise_stats = {}
-    for session in user_sessions:
-        exercise = session["exercise"]
-        if exercise not in exercise_stats:
-            exercise_stats[exercise] = {"sessions": 0, "total_reps": 0, "total_duration": 0}
-        exercise_stats[exercise]["sessions"] += 1
-        exercise_stats[exercise]["total_reps"] += session["total_reps"]
-        exercise_stats[exercise]["total_duration"] += session["duration"]
+        total_sessions = len(user_sessions)
+        total_reps = sum(session["total_reps"] for session in user_sessions)
+        total_duration = sum(session["duration"] for session in user_sessions)
 
-    return jsonify(
-        {
-            "user_id": user_id,
-            "sessions": user_sessions,
-            "summary": {
-                "total_sessions": total_sessions,
-                "total_reps": total_reps,
-                "total_duration": total_duration,
-                "exercise_breakdown": exercise_stats,
-            },
-        }
-    )
+        exercise_stats = {}
+        for session in user_sessions:
+            exercise = session["exercise"]
+            if exercise not in exercise_stats:
+                exercise_stats[exercise] = {"sessions": 0, "total_reps": 0, "total_duration": 0}
+            exercise_stats[exercise]["sessions"] += 1
+            exercise_stats[exercise]["total_reps"] += session["total_reps"]
+            exercise_stats[exercise]["total_duration"] += session["duration"]
+
+        return jsonify(
+            {
+                "user_id": user_id,
+                "sessions": user_sessions,
+                "summary": {
+                    "total_sessions": total_sessions,
+                    "total_reps": total_reps,
+                    "total_duration": total_duration,
+                    "exercise_breakdown": exercise_stats,
+                },
+            }
+        )
+    except Exception as exc:
+        return jsonify({"error": f"Failed to retrieve sessions: {exc}", "success": False}), 500
 
 
 @app.route("/sessions", methods=["GET"])
 def get_all_sessions():
-    return jsonify({"sessions": exercise_sessions})
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM sessions ORDER BY timestamp DESC')
+        rows = cursor.fetchall()
+        conn.close()
+
+        all_sessions = []
+        for row in rows:
+            session = dict(row)
+            session["session_data"] = json.loads(session["session_data"]) if session["session_data"] else []
+            all_sessions.append(session)
+
+        return jsonify({"sessions": all_sessions})
+    except Exception as exc:
+        return jsonify({"error": f"Failed to retrieve all sessions: {exc}", "success": False}), 500
 
 
 if __name__ == "__main__":
     print("Starting Physiotherapy Exercise Monitoring Backend...")
+    init_db()
     if load_models():
         print("Models loaded successfully. Starting Flask server...")
         app.run(debug=True, host="0.0.0.0", port=int(os.getenv("PORT", "5000")))

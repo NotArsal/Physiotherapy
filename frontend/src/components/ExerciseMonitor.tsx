@@ -227,7 +227,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         }
 
         lastPredictionAtRef.current = now;
-        const predictionResult = await apiService.predictExercise(jointAngles, selectedExerciseRef.current);
+        const predictionResult = await apiService.predictExercise(jointAngles, selectedExerciseRef.current, results.poseLandmarks);
 
         setPrediction(predictionResult);
         setRepCount(predictionResult.rep_count);
