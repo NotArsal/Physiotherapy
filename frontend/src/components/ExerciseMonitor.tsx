@@ -460,13 +460,18 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       setIsActive(true);
       setIsPaused(false);
       setRepCount(0);
+      repCountRef.current = 0;
       setSessionDuration(0);
       setSessionStartTime(new Date());
       setPredictedExercise('');
+      predictedExerciseRef.current = '';
       setExerciseFeedback('Ready to start!');
       setPrediction(null);
       setAiModelDetails(null);
       setCurrentPhase('');
+      currentPhaseRef.current = '';
+      setPoseDetected(false);
+      poseDetectedRef.current = false;
       lastPredictionAtRef.current = 0;
 
       const started = await startCamera();
