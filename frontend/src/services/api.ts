@@ -62,7 +62,8 @@ class ApiService {
   // Health check
   async healthCheck() {
     try {
-      const response = await api.get('/health');
+      // Increase timeout for health check to handle cold starts
+      const response = await api.get('/health', { timeout: 30000 });
       return response.data;
     } catch (error) {
       console.error('Health check failed:', error);
@@ -99,7 +100,8 @@ class ApiService {
   // Reset exercise session
   async resetSession() {
     try {
-      const response = await api.post('/reset_session');
+      // Increase timeout for session reset
+      const response = await api.post('/reset_session', {}, { timeout: 10000 });
       return response.data;
     } catch (error) {
       console.error('Failed to reset session:', error);

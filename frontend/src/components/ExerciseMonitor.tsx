@@ -417,16 +417,41 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
 
   const handleStart = async () => {
     try {
+      setLoading(true);
       setError('');
-      const health = await apiService.healthCheck();
-      addToConsoleLog(`Backend healthy: ${health.status}`);
+      addToConsoleLog('Initializing session...');
 
-      const exercises = await apiService.getExercises();
-      if (!exercises.includes(selectedExercise)) {
-        setError(`Exercise "${selectedExercise}" not available in backend.`);
+      // Helper to normalize strings for comparison
+      const normalize = (s: string) => s.trim().toLowerCase().replace(/-/g, '_').replace(/ /g, '_');
+      const targetExercise = normalize(selectedExercise);
+
+      // Attempt to wake up backend (Retry logic)
+      let healthy = false;
+      let attempts = 0;
+      while (!healthy && attempts < 3) {
+        try {
+          addToConsoleLog(`Waking up server (Attempt ${attempts + 1})...`);
+          const health = await apiService.healthCheck();
+          if (health.status === 'healthy') {
+            healthy = true;
+          }
+        } catch (e) {
+          attempts++;
+          if (attempts >= 3) throw e;
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
+        }
+      }
+
+      const availableExercises = await apiService.getExercises();
+      const isAvailable = availableExercises.some(ex => normalize(ex) === targetExercise);
+
+      if (!isAvailable) {
+        setError(`Exercise "${selectedExercise}" not available in backend. Available: ${availableExercises.join(', ')}`);
+        setLoading(false);
         return;
       }
 
+      addToConsoleLog('Setting up exercise...');
       await apiService.resetSession();
 
       isActiveRef.current = true;
@@ -441,7 +466,6 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       setPrediction(null);
       setAiModelDetails(null);
       setCurrentPhase('');
-      setPoseDetected(false);
       lastPredictionAtRef.current = 0;
 
       const started = await startCamera();
@@ -459,6 +483,8 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       setError(`Failed to start exercise session: ${message}`);
       isActiveRef.current = false;
       setIsActive(false);
+    } finally {
+      setLoading(false);
     }
   };
 
