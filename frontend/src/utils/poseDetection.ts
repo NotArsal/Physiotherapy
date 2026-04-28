@@ -86,6 +86,7 @@ export function extractJointAngles(landmarks: any): number[] {
     angles.push(calculateAngle(rightHip, rightKnee, rightAnkle));
     
     // Spine angle (approximation)
+    // Measures the inclination of the torso relative to a vertical axis
     const shoulderMidpoint = {
       x: (leftShoulder.x + rightShoulder.x) / 2,
       y: (leftShoulder.y + rightShoulder.y) / 2
@@ -94,9 +95,11 @@ export function extractJointAngles(landmarks: any): number[] {
       x: (leftHip.x + rightHip.x) / 2,
       y: (leftHip.y + rightHip.y) / 2
     };
+    
+    // Create a virtual vertical reference directly above the shoulder midpoint
     const verticalRef = {
       x: shoulderMidpoint.x,
-      y: shoulderMidpoint.y - 0.1
+      y: shoulderMidpoint.y - 1.0 // Extend further for better vector stability
     };
     
     angles.push(calculateAngle(verticalRef, shoulderMidpoint, hipMidpoint));
