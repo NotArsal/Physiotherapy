@@ -355,4 +355,66 @@ export function getMilestoneFeedback(repCount: number): string {
   if (repCount % 5 === 0) return `${repCount} reps down!`;
   
   return getRandomFeedback('encouragement');
-} 
+}
+
+/**
+ * Normalizes exercise names for consistent comparison
+ */
+export function normalizeExerciseName(exerciseName: string | null | undefined): string {
+  if (!exerciseName) return "";
+  return str(exerciseName).trim().toLowerCase().replace(/-/g, "_").replace(/ /g, "_");
+}
+
+/**
+ * Detects the current phase of an exercise based on joint angles.
+ * Returns the new phase ('up', 'down', or 'hold').
+ */
+export function detectExercisePhase(
+  jointAngles: number[], 
+  exercise: string, 
+  previousPhase: string = 'down'
+): string {
+  if (!jointAngles || jointAngles.length < 9) return previousPhase;
+
+  const shoulderAngle = jointAngles[0]; // Left shoulder
+  const elbowAngle = jointAngles[2];    // Left elbow
+  const hipAngle = jointAngles[4];      // Left hip
+  const kneeAngle = jointAngles[6];     // Left knee
+
+  const exerciseKey = normalizeExerciseName(exercise);
+  let newPhase = previousPhase;
+
+  // Exercise-specific phase detection logic (matching backend thresholds)
+  if (["bench_press", "incline_bench_press", "decline_bench_press", "push_up"].includes(exerciseKey)) {
+    newPhase = elbowAngle < 120 ? "down" : "up";
+  } else if (["barbell_biceps_curl", "hammer_curl", "biceps_curl"].includes(exerciseKey)) {
+    newPhase = elbowAngle < 120 ? "down" : "up";
+  } else if (["tricep_dips", "tricep_pushdown"].includes(exerciseKey)) {
+    newPhase = elbowAngle < 100 ? "down" : "up";
+  } else if (["shoulder_press", "lateral_raise"].includes(exerciseKey)) {
+    newPhase = shoulderAngle < 100 ? "down" : "up";
+  } else if (["squat", "leg_extension"].includes(exerciseKey)) {
+    newPhase = kneeAngle < 120 ? "down" : "up";
+  } else if (["deadlift", "romanian_deadlift"].includes(exerciseKey)) {
+    newPhase = hipAngle < 140 ? "down" : "up";
+  } else if (["hip_thrust", "leg_raises"].includes(exerciseKey)) {
+    newPhase = hipAngle < 110 ? "down" : "up";
+  } else if (["pull_up", "lat_pulldown", "t_bar_row"].includes(exerciseKey)) {
+    newPhase = elbowAngle > 140 ? "down" : "up";
+  } else if (exerciseKey === "russian_twist") {
+    newPhase = shoulderAngle < 85 ? "down" : "up";
+  } else if (exerciseKey === "plank") {
+    newPhase = "hold";
+  } else if (exerciseKey === "chest_fly_machine") {
+    newPhase = shoulderAngle > 110 ? "down" : "up";
+  } else {
+    // Default fallback
+    newPhase = shoulderAngle < 100 ? "down" : "up";
+  }
+
+  return newPhase;
+}
+
+function str(val: any): string {
+  return String(val);
+}

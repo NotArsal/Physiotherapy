@@ -26,7 +26,8 @@ import {
   speak,
   getRandomFeedback,
   getExerciseSpecificFeedback,
-  getMilestoneFeedback
+  getMilestoneFeedback,
+  detectExercisePhase
 } from '../utils/poseDetection';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -230,11 +231,34 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         const predictionResult = await apiService.predictExercise(jointAngles, selectedExerciseRef.current, results.poseLandmarks);
 
         setPrediction(predictionResult);
-        setRepCount(predictionResult.rep_count);
-        setCurrentPhase(predictionResult.phase);
         setConfidence(predictionResult.confidence);
         setPredictedExercise(predictionResult.exercise || 'unknown');
         setAiModelDetails(predictionResult);
+
+        // Client-side phase detection and rep counting
+        const previousPhase = currentPhaseRef.current || 'down';
+        const newPhase = detectExercisePhase(jointAngles, selectedExerciseRef.current, previousPhase);
+        
+        if (newPhase !== 'hold' && previousPhase !== newPhase) {
+          if (previousPhase === 'down' && newPhase === 'up') {
+            const newRepCount = repCountRef.current + 1;
+            setRepCount(newRepCount);
+            
+            // Trigger voice feedback on new rep
+            if (voiceEnabledRef.current) {
+              const feedback =
+                newRepCount % 5 === 0 || newRepCount <= 3
+                  ? getMilestoneFeedback(newRepCount)
+                  : Math.random() > 0.5
+                    ? getRandomFeedback('goodRep')
+                    : getExerciseSpecificFeedback(selectedExerciseRef.current);
+              speak(feedback);
+            }
+          }
+          setCurrentPhase(newPhase);
+        } else if (newPhase === 'hold') {
+          setCurrentPhase(newPhase);
+        }
 
         const isCorrectExercise =
           normalizeExerciseName(predictionResult.exercise || '') === normalizeExerciseName(selectedExerciseRef.current);
@@ -257,15 +281,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
           setExerciseFeedback('Low confidence detection. Check your positioning.');
         }
 
-        if (voiceEnabledRef.current && predictionResult.rep_count > repCountRef.current) {
-          const feedback =
-            predictionResult.rep_count % 5 === 0 || predictionResult.rep_count <= 3
-              ? getMilestoneFeedback(predictionResult.rep_count)
-              : Math.random() > 0.5
-                ? getRandomFeedback('goodRep')
-                : getExerciseSpecificFeedback(selectedExerciseRef.current);
-          speak(feedback);
-        }
+        // Voice feedback moved to the rep counting logic above
       } catch (processingError) {
         if (!poseDisposedRef.current) {
           addToConsoleLog(`Pose processing error: ${String(processingError)}`);

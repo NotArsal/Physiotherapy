@@ -29,13 +29,7 @@ CORS(
 model = None
 label_encoder = None
 
-current_exercise_state = {
-    "current_phase": "down",
-    "rep_count": 0,
-    "last_prediction": None,
-    "phase_threshold": 0.7,
-    "last_counted_exercise": None,
-}
+# Stateless backend - current_exercise_state removed to support multi-worker environments
 
 def init_db():
     """Initialize the SQLite database for session persistence."""
@@ -72,16 +66,7 @@ def load_models():
         return False
 
 
-def reset_exercise_state():
-    """Reset in-memory phase tracking for the current session."""
-    global current_exercise_state
-    current_exercise_state = {
-        "current_phase": "down",
-        "rep_count": 0,
-        "last_prediction": None,
-        "phase_threshold": 0.7,
-        "last_counted_exercise": None,
-    }
+
 
 
 def build_model_input(joint_angles, landmarks=None):
@@ -152,69 +137,7 @@ def normalize_exercise_name(exercise_name):
     return str(exercise_name).strip().lower().replace("-", "_").replace(" ", "_")
 
 
-def detect_exercise_phase(joint_angles, predicted_exercise, selected_exercise=None):
-    """Detect the current phase for supported exercises and count reps."""
-    global current_exercise_state
 
-    shoulder_angle = joint_angles[0] if len(joint_angles) > 0 else 90
-    elbow_angle = joint_angles[2] if len(joint_angles) > 2 else 90
-    hip_angle = joint_angles[4] if len(joint_angles) > 4 else 90
-    knee_angle = joint_angles[6] if len(joint_angles) > 6 else 90
-
-    selected_exercise_normalized = normalize_exercise_name(selected_exercise)
-    predicted_exercise_normalized = normalize_exercise_name(predicted_exercise)
-    exercise_lower = selected_exercise_normalized or predicted_exercise_normalized
-
-    if current_exercise_state["last_counted_exercise"] != exercise_lower:
-        current_exercise_state["current_phase"] = "down"
-        current_exercise_state["last_counted_exercise"] = exercise_lower
-
-    if exercise_lower in ["bench_press", "incline_bench_press", "decline_bench_press", "push_up"]:
-        new_phase = "down" if elbow_angle < 120 else "up"
-    elif exercise_lower in ["barbell_biceps_curl", "hammer_curl"]:
-        new_phase = "down" if elbow_angle < 120 else "up"
-    elif exercise_lower in ["tricep_dips", "tricep_pushdown"]:
-        new_phase = "down" if elbow_angle < 100 else "up"
-    elif exercise_lower in ["shoulder_press", "lateral_raise"]:
-        new_phase = "down" if shoulder_angle < 100 else "up"
-    elif exercise_lower in ["squat", "leg_extension"]:
-        new_phase = "down" if knee_angle < 120 else "up"
-    elif exercise_lower in ["deadlift", "romanian_deadlift"]:
-        new_phase = "down" if hip_angle < 140 else "up"
-    elif exercise_lower in ["hip_thrust", "leg_raises"]:
-        new_phase = "down" if hip_angle < 110 else "up"
-    elif exercise_lower in ["pull_up", "lat_pulldown", "t_bar_row"]:
-        new_phase = "down" if elbow_angle > 140 else "up"
-    elif exercise_lower == "russian_twist":
-        new_phase = "down" if shoulder_angle < 85 else "up"
-    elif exercise_lower == "plank":
-        new_phase = "hold"
-    elif exercise_lower == "chest_fly_machine":
-        new_phase = "down" if shoulder_angle > 110 else "up"
-    else:
-        new_phase = "down" if shoulder_angle < 100 else "up"
-
-    old_phase = current_exercise_state["current_phase"]
-    old_rep_count = current_exercise_state["rep_count"]
-
-    if new_phase != "hold" and old_phase != new_phase:
-        if old_phase == "down" and new_phase == "up":
-            current_exercise_state["rep_count"] += 1
-            print(f"   REP COMPLETED! {old_rep_count} -> {current_exercise_state['rep_count']}")
-        current_exercise_state["current_phase"] = new_phase
-        print(f"   Phase transition: {old_phase} -> {new_phase}")
-    elif new_phase == "hold":
-        current_exercise_state["current_phase"] = new_phase
-    else:
-        pass # Phase maintained
-
-    current_exercise_state["last_prediction"] = {
-        "exercise": predicted_exercise,
-        "selected_exercise": selected_exercise,
-        "timestamp": datetime.now().isoformat(),
-    }
-
-    return new_phase
 
 
 @app.errorhandler(500)
@@ -289,7 +212,7 @@ def predict():
                     "exercise": "unknown",
                     "confidence": 0.0,
                     "phase": "unknown",
-                    "rep_count": current_exercise_state["rep_count"],
+                    "rep_count": 0,
                     "joint_angles": joint_angles[:9],
                     "timestamp": datetime.now().isoformat(),
                     "error": "Poor pose detection - please ensure you are fully visible in the camera",
@@ -313,29 +236,14 @@ def predict():
         predicted_exercise_normalized = normalize_exercise_name(predicted_exercise)
         selected_exercise_normalized = normalize_exercise_name(selected_exercise)
 
-        if selected_exercise_normalized:
-            exercise_match = predicted_exercise_normalized == selected_exercise_normalized
-        else:
-            exercise_match = confidence >= 0.7
-
-        phase_source_exercise = selected_exercise or predicted_exercise
-        should_count_reps = bool(selected_exercise_normalized) or confidence >= 0.55
-
-        phase = "unknown"
-        if should_count_reps:
-            phase = detect_exercise_phase(joint_angles, phase_source_exercise, selected_exercise)
-
         response = {
             "exercise": predicted_exercise,
             "confidence": confidence,
-            "phase": phase,
-            "rep_count": current_exercise_state["rep_count"],
+            "rep_count": 0, # Rep counting is now handled on the frontend
             "joint_angles": joint_angles,
             "timestamp": datetime.now().isoformat(),
             "exercise_match": exercise_match,
             "selected_exercise": selected_exercise,
-            "counting_exercise": phase_source_exercise,
-            "counting_active": should_count_reps,
             "success": True,
         }
         return jsonify(response)
@@ -348,8 +256,8 @@ def predict():
 
 @app.route("/reset_session", methods=["POST"])
 def reset_session():
-    reset_exercise_state()
-    return jsonify({"message": "Session reset successfully"})
+    # Session reset is now handled on the frontend
+    return jsonify({"message": "Session reset successfully", "success": True})
 
 
 @app.route("/log_session", methods=["POST"])
