@@ -17,7 +17,7 @@ LABEL_ENCODER_PATH = MODEL_DIR / "label_encoder.pkl"
 
 CORS(
     app,
-    origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    origins=["http://localhost:3000", "http://127.0.0.1:3000", os.getenv("FRONTEND_URL", "*")],
     allow_headers=["Content-Type", "Authorization"],
     methods=["GET", "POST", "OPTIONS"],
     supports_credentials=True,
