@@ -647,7 +647,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
 
             <Box sx={{ mt: 2, display: 'flex', gap: 2, justifyContent: 'center' }}>
               {!isActive ? (
-                <Button variant="contained" size="large" startIcon={<PlayArrowIcon />} onClick={handleStart}>
+                <Button variant="contained" size="large" startIcon={<PlayArrowIcon />} onClick={handleStart} disabled={loading}>
                   Start Exercise
                 </Button>
               ) : (
@@ -666,6 +666,16 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                 </>
               )}
             </Box>
+
+            {/* Loading Overlay */}
+            <Backdrop
+              sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1, position: 'absolute', flexDirection: 'column', gap: 2, borderRadius: '8px' }}
+              open={loading}
+            >
+              <CircularProgress color="inherit" />
+              <Typography variant="h6">Waking up server...</Typography>
+              <Typography variant="body2">This may take up to 30 seconds on first load.</Typography>
+            </Backdrop>
           </Paper>
         </Grid>
 
