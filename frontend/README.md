@@ -4,9 +4,9 @@ This frontend is a React + TypeScript app for:
 
 - User authentication with Firebase
 - Exercise selection
-- Webcam-based pose monitoring
+- Webcam-based pose monitoring using MediaPipe
 - Real-time rep and phase feedback
-- Session dashboard and debug tooling
+- Session dashboard and analytics
 
 ## Setup
 
@@ -18,32 +18,31 @@ npm start
 
 The app runs on `http://localhost:3000`.
 
-## Environment
+## Environment Variables
 
-The frontend uses `REACT_APP_API_BASE_URL` when provided. If unset, it defaults to `http://localhost:5000`.
+The frontend relies on environment variables for API and Firebase configuration. Create a `.env` file in the root of the `frontend` directory:
 
-Example:
-
-```powershell
-$env:REACT_APP_API_BASE_URL="http://localhost:5000"
-npm start
+```env
+REACT_APP_API_BASE_URL=http://localhost:5000
+REACT_APP_FIREBASE_API_KEY=your_key
+REACT_APP_FIREBASE_AUTH_DOMAIN=your_domain
+REACT_APP_FIREBASE_PROJECT_ID=your_id
+REACT_APP_FIREBASE_STORAGE_BUCKET=your_bucket
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+REACT_APP_FIREBASE_APP_ID=your_app_id
+REACT_APP_FIREBASE_MEASUREMENT_ID=your_measurement_id
 ```
 
-## Main Areas
+## Main Components
 
-- [src/App.tsx](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/App.tsx): app shell and navigation
-- [src/components/ExerciseSelector.tsx](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/components/ExerciseSelector.tsx): exercise browser
-- [src/components/ExerciseMonitor.tsx](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/components/ExerciseMonitor.tsx): live monitoring screen
-- [src/components/Dashboard.tsx](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/components/Dashboard.tsx): analytics view
-- [src/components/MediaPipeDebug.tsx](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/components/MediaPipeDebug.tsx): pose-debug page
-- [src/services/api.ts](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/services/api.ts): API client
-- [src/firebase.ts](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/firebase.ts): Firebase bootstrapping
+- [src/components/ExerciseMonitor.tsx](src/components/ExerciseMonitor.tsx): Live monitoring with MediaPipe integration.
+- [src/components/Dashboard.tsx](src/components/Dashboard.tsx): View session history and progress.
+- [src/services/api.ts](src/services/api.ts): Communication with the Flask backend.
+- [src/firebase.ts](src/firebase.ts): Firebase initialization using environment variables.
 
-## Notes
+## Technical Notes
 
-- MediaPipe assets are loaded from a CDN during runtime.
-- Firebase authentication depends on the config currently committed in `src/firebase.ts`.
-- The frontend build was validated successfully after the audit fixes.
-- The exercise monitor and debug console now use a request-animation-frame processing loop with explicit webcam and MediaPipe cleanup.
-- The old `@mediapipe/camera_utils` dependency is no longer part of the active runtime path.
-- The current frontend dependency tree still reports audit vulnerabilities inherited from the older CRA stack.
+- **Pose Detection**: Uses MediaPipe Pose (Task API) loaded via CDN.
+- **Feature Alignment**: The monitor now sends raw landmarks to the backend for improved BiLSTM classification.
+- **Cleanup**: Implementation includes explicit webcam and MediaPipe context cleanup to prevent memory leaks during exercise transitions.
+- **Hosting**: Deployed on Vercel with automated CI/CD.

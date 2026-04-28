@@ -12,6 +12,7 @@ Physiotherapy-project-main/
 |   |-- run.py
 |   |-- pose_utils.py
 |   |-- requirements.txt
+|   |-- physio_sessions.db
 |   `-- model/
 |-- frontend/
 |   |-- README.md
@@ -26,13 +27,13 @@ Physiotherapy-project-main/
 
 ## Quick Start
 
-Use Python 3.10 for backend setup because the TensorFlow dependency in this project is pinned for that runtime.
-
 ### Backend
+
+Use Python 3.10 or 3.13. For deployment on Render, Python 3.10 is recommended for TensorFlow 2.13 compatibility.
 
 ```powershell
 cd backend
-py -3.10 -m venv .venv
+python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 python run.py
@@ -50,48 +51,31 @@ npm start
 
 The frontend starts on `http://localhost:3000`.
 
-If the API is hosted on a different port, set the frontend API base URL before `npm start`:
+Before starting, ensure you have a `.env` file in the `frontend` directory with your Firebase configuration.
 
-```powershell
-$env:REACT_APP_API_BASE_URL="http://localhost:5001"
-```
+## Deployment
 
-## Validation
-
-Frontend production build:
-
-```powershell
-cd frontend
-npm run build
-```
-
-Backend syntax validation:
-
-```powershell
-cd backend
-python -m py_compile app.py run.py pose_utils.py
-```
+- **Backend**: Hosted on Render at [https://physiotracker-backend.onrender.com](https://physiotracker-backend.onrender.com)
+- **Frontend**: Hosted on Vercel at [https://physiotherapy-frotend.vercel.app](https://physiotherapy-frotend.vercel.app)
 
 ## Current Behavior
 
-- The backend resolves model files from `backend/model` using absolute paths relative to [backend/app.py](C:/Users/shada/Desktop/Physiotherapy-project-main/backend/app.py).
-- Session history is stored in memory, so data resets when the backend restarts.
-- Firebase config is defined in [frontend/src/firebase.ts](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/firebase.ts).
-- MediaPipe pose assets load from the jsDelivr CDN at runtime.
-- Repetition counting now follows the user-selected exercise flow, so rep detection can continue even when the classifier confidence is low.
-- The live monitor and debug views now keep tighter control over MediaPipe and webcam cleanup to reduce repeated WebGL/context churn.
+- **Model Loading**: The backend resolves model files from `backend/model` using absolute paths.
+- **Persistence**: Session history is persisted in a local **SQLite database** (`physio_sessions.db`).
+- **Feature Alignment**: The system uses raw landmarks (33 points) for the BiLSTM classifier to match the original training data distribution.
+- **Environment Variables**: Firebase configuration and API base URLs are managed via environment variables.
+- **MediaPipe**: Pose detection assets load from the jsDelivr CDN at runtime.
+- **Repetition Counting**: Follows the user-selected exercise flow, ensuring stability even with noisy classifier predictions.
 
 ## Documentation
 
-- Root overview: [README.md](C:/Users/shada/Desktop/Physiotherapy-project-main/README.md)
-- Backend details: [backend/README.md](C:/Users/shada/Desktop/Physiotherapy-project-main/backend/README.md)
-- Frontend details: [frontend/README.md](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/README.md)
-- Audit and repair log: [CHANGELOG_AUDIT.md](C:/Users/shada/Desktop/Physiotherapy-project-main/CHANGELOG_AUDIT.md)
+- Root overview: [README.md](README.md)
+- Backend details: [backend/README.md](backend/README.md)
+- Frontend details: [frontend/README.md](frontend/README.md)
+- Audit and repair log: [CHANGELOG_AUDIT.md](CHANGELOG_AUDIT.md)
 
 ## Follow-Up Improvements
 
-- Persist session history in a real database instead of process memory.
-- Move Firebase configuration to environment variables for safer deployment.
 - Add automated API and UI tests for the webcam and prediction flow.
-- Replace the current feature-engineering bridge with preprocessing that matches the original model training pipeline exactly.
-- Refresh the frontend dependency stack over time; the current CRA-based tree still reports known audit vulnerabilities.
+- Refresh the frontend dependency stack to address remaining `npm audit` vulnerabilities.
+- Implement more complex form analysis (e.g., velocity tracking, ROM depth analysis).
