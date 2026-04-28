@@ -217,6 +217,17 @@ def detect_exercise_phase(joint_angles, predicted_exercise, selected_exercise=No
     return new_phase
 
 
+@app.route("/", methods=["GET"])
+def index():
+    return jsonify(
+        {
+            "message": "PhysioTracker API is running",
+            "docs": "https://github.com/NotArsal/Physiotherapy",
+            "health_check": "/health"
+        }
+    )
+
+
 @app.route("/health", methods=["GET"])
 def health_check():
     return jsonify(
