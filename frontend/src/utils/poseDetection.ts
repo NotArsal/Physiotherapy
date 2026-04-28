@@ -61,11 +61,11 @@ export function extractJointAngles(landmarks: any): number[] {
     
     const angles = [];
     
-    // Left shoulder angle (shoulder-elbow-wrist)
-    angles.push(calculateAngle(leftShoulder, leftElbow, leftWrist));
+    // Left shoulder angle (hip-shoulder-elbow)
+    angles.push(calculateAngle(leftHip, leftShoulder, leftElbow));
     
-    // Right shoulder angle (shoulder-elbow-wrist)
-    angles.push(calculateAngle(rightShoulder, rightElbow, rightWrist));
+    // Right shoulder angle (hip-shoulder-elbow)
+    angles.push(calculateAngle(rightHip, rightShoulder, rightElbow));
     
     // Left elbow angle (shoulder-elbow-wrist)
     angles.push(calculateAngle(leftShoulder, leftElbow, leftWrist));
@@ -362,12 +362,13 @@ export function getMilestoneFeedback(repCount: number): string {
  */
 export function normalizeExerciseName(exerciseName: string | null | undefined): string {
   if (!exerciseName) return "";
-  return str(exerciseName).trim().toLowerCase().replace(/-/g, "_").replace(/ /g, "_");
+  return String(exerciseName).trim().toLowerCase().replace(/-/g, "_").replace(/ /g, "_");
 }
 
 /**
  * Detects the current phase of an exercise based on joint angles.
  * Returns the new phase ('up', 'down', or 'hold').
+ * Uses hysteresis (High/Low thresholds) to prevent flickering and improve rep counting.
  */
 export function detectExercisePhase(
   jointAngles: number[], 
@@ -376,45 +377,55 @@ export function detectExercisePhase(
 ): string {
   if (!jointAngles || jointAngles.length < 9) return previousPhase;
 
-  const shoulderAngle = jointAngles[0]; // Left shoulder
-  const elbowAngle = jointAngles[2];    // Left elbow
-  const hipAngle = jointAngles[4];      // Left hip
-  const kneeAngle = jointAngles[6];     // Left knee
+  const shoulderAngle = jointAngles[0]; // Left shoulder (Hip-Shoulder-Elbow)
+  const elbowAngle = jointAngles[2];    // Left elbow (Shoulder-Elbow-Wrist)
+  const hipAngle = jointAngles[4];      // Left hip (Shoulder-Hip-Knee)
+  const kneeAngle = jointAngles[6];     // Left knee (Hip-Knee-Ankle)
 
   const exerciseKey = normalizeExerciseName(exercise);
   let newPhase = previousPhase;
 
-  // Exercise-specific phase detection logic (matching backend thresholds)
+  // Hysteresis logic: Requires crossing a significantly different threshold to change phase.
+  // This prevents flickering near a single threshold point.
+  
   if (["bench_press", "incline_bench_press", "decline_bench_press", "push_up"].includes(exerciseKey)) {
-    newPhase = elbowAngle < 120 ? "down" : "up";
+    // Going Down: Angle decreases | Going Up: Angle increases
+    if (elbowAngle < 90) newPhase = "down";
+    else if (elbowAngle > 140) newPhase = "up";
   } else if (["barbell_biceps_curl", "hammer_curl", "biceps_curl"].includes(exerciseKey)) {
-    newPhase = elbowAngle < 120 ? "down" : "up";
+    if (elbowAngle < 70) newPhase = "down"; // Fully contracted
+    else if (elbowAngle > 150) newPhase = "up"; // Fully extended
   } else if (["tricep_dips", "tricep_pushdown"].includes(exerciseKey)) {
-    newPhase = elbowAngle < 100 ? "down" : "up";
+    if (elbowAngle < 90) newPhase = "down";
+    else if (elbowAngle > 140) newPhase = "up";
   } else if (["shoulder_press", "lateral_raise"].includes(exerciseKey)) {
-    newPhase = shoulderAngle < 100 ? "down" : "up";
+    if (shoulderAngle < 70) newPhase = "down";
+    else if (shoulderAngle > 150) newPhase = "up";
   } else if (["squat", "leg_extension"].includes(exerciseKey)) {
-    newPhase = kneeAngle < 120 ? "down" : "up";
+    if (kneeAngle < 100) newPhase = "down";
+    else if (kneeAngle > 150) newPhase = "up";
   } else if (["deadlift", "romanian_deadlift"].includes(exerciseKey)) {
-    newPhase = hipAngle < 140 ? "down" : "up";
+    if (hipAngle < 130) newPhase = "down";
+    else if (hipAngle > 165) newPhase = "up";
   } else if (["hip_thrust", "leg_raises"].includes(exerciseKey)) {
-    newPhase = hipAngle < 110 ? "down" : "up";
+    if (hipAngle < 100) newPhase = "down";
+    else if (hipAngle > 160) newPhase = "up";
   } else if (["pull_up", "lat_pulldown", "t_bar_row"].includes(exerciseKey)) {
-    newPhase = elbowAngle > 140 ? "down" : "up";
+    if (elbowAngle > 150) newPhase = "down";
+    else if (elbowAngle < 80) newPhase = "up";
   } else if (exerciseKey === "russian_twist") {
-    newPhase = shoulderAngle < 85 ? "down" : "up";
+    if (shoulderAngle < 75) newPhase = "down";
+    else if (shoulderAngle > 110) newPhase = "up";
   } else if (exerciseKey === "plank") {
     newPhase = "hold";
   } else if (exerciseKey === "chest_fly_machine") {
-    newPhase = shoulderAngle > 110 ? "down" : "up";
+    if (shoulderAngle > 130) newPhase = "down";
+    else if (shoulderAngle < 80) newPhase = "up";
   } else {
     // Default fallback
-    newPhase = shoulderAngle < 100 ? "down" : "up";
+    if (shoulderAngle < 90) newPhase = "down";
+    else if (shoulderAngle > 140) newPhase = "up";
   }
 
   return newPhase;
-}
-
-function str(val: any): string {
-  return String(val);
 }

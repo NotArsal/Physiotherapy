@@ -38,26 +38,28 @@ def extract_pose_angles(landmarks):
     angles = []
     
     try:
+        # Check if landmarks object is valid and has sufficient points
+        if not hasattr(landmarks, 'landmark') or len(landmarks.landmark) < 33:
+            return [0.0] * 9
+
         # Convert landmarks to list of [x, y] coordinates
         points = [[lm.x, lm.y] for lm in landmarks.landmark]
         
-        # Left arm angles
-        if len(points) > 16:
-            # Left arm angle
-            left_shoulder_angle = calculate_angle(points[11], points[13], points[15])
-            angles.append(left_shoulder_angle)
-            
-            # Right arm angle
-            right_shoulder_angle = calculate_angle(points[12], points[14], points[16])
-            angles.append(right_shoulder_angle)
-            
-            # Left elbow angle
-            left_elbow_angle = calculate_angle(points[11], points[13], points[15])
-            angles.append(left_elbow_angle)
-            
-            # Right elbow angle
-            right_elbow_angle = calculate_angle(points[12], points[14], points[16])
-            angles.append(right_elbow_angle)
+        # Left arm angles (Hip-Shoulder-Elbow)
+        left_shoulder_angle = calculate_angle(points[23], points[11], points[13])
+        angles.append(left_shoulder_angle)
+        
+        # Right arm angle (Hip-Shoulder-Elbow)
+        right_shoulder_angle = calculate_angle(points[24], points[12], points[14])
+        angles.append(right_shoulder_angle)
+        
+        # Left elbow angle (Shoulder-Elbow-Wrist)
+        left_elbow_angle = calculate_angle(points[11], points[13], points[15])
+        angles.append(left_elbow_angle)
+        
+        # Right elbow angle (Shoulder-Elbow-Wrist)
+        right_elbow_angle = calculate_angle(points[12], points[14], points[16])
+        angles.append(right_elbow_angle)
         
         # Torso angles
         if len(points) > 24:
