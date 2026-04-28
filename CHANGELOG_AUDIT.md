@@ -28,6 +28,7 @@ This file records the system audit, fixes, cleanup, and follow-up recommendation
 - Added a root route (`/`) to the backend to provide a status message and prevent 404 logs during deployment health checks.
 - Implemented a **Global Error Handler** (`@app.errorhandler(500)`) in the backend to provide detailed JSON tracebacks for production debugging.
 - Added **Email/Password Authentication** alongside Google Sign-In, including registration and password reset support.
+- Migrated backend hosting to a new Render project: [https://physiotherapy-backend-gw5s.onrender.com](https://physiotherapy-backend-gw5s.onrender.com).
 
 ## Removed Unnecessary Files
 

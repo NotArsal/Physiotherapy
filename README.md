@@ -55,7 +55,7 @@ Before starting, ensure you have a `.env` file in the `frontend` directory with 
 
 ## Deployment
 
-- **Backend**: Hosted on Render at [https://physiotracker-backend.onrender.com](https://physiotracker-backend.onrender.com)
+- **Backend**: Hosted on Render at [https://physiotherapy-backend-gw5s.onrender.com](https://physiotherapy-backend-gw5s.onrender.com)
 - **Frontend**: Hosted on Vercel at [https://physiotherapy-frotend.vercel.app](https://physiotherapy-frotend.vercel.app)
 
 ## Current Behavior
