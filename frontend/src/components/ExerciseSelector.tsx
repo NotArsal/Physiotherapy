@@ -249,7 +249,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
     };
 
     fetchExercises();
-  }, []);
+  }, [exercises.length]);
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty.toLowerCase()) {

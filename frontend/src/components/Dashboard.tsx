@@ -75,14 +75,12 @@ const Dashboard: React.FC = () => {
       setSessionData(data);
       localStorage.setItem(cacheKey, JSON.stringify(data));
     } catch (fetchError) {
-      if (!sessionData) {
-        setError('Failed to load dashboard data. Please make sure the backend is running.');
-      }
+      setError('Failed to load dashboard data. Please make sure the backend is running.');
       console.error('Error fetching user sessions:', fetchError);
     } finally {
       setLoading(false);
     }
-  }, [currentUser, sessionData]);
+  }, [currentUser]);
 
   useEffect(() => {
     fetchUserSessions();
