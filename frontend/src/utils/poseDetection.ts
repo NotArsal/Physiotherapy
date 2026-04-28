@@ -1,5 +1,4 @@
 import { Pose } from '@mediapipe/pose';
-import { Camera } from '@mediapipe/camera_utils';
 
 export interface JointAngles {
   leftShoulder: number;
@@ -28,6 +27,10 @@ function calculateAngle(point1: any, point2: any, point3: any): number {
   const dotProduct = vector1.x * vector2.x + vector1.y * vector2.y;
   const magnitude1 = Math.sqrt(vector1.x * vector1.x + vector1.y * vector1.y);
   const magnitude2 = Math.sqrt(vector2.x * vector2.x + vector2.y * vector2.y);
+
+  if (magnitude1 === 0 || magnitude2 === 0) {
+    return 0;
+  }
   
   const cosAngle = dotProduct / (magnitude1 * magnitude2);
   const angle = Math.acos(Math.max(-1, Math.min(1, cosAngle)));
@@ -105,11 +108,8 @@ export function extractJointAngles(landmarks: any): number[] {
   }
 }
 
-// Initialize MediaPipe Pose
-export function initializePoseDetection(
-  onResults: (results: any) => void,
-  videoRef: React.RefObject<HTMLVideoElement>
-): { pose: Pose; camera: Camera | null } {
+// Initialize MediaPipe Pose with CDN-hosted assets.
+export function initializePoseDetection(onResults: (results: any) => void): { pose: Pose } {
   const pose = new Pose({
     locateFile: (file) => {
       return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
@@ -126,22 +126,8 @@ export function initializePoseDetection(
   });
   
   pose.onResults(onResults);
-  
-  let camera: Camera | null = null;
-  
-  if (videoRef.current) {
-    camera = new Camera(videoRef.current, {
-      onFrame: async () => {
-        if (videoRef.current) {
-          await pose.send({ image: videoRef.current });
-        }
-      },
-      width: 640,
-      height: 480
-    });
-  }
-  
-  return { pose, camera };
+
+  return { pose };
 }
 
 // Voice feedback messages

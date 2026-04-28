@@ -43,3 +43,5 @@ The service starts on `http://localhost:5000`.
 - Model files are expected in `backend/model`.
 - The backend now uses project-relative path resolution, so it is no longer tied to one local machine.
 - Session storage is in-memory only.
+- Rep counting is driven by the selected exercise when the frontend provides one, which avoids counts stalling when the classifier prediction is noisy.
+- Helper angle utilities in [pose_utils.py](C:/Users/shada/Desktop/Physiotherapy-project-main/backend/pose_utils.py) were hardened against zero-length vectors during angle calculation.

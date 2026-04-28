@@ -78,6 +78,8 @@ python -m py_compile app.py run.py pose_utils.py
 - Session history is stored in memory, so data resets when the backend restarts.
 - Firebase config is defined in [frontend/src/firebase.ts](C:/Users/shada/Desktop/Physiotherapy-project-main/frontend/src/firebase.ts).
 - MediaPipe pose assets load from the jsDelivr CDN at runtime.
+- Repetition counting now follows the user-selected exercise flow, so rep detection can continue even when the classifier confidence is low.
+- The live monitor and debug views now keep tighter control over MediaPipe and webcam cleanup to reduce repeated WebGL/context churn.
 
 ## Documentation
 
@@ -92,3 +94,4 @@ python -m py_compile app.py run.py pose_utils.py
 - Move Firebase configuration to environment variables for safer deployment.
 - Add automated API and UI tests for the webcam and prediction flow.
 - Replace the current feature-engineering bridge with preprocessing that matches the original model training pipeline exactly.
+- Refresh the frontend dependency stack over time; the current CRA-based tree still reports known audit vulnerabilities.

@@ -44,3 +44,6 @@ npm start
 - MediaPipe assets are loaded from a CDN during runtime.
 - Firebase authentication depends on the config currently committed in `src/firebase.ts`.
 - The frontend build was validated successfully after the audit fixes.
+- The exercise monitor and debug console now use a request-animation-frame processing loop with explicit webcam and MediaPipe cleanup.
+- The old `@mediapipe/camera_utils` dependency is no longer part of the active runtime path.
+- The current frontend dependency tree still reports audit vulnerabilities inherited from the older CRA stack.

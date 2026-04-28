@@ -11,7 +11,11 @@ def calculate_angle(point1, point2, point3):
     vector2 = np.array([point3[0] - point2[0], point3[1] - point2[1]])
     
     # Calculate angle using dot product
-    cosine_angle = np.dot(vector1, vector2) / (np.linalg.norm(vector1) * np.linalg.norm(vector2))
+    norm_product = np.linalg.norm(vector1) * np.linalg.norm(vector2)
+    if norm_product == 0:
+        return 0.0
+
+    cosine_angle = np.dot(vector1, vector2) / norm_product
     
     # Handle numerical errors
     cosine_angle = np.clip(cosine_angle, -1.0, 1.0)
@@ -39,19 +43,19 @@ def extract_pose_angles(landmarks):
         
         # Left arm angles
         if len(points) > 16:
-            # Left shoulder angle (shoulder-elbow-wrist)
+            # Left arm angle
             left_shoulder_angle = calculate_angle(points[11], points[13], points[15])
             angles.append(left_shoulder_angle)
             
-            # Right shoulder angle (shoulder-elbow-wrist)
+            # Right arm angle
             right_shoulder_angle = calculate_angle(points[12], points[14], points[16])
             angles.append(right_shoulder_angle)
             
-            # Left elbow angle (shoulder-elbow-wrist)
+            # Left elbow angle
             left_elbow_angle = calculate_angle(points[11], points[13], points[15])
             angles.append(left_elbow_angle)
             
-            # Right elbow angle (shoulder-elbow-wrist)
+            # Right elbow angle
             right_elbow_angle = calculate_angle(points[12], points[14], points[16])
             angles.append(right_elbow_angle)
         

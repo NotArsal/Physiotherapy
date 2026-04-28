@@ -48,6 +48,18 @@ const waitForVideoReady = async (video: HTMLVideoElement, timeoutMs = 10000) => 
   return false;
 };
 
+const stopVideoStream = (video: HTMLVideoElement | null | undefined) => {
+  if (!video) {
+    return;
+  }
+
+  const mediaStream = video.srcObject;
+  if (mediaStream instanceof MediaStream) {
+    mediaStream.getTracks().forEach((track) => track.stop());
+    video.srcObject = null;
+  }
+};
+
 const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onBack }) => {
   const { currentUser } = useAuth();
   const webcamRef = useRef<Webcam>(null);
@@ -147,6 +159,10 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       frameRequestRef.current = null;
     }
     poseProcessingRef.current = false;
+  }, []);
+
+  const stopCameraStream = useCallback(() => {
+    stopVideoStream(webcamRef.current?.video);
   }, []);
 
   const onPoseResultsRef = useRef<(results: any) => Promise<void>>(async () => {});
@@ -296,13 +312,14 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
     return () => {
       window.clearTimeout(timer);
       stopFrameLoop();
+      stopCameraStream();
       poseDisposedRef.current = true;
       if (poseRef.current) {
         poseRef.current.close();
         poseRef.current = null;
       }
     };
-  }, [addToConsoleLog, stopFrameLoop]);
+  }, [addToConsoleLog, stopCameraStream, stopFrameLoop]);
 
   const startFrameLoop = useCallback(() => {
     const tick = async () => {
@@ -445,6 +462,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       setIsActive(false);
       setIsPaused(false);
       stopFrameLoop();
+      stopCameraStream();
 
       if (currentUser && sessionStartTime) {
         await apiService.logSession({

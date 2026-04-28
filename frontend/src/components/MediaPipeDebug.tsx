@@ -30,6 +30,18 @@ const waitForVideoReady = async (video: HTMLVideoElement, timeoutMs = 10000) => 
   return false;
 };
 
+const stopVideoStream = (video: HTMLVideoElement | null | undefined) => {
+  if (!video) {
+    return;
+  }
+
+  const mediaStream = video.srcObject;
+  if (mediaStream instanceof MediaStream) {
+    mediaStream.getTracks().forEach((track) => track.stop());
+    video.srcObject = null;
+  }
+};
+
 const MediaPipeDebug: React.FC = () => {
   const webcamRef = useRef<Webcam>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -37,6 +49,8 @@ const MediaPipeDebug: React.FC = () => {
   const frameRequestRef = useRef<number | null>(null);
   const poseDisposedRef = useRef(false);
   const poseProcessingRef = useRef(false);
+  const showLandmarksRef = useRef(true);
+  const showConnectionsRef = useRef(true);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -57,60 +71,76 @@ const MediaPipeDebug: React.FC = () => {
     poseProcessingRef.current = false;
   }, []);
 
-  const onPoseResults = useCallback((results: any) => {
-    if (!canvasRef.current) {
-      return;
-    }
+  const stopCameraStream = useCallback(() => {
+    stopVideoStream(webcamRef.current?.video);
+  }, []);
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      return;
-    }
+  useEffect(() => {
+    showLandmarksRef.current = showLandmarks;
+  }, [showLandmarks]);
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  useEffect(() => {
+    showConnectionsRef.current = showConnections;
+  }, [showConnections]);
 
-    if (results.image) {
-      ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-    }
+  const onPoseResultsRef = useRef<(results: any) => void>(() => {});
 
-    if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
-      setPoseDetected(false);
-      setLandmarkCount(0);
-      setConfidence(0);
-      setJointAngles([]);
-      setDebugInfo(null);
-      return;
-    }
+  useEffect(() => {
+    onPoseResultsRef.current = (results: any) => {
+      if (!canvasRef.current) {
+        return;
+      }
 
-    setPoseDetected(true);
-    setLandmarkCount(results.poseLandmarks.length);
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        return;
+      }
 
-    const avgConfidence =
-      results.poseLandmarks.reduce((sum: number, landmark: any) => sum + (landmark.visibility || 0), 0) /
-      results.poseLandmarks.length;
-    setConfidence(avgConfidence);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (showConnections) {
-      drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
-    }
+      if (results.image) {
+        ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+      }
 
-    if (showLandmarks) {
-      drawLandmarks(ctx, results.poseLandmarks, { color: '#FF0000', lineWidth: 1, radius: 3 });
-    }
+      if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
+        setPoseDetected(false);
+        setLandmarkCount(0);
+        setConfidence(0);
+        setJointAngles([]);
+        setDebugInfo(null);
+        return;
+      }
 
-    try {
-      setJointAngles(extractJointAngles(results.poseLandmarks));
-    } catch (angleError) {
-      console.error('Error extracting joint angles:', angleError);
-    }
+      setPoseDetected(true);
+      setLandmarkCount(results.poseLandmarks.length);
 
-    setDebugInfo({
-      landmarkCount: results.poseLandmarks.length,
-      avgConfidence,
-      imageSize: results.image ? { width: results.image.width, height: results.image.height } : null
-    });
-  }, [showConnections, showLandmarks]);
+      const avgConfidence =
+        results.poseLandmarks.reduce((sum: number, landmark: any) => sum + (landmark.visibility || 0), 0) /
+        results.poseLandmarks.length;
+      setConfidence(avgConfidence);
+
+      if (showConnectionsRef.current) {
+        drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
+      }
+
+      if (showLandmarksRef.current) {
+        drawLandmarks(ctx, results.poseLandmarks, { color: '#FF0000', lineWidth: 1, radius: 3 });
+      }
+
+      try {
+        setJointAngles(extractJointAngles(results.poseLandmarks));
+      } catch (angleError) {
+        console.error('Error extracting joint angles:', angleError);
+      }
+
+      setDebugInfo({
+        landmarkCount: results.poseLandmarks.length,
+        avgConfidence,
+        imageSize: results.image ? { width: results.image.width, height: results.image.height } : null
+      });
+    };
+  }, []);
 
   useEffect(() => {
     const initializePose = async () => {
@@ -130,7 +160,9 @@ const MediaPipeDebug: React.FC = () => {
           minTrackingConfidence: 0.4
         });
 
-        pose.onResults(onPoseResults);
+        pose.onResults((results) => {
+          onPoseResultsRef.current(results);
+        });
         poseRef.current = pose;
         setIsLoading(false);
       } catch (initError) {
@@ -144,13 +176,14 @@ const MediaPipeDebug: React.FC = () => {
 
     return () => {
       stopLoop();
+      stopCameraStream();
       poseDisposedRef.current = true;
       if (poseRef.current) {
         poseRef.current.close();
         poseRef.current = null;
       }
     };
-  }, [onPoseResults, stopLoop]);
+  }, [stopCameraStream, stopLoop]);
 
   const startLoop = useCallback(() => {
     const tick = async () => {
@@ -215,9 +248,10 @@ const MediaPipeDebug: React.FC = () => {
 
   const stopCamera = useCallback(() => {
     stopLoop();
+    stopCameraStream();
     setIsActive(false);
     setPoseDetected(false);
-  }, [stopLoop]);
+  }, [stopCameraStream, stopLoop]);
 
   const resetTest = useCallback(() => {
     stopCamera();
