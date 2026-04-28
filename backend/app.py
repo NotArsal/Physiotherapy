@@ -32,6 +32,7 @@ current_exercise_state = {
     "rep_count": 0,
     "last_prediction": None,
     "phase_threshold": 0.7,
+    "last_counted_exercise": None,
 }
 
 
@@ -59,6 +60,7 @@ def reset_exercise_state():
         "rep_count": 0,
         "last_prediction": None,
         "phase_threshold": 0.7,
+        "last_counted_exercise": None,
     }
 
 
@@ -103,6 +105,13 @@ def build_model_input(joint_angles):
     return (time_series * time_scale).reshape(1, timesteps, 99)
 
 
+def normalize_exercise_name(exercise_name):
+    """Normalize exercise names so frontend and backend labels can be compared safely."""
+    if not exercise_name:
+        return ""
+    return str(exercise_name).strip().lower().replace("-", "_").replace(" ", "_")
+
+
 def detect_exercise_phase(joint_angles, predicted_exercise, selected_exercise=None):
     """Detect the current phase for supported exercises and count reps."""
     global current_exercise_state
@@ -119,7 +128,13 @@ def detect_exercise_phase(joint_angles, predicted_exercise, selected_exercise=No
         f"Elbow: {elbow_angle:.1f} deg, Hip: {hip_angle:.1f} deg, Knee: {knee_angle:.1f} deg"
     )
 
-    exercise_lower = predicted_exercise.lower().replace("-", "_")
+    selected_exercise_normalized = normalize_exercise_name(selected_exercise)
+    predicted_exercise_normalized = normalize_exercise_name(predicted_exercise)
+    exercise_lower = selected_exercise_normalized or predicted_exercise_normalized
+
+    if current_exercise_state["last_counted_exercise"] != exercise_lower:
+        current_exercise_state["current_phase"] = "down"
+        current_exercise_state["last_counted_exercise"] = exercise_lower
 
     if exercise_lower in ["bench_press", "incline_bench_press", "decline_bench_press", "push_up"]:
         new_phase = "down" if elbow_angle < 120 else "up"
@@ -234,20 +249,23 @@ def predict():
         predicted_class_idx = int(np.argmax(prediction[0]))
         confidence = float(np.max(prediction[0]))
         predicted_exercise = label_encoder.inverse_transform([predicted_class_idx])[0]
+        predicted_exercise_normalized = normalize_exercise_name(predicted_exercise)
+        selected_exercise_normalized = normalize_exercise_name(selected_exercise)
 
-        if selected_exercise:
-            exercise_match = (
-                predicted_exercise.lower() == str(selected_exercise).lower() and confidence >= 0.6
-            )
+        if selected_exercise_normalized:
+            exercise_match = predicted_exercise_normalized == selected_exercise_normalized
         else:
             exercise_match = confidence >= 0.7
 
+        phase_source_exercise = selected_exercise or predicted_exercise
+        should_count_reps = bool(selected_exercise_normalized) or confidence >= 0.55
+
         phase = "unknown"
-        if exercise_match:
-            phase = detect_exercise_phase(joint_angles, predicted_exercise, selected_exercise)
+        if should_count_reps:
+            phase = detect_exercise_phase(joint_angles, phase_source_exercise, selected_exercise)
         else:
             print(
-                "Exercise mismatch or low confidence: "
+                "Low confidence, skipping rep detection: "
                 f"detected={predicted_exercise}, selected={selected_exercise}, confidence={confidence:.2f}"
             )
 
@@ -260,6 +278,8 @@ def predict():
             "timestamp": datetime.now().isoformat(),
             "exercise_match": exercise_match,
             "selected_exercise": selected_exercise,
+            "counting_exercise": phase_source_exercise,
+            "counting_active": should_count_reps,
             "success": True,
         }
         return jsonify(response)

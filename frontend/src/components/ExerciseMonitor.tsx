@@ -19,7 +19,6 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import Webcam from 'react-webcam';
 import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose';
-import { Camera } from '@mediapipe/camera_utils';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 import { apiService, PredictionResponse } from '../services/api';
 import {
@@ -38,12 +37,35 @@ interface ExerciseMonitorProps {
 
 const normalizeExerciseName = (value: string) => value.toLowerCase().replace(/[-\s]+/g, '_');
 
+const waitForVideoReady = async (video: HTMLVideoElement, timeoutMs = 10000) => {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  return false;
+};
+
 const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onBack }) => {
   const { currentUser } = useAuth();
   const webcamRef = useRef<Webcam>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const poseRef = useRef<Pose | null>(null);
-  const cameraRef = useRef<Camera | null>(null);
+  const frameRequestRef = useRef<number | null>(null);
+  const isActiveRef = useRef(false);
+  const isPausedRef = useRef(false);
+  const poseDisposedRef = useRef(false);
+  const poseProcessingRef = useRef(false);
+  const lastPredictionAtRef = useRef(0);
+  const repCountRef = useRef(0);
+  const currentPhaseRef = useRef('');
+  const predictedExerciseRef = useRef('');
+  const selectedExerciseRef = useRef(selectedExercise);
+  const voiceEnabledRef = useRef(true);
+  const debugModeRef = useRef(false);
+  const poseDetectedRef = useRef(false);
 
   const [isActive, setIsActive] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -70,14 +92,48 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   }, []);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
+    isActiveRef.current = isActive;
+  }, [isActive]);
 
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
+
+  useEffect(() => {
+    repCountRef.current = repCount;
+  }, [repCount]);
+
+  useEffect(() => {
+    currentPhaseRef.current = currentPhase;
+  }, [currentPhase]);
+
+  useEffect(() => {
+    predictedExerciseRef.current = predictedExercise;
+  }, [predictedExercise]);
+
+  useEffect(() => {
+    selectedExerciseRef.current = selectedExercise;
+  }, [selectedExercise]);
+
+  useEffect(() => {
+    voiceEnabledRef.current = voiceEnabled;
+  }, [voiceEnabled]);
+
+  useEffect(() => {
+    debugModeRef.current = debugMode;
+  }, [debugMode]);
+
+  useEffect(() => {
+    poseDetectedRef.current = poseDetected;
+  }, [poseDetected]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
     if (isActive && !isPaused && sessionStartTime) {
       interval = setInterval(() => {
         setSessionDuration(Math.floor((Date.now() - sessionStartTime.getTime()) / 1000));
       }, 1000);
     }
-
     return () => {
       if (interval) {
         clearInterval(interval);
@@ -85,194 +141,204 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
     };
   }, [isActive, isPaused, sessionStartTime]);
 
-  const onPoseResults = useCallback(async (results: any) => {
-    if (!canvasRef.current || !isActive || isPaused) {
-      return;
+  const stopFrameLoop = useCallback(() => {
+    if (frameRequestRef.current !== null) {
+      cancelAnimationFrame(frameRequestRef.current);
+      frameRequestRef.current = null;
     }
+    poseProcessingRef.current = false;
+  }, []);
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      return;
-    }
+  const onPoseResultsRef = useRef<(results: any) => Promise<void>>(async () => {});
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (results.image) {
-      ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-    }
-
-    if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
-      if (poseDetected) {
-        addToConsoleLog('Pose lost');
-      }
-      setPoseDetected(false);
-
-      ctx.fillStyle = '#FF0000';
-      ctx.font = '16px Arial';
-      ctx.fillText('NO POSE DETECTED', 10, 30);
-      return;
-    }
-
-    if (!poseDetected) {
-      addToConsoleLog('Pose detected');
-    }
-    setPoseDetected(true);
-
-    try {
-      drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
-        color: '#00FF00',
-        lineWidth: 3
-      });
-      drawLandmarks(ctx, results.poseLandmarks, {
-        color: '#FF0000',
-        lineWidth: 2,
-        radius: 4
-      });
-
-      ctx.fillStyle = '#00FF00';
-      ctx.font = '16px Arial';
-      ctx.fillText('POSE DETECTED', 10, 30);
-
-      if (debugMode) {
-        ctx.fillStyle = '#FFFF00';
-        ctx.font = '12px Arial';
-        ctx.fillText(`Landmarks: ${results.poseLandmarks.length}`, 10, 50);
-      }
-    } catch (drawError) {
-      console.error('Drawing error:', drawError);
-      addToConsoleLog(`Drawing error: ${String(drawError)}`);
-    }
-
-    try {
-      const jointAngles = extractJointAngles(results.poseLandmarks);
-      if (jointAngles.length !== 9 || jointAngles.some((angle) => angle < 0 || angle > 180 || Number.isNaN(angle))) {
-        addToConsoleLog('Skipping invalid joint-angle frame');
+  useEffect(() => {
+    onPoseResultsRef.current = async (results: any) => {
+      if (!canvasRef.current || !isActiveRef.current || isPausedRef.current) {
         return;
       }
 
-      if (debugMode) {
-        addToConsoleLog(`Joint angles: ${jointAngles.map((angle) => angle.toFixed(1)).join(', ')}`);
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        return;
       }
 
-      const predictionResult = await apiService.predictExercise(jointAngles, selectedExercise);
-      if (predictionResult.error) {
-        addToConsoleLog(predictionResult.error);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (results.image) {
+        ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
       }
 
-      if (Math.abs(predictionResult.confidence - confidence) > 0.1 || predictionResult.exercise !== predictedExercise) {
-        addToConsoleLog(
-          `Model: ${predictionResult.exercise} (${(predictionResult.confidence * 100).toFixed(1)}%)`
-        );
+      if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
+        if (poseDetectedRef.current) {
+          setPoseDetected(false);
+        }
+        ctx.fillStyle = '#FF0000';
+        ctx.font = '16px Arial';
+        ctx.fillText('NO POSE DETECTED', 10, 30);
+        return;
       }
 
-      setPrediction(predictionResult);
-      setRepCount(predictionResult.rep_count);
-      setCurrentPhase(predictionResult.phase);
-      setConfidence(predictionResult.confidence);
-      setPredictedExercise(predictionResult.exercise || 'unknown');
-      setAiModelDetails(predictionResult);
-
-      const isCorrectExercise =
-        normalizeExerciseName(predictionResult.exercise || '') === normalizeExerciseName(selectedExercise);
-
-      if (predictionResult.confidence >= 0.85 && isCorrectExercise) {
-        setFormQuality('excellent');
-        setExerciseFeedback('Perfect form! Keep it up!');
-      } else if (predictionResult.confidence >= 0.7 && isCorrectExercise) {
-        setFormQuality('good');
-        setExerciseFeedback('Good form! Stay focused on your movement.');
-      } else if (predictionResult.confidence >= 0.5) {
-        setFormQuality('needs_improvement');
-        setExerciseFeedback(
-          isCorrectExercise
-            ? 'Form needs improvement. Focus on proper technique.'
-            : `AI detected ${predictionResult.exercise?.replace(/_/g, ' ')} instead of ${selectedExercise.replace(/_/g, ' ')}`
-        );
-      } else {
-        setFormQuality('poor');
-        setExerciseFeedback('Low confidence detection. Check your positioning.');
+      if (!poseDetectedRef.current) {
+        setPoseDetected(true);
       }
 
-      if (predictionResult.rep_count > repCount) {
-        addToConsoleLog(`Rep count: ${repCount} -> ${predictionResult.rep_count}`);
+      try {
+        drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
+        drawLandmarks(ctx, results.poseLandmarks, { color: '#FF0000', lineWidth: 1, radius: 3 });
+        ctx.fillStyle = '#00FF00';
+        ctx.font = '16px Arial';
+        ctx.fillText('POSE DETECTED', 10, 30);
+
+        if (debugModeRef.current) {
+          ctx.fillStyle = '#FFFF00';
+          ctx.font = '12px Arial';
+          ctx.fillText(`Landmarks: ${results.poseLandmarks.length}`, 10, 50);
+        }
+      } catch (drawError) {
+        addToConsoleLog(`Drawing error: ${String(drawError)}`);
       }
 
-      if (predictionResult.phase !== currentPhase) {
-        addToConsoleLog(`Phase: ${currentPhase || 'ready'} -> ${predictionResult.phase}`);
+      const now = Date.now();
+      if (now - lastPredictionAtRef.current < 300) {
+        return;
       }
 
-      if (voiceEnabled && predictionResult.rep_count > repCount) {
-        const feedback =
-          predictionResult.rep_count % 5 === 0 || predictionResult.rep_count <= 3
-            ? getMilestoneFeedback(predictionResult.rep_count)
-            : Math.random() > 0.5
-              ? getRandomFeedback('goodRep')
-              : getExerciseSpecificFeedback(selectedExercise);
-        speak(feedback);
+      try {
+        const jointAngles = extractJointAngles(results.poseLandmarks);
+        if (jointAngles.length !== 9 || jointAngles.some((angle) => angle < 0 || angle > 180 || Number.isNaN(angle))) {
+          return;
+        }
+
+        lastPredictionAtRef.current = now;
+        const predictionResult = await apiService.predictExercise(jointAngles, selectedExerciseRef.current);
+
+        setPrediction(predictionResult);
+        setRepCount(predictionResult.rep_count);
+        setCurrentPhase(predictionResult.phase);
+        setConfidence(predictionResult.confidence);
+        setPredictedExercise(predictionResult.exercise || 'unknown');
+        setAiModelDetails(predictionResult);
+
+        const isCorrectExercise =
+          normalizeExerciseName(predictionResult.exercise || '') === normalizeExerciseName(selectedExerciseRef.current);
+
+        if (predictionResult.confidence >= 0.85 && isCorrectExercise) {
+          setFormQuality('excellent');
+          setExerciseFeedback('Perfect form! Keep it up!');
+        } else if (predictionResult.confidence >= 0.7 && isCorrectExercise) {
+          setFormQuality('good');
+          setExerciseFeedback('Good form! Stay focused on your movement.');
+        } else if (predictionResult.confidence >= 0.5) {
+          setFormQuality('needs_improvement');
+          setExerciseFeedback(
+            isCorrectExercise
+              ? 'Form needs improvement. Focus on proper technique.'
+              : `AI detected ${predictionResult.exercise?.replace(/_/g, ' ')} instead of ${selectedExerciseRef.current.replace(/_/g, ' ')}`
+          );
+        } else {
+          setFormQuality('poor');
+          setExerciseFeedback('Low confidence detection. Check your positioning.');
+        }
+
+        if (voiceEnabledRef.current && predictionResult.rep_count > repCountRef.current) {
+          const feedback =
+            predictionResult.rep_count % 5 === 0 || predictionResult.rep_count <= 3
+              ? getMilestoneFeedback(predictionResult.rep_count)
+              : Math.random() > 0.5
+                ? getRandomFeedback('goodRep')
+                : getExerciseSpecificFeedback(selectedExerciseRef.current);
+          speak(feedback);
+        }
+      } catch (processingError) {
+        if (!poseDisposedRef.current) {
+          addToConsoleLog(`Pose processing error: ${String(processingError)}`);
+        }
       }
-    } catch (processingError) {
-      console.error('Error processing pose results:', processingError);
-      addToConsoleLog(`Pose processing error: ${String(processingError)}`);
-    }
-  }, [
-    addToConsoleLog,
-    confidence,
-    currentPhase,
-    debugMode,
-    isActive,
-    isPaused,
-    poseDetected,
-    predictedExercise,
-    repCount,
-    selectedExercise,
-    voiceEnabled
-  ]);
+    };
+  }, [addToConsoleLog]);
 
   useEffect(() => {
     const initializePose = async () => {
       try {
-        addToConsoleLog('Initializing MediaPipe Pose...');
         setError('');
-
+        addToConsoleLog('Initializing MediaPipe Pose...');
         const pose = new Pose({
           locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
         });
+        poseDisposedRef.current = false;
 
         pose.setOptions({
-          modelComplexity: 1,
+          modelComplexity: 0,
           smoothLandmarks: true,
           enableSegmentation: false,
           smoothSegmentation: false,
-          minDetectionConfidence: 0.7,
+          minDetectionConfidence: 0.6,
           minTrackingConfidence: 0.5
         });
 
-        pose.onResults(onPoseResults);
+        pose.onResults((results) => {
+          void onPoseResultsRef.current(results);
+        });
+
         poseRef.current = pose;
         addToConsoleLog('MediaPipe Pose initialized successfully');
       } catch (initError) {
-        console.error('Error initializing pose detection:', initError);
         setError('Failed to initialize pose detection. Please refresh the page.');
-        addToConsoleLog('MediaPipe initialization failed');
+        addToConsoleLog(`MediaPipe initialization failed: ${String(initError)}`);
       }
     };
 
-    const timer = window.setTimeout(initializePose, 100);
+    const timer = window.setTimeout(() => {
+      void initializePose();
+    }, 100);
 
     return () => {
       window.clearTimeout(timer);
-      if (cameraRef.current) {
-        cameraRef.current.stop();
+      stopFrameLoop();
+      poseDisposedRef.current = true;
+      if (poseRef.current) {
+        poseRef.current.close();
+        poseRef.current = null;
       }
     };
-  }, [addToConsoleLog, onPoseResults]);
+  }, [addToConsoleLog, stopFrameLoop]);
 
-  useEffect(() => {
-    if (poseRef.current) {
-      poseRef.current.onResults(onPoseResults);
-    }
-  }, [onPoseResults]);
+  const startFrameLoop = useCallback(() => {
+    const tick = async () => {
+      if (!isActiveRef.current || isPausedRef.current || poseDisposedRef.current) {
+        frameRequestRef.current = requestAnimationFrame(() => {
+          void tick();
+        });
+        return;
+      }
+
+      const video = webcamRef.current?.video;
+      const pose = poseRef.current;
+
+      if (video && pose && !poseProcessingRef.current) {
+        poseProcessingRef.current = true;
+        try {
+          await pose.send({ image: video });
+        } catch (sendError) {
+          if (!poseDisposedRef.current) {
+            addToConsoleLog(`Pose send error: ${String(sendError)}`);
+          }
+        } finally {
+          poseProcessingRef.current = false;
+        }
+      }
+
+      frameRequestRef.current = requestAnimationFrame(() => {
+        void tick();
+      });
+    };
+
+    stopFrameLoop();
+    frameRequestRef.current = requestAnimationFrame(() => {
+      void tick();
+    });
+  }, [addToConsoleLog, stopFrameLoop]);
 
   const startCamera = useCallback(async () => {
     try {
@@ -280,21 +346,25 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
 
       if (!webcamRef.current?.video) {
         setError('Camera not available. Please allow camera permissions.');
-        addToConsoleLog('Webcam video element not found');
         return false;
       }
 
       if (!poseRef.current) {
         setError('Pose detection not ready. Please refresh the page.');
-        addToConsoleLog('MediaPipe Pose not initialized');
         return false;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      poseDisposedRef.current = false;
       const video = webcamRef.current.video;
 
       if (video.paused) {
         await video.play();
+      }
+
+      const ready = await waitForVideoReady(video);
+      if (!ready) {
+        setError('Camera stream did not become ready in time. Please allow camera access and try again.');
+        return false;
       }
 
       if (canvasRef.current) {
@@ -302,49 +372,32 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         canvasRef.current.height = video.videoHeight || 480;
       }
 
-      const camera = new Camera(video, {
-        onFrame: async () => {
-          if (webcamRef.current?.video && poseRef.current && isActive && !isPaused) {
-            await poseRef.current.send({ image: webcamRef.current.video });
-          }
-        },
-        width: video.videoWidth || 640,
-        height: video.videoHeight || 480
-      });
-
-      cameraRef.current = camera;
-      await camera.start();
-      addToConsoleLog('Camera started successfully');
+      startFrameLoop();
+      addToConsoleLog(`Video ready: ${video.videoWidth}x${video.videoHeight}`);
       return true;
     } catch (cameraError) {
-      console.error('Camera start error:', cameraError);
-      addToConsoleLog(`Camera error: ${String(cameraError)}`);
       setError('Failed to start camera. Please check permissions and refresh.');
+      addToConsoleLog(`Camera error: ${String(cameraError)}`);
       return false;
     }
-  }, [addToConsoleLog, isActive, isPaused]);
+  }, [addToConsoleLog, startFrameLoop]);
 
   const handleStart = async () => {
     try {
       setError('');
-      addToConsoleLog('Starting exercise session...');
-
       const health = await apiService.healthCheck();
       addToConsoleLog(`Backend healthy: ${health.status}`);
 
       const exercises = await apiService.getExercises();
       if (!exercises.includes(selectedExercise)) {
         setError(`Exercise "${selectedExercise}" not available in backend.`);
-        addToConsoleLog(`Exercise "${selectedExercise}" not found in backend`);
         return;
       }
 
-      const testAngles = [90, 90, 120, 120, 180, 180, 90, 90, 170];
-      const testPrediction = await apiService.predictExercise(testAngles, selectedExercise);
-      addToConsoleLog(`Model test successful: ${testPrediction.exercise}`);
-
       await apiService.resetSession();
 
+      isActiveRef.current = true;
+      isPausedRef.current = false;
       setIsActive(true);
       setIsPaused(false);
       setRepCount(0);
@@ -355,61 +408,58 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       setPrediction(null);
       setAiModelDetails(null);
       setCurrentPhase('');
+      setPoseDetected(false);
+      lastPredictionAtRef.current = 0;
 
       const started = await startCamera();
       if (!started) {
+        isActiveRef.current = false;
         setIsActive(false);
         return;
       }
 
-      if (voiceEnabled) {
+      if (voiceEnabledRef.current) {
         speak(`Starting ${selectedExercise.replace(/_/g, ' ')} exercise. Good luck!`);
       }
-
-      addToConsoleLog('Exercise session started successfully');
     } catch (startError) {
       const message = startError instanceof Error ? startError.message : 'Unknown error';
-      addToConsoleLog(`Start failed: ${message}`);
       setError(`Failed to start exercise session: ${message}`);
+      isActiveRef.current = false;
       setIsActive(false);
-      console.error('Start error:', startError);
     }
   };
 
   const handlePause = () => {
-    setIsPaused((previous) => !previous);
-    if (voiceEnabled) {
-      speak(isPaused ? 'Resuming exercise' : 'Exercise paused');
+    const nextPaused = !isPausedRef.current;
+    isPausedRef.current = nextPaused;
+    setIsPaused(nextPaused);
+    if (voiceEnabledRef.current) {
+      speak(nextPaused ? 'Exercise paused' : 'Resuming exercise');
     }
   };
 
   const handleStop = async () => {
     try {
+      isActiveRef.current = false;
+      isPausedRef.current = false;
       setIsActive(false);
       setIsPaused(false);
-
-      if (cameraRef.current) {
-        cameraRef.current.stop();
-        cameraRef.current = null;
-      }
+      stopFrameLoop();
 
       if (currentUser && sessionStartTime) {
         await apiService.logSession({
           user_id: currentUser.uid,
           exercise: selectedExercise,
-          total_reps: repCount,
+          total_reps: repCountRef.current,
           duration: sessionDuration,
           session_data: prediction ? [prediction] : []
         });
       }
 
-      if (voiceEnabled) {
-        speak(`Exercise completed! You did ${repCount} repetitions.`);
+      if (voiceEnabledRef.current) {
+        speak(`Exercise completed! You did ${repCountRef.current} repetitions.`);
       }
-
-      addToConsoleLog('Session stopped');
     } catch (stopError) {
-      console.error('Error stopping session:', stopError);
       addToConsoleLog(`Stop error: ${String(stopError)}`);
     }
   };
@@ -419,13 +469,6 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       addToConsoleLog('Running connection test...');
       const health = await apiService.healthCheck();
       addToConsoleLog(`Backend test: ${health.status}`);
-
-      const exercises = await apiService.getExercises();
-      addToConsoleLog(`Found ${exercises.length} exercises`);
-
-      const testAngles = [90, 90, 120, 120, 180, 180, 90, 90, 170];
-      const testPrediction = await apiService.predictExercise(testAngles, selectedExercise);
-      addToConsoleLog(`AI test: ${testPrediction.exercise} (${(testPrediction.confidence * 100).toFixed(1)}%)`);
     } catch (testError) {
       addToConsoleLog(`Connection test failed: ${String(testError)}`);
     }
@@ -460,21 +503,6 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         return 'error';
       default:
         return 'default';
-    }
-  };
-
-  const getFormQualityIcon = (quality: string) => {
-    switch (quality) {
-      case 'excellent':
-        return 'Strong';
-      case 'good':
-        return 'Good';
-      case 'needs_improvement':
-        return 'Adjust';
-      case 'poor':
-        return 'Check';
-      default:
-        return 'Ready';
     }
   };
 
@@ -554,40 +582,6 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                   <Typography variant="body2">Make sure your full body is visible</Typography>
                 </Box>
               )}
-
-              {poseDetected && isActive && confidence < 0.5 && (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 10,
-                    right: 10,
-                    backgroundColor: 'rgba(255, 165, 0, 0.85)',
-                    color: 'white',
-                    p: 1,
-                    borderRadius: 1,
-                    fontSize: '0.8em'
-                  }}
-                >
-                  Analyzing pose...
-                </Box>
-              )}
-
-              {poseDetected && isActive && confidence >= 0.7 && (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 10,
-                    right: 10,
-                    backgroundColor: 'rgba(0, 160, 0, 0.85)',
-                    color: 'white',
-                    p: 1,
-                    borderRadius: 1,
-                    fontSize: '0.8em'
-                  }}
-                >
-                  Exercise detected
-                </Box>
-              )}
             </Box>
 
             <Box sx={{ mt: 2, display: 'flex', gap: 2, justifyContent: 'center' }}>
@@ -626,11 +620,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                     <Typography variant="body2" color="text.secondary">
                       Current Phase:
                     </Typography>
-                    <Chip
-                      label={currentPhase || 'Ready'}
-                      color={getPhaseColor(currentPhase) as 'success' | 'info' | 'default'}
-                      size="small"
-                    />
+                    <Chip label={currentPhase || 'Ready'} color={getPhaseColor(currentPhase) as any} size="small" />
                   </Box>
                   <FormControlLabel
                     control={<Switch checked={voiceEnabled} onChange={(event) => setVoiceEnabled(event.target.checked)} />}
@@ -722,14 +712,12 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                   <Typography variant="h6" gutterBottom>
                     Form Analysis
                   </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                    <Chip label={getFormQualityIcon(formQuality)} variant="outlined" size="small" />
-                    <Chip
-                      label={formQuality.replace(/_/g, ' ').toUpperCase()}
-                      color={getFormQualityColor(formQuality) as 'success' | 'info' | 'warning' | 'error' | 'default'}
-                      size="small"
-                    />
-                  </Box>
+                  <Chip
+                    label={formQuality.replace(/_/g, ' ').toUpperCase()}
+                    color={getFormQualityColor(formQuality) as any}
+                    size="small"
+                    sx={{ mb: 2 }}
+                  />
                   <Typography
                     variant="body2"
                     color="text.secondary"
@@ -754,9 +742,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                         p: 2,
                         borderRadius: 1,
                         fontFamily: 'monospace',
-                        fontSize: '0.85em',
-                        maxHeight: '200px',
-                        overflowY: 'auto'
+                        fontSize: '0.85em'
                       }}
                     >
                       <Typography variant="body2" component="div">
@@ -767,14 +753,6 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                         <strong>Phase:</strong> {aiModelDetails.phase}
                         <br />
                         <strong>Rep Count:</strong> {aiModelDetails.rep_count}
-                        <br />
-                        {aiModelDetails.timestamp && (
-                          <>
-                            <strong>Timestamp:</strong> {new Date(aiModelDetails.timestamp).toLocaleTimeString()}
-                            <br />
-                          </>
-                        )}
-                        <strong>Status:</strong> {aiModelDetails.success === false ? 'Failed' : 'Success'}
                       </Typography>
                     </Box>
                   </CardContent>

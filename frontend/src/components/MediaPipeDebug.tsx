@@ -16,15 +16,27 @@ import {
 } from '@mui/material';
 import Webcam from 'react-webcam';
 import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose';
-import { Camera } from '@mediapipe/camera_utils';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 import { extractJointAngles } from '../utils/poseDetection';
+
+const waitForVideoReady = async (video: HTMLVideoElement, timeoutMs = 10000) => {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  return false;
+};
 
 const MediaPipeDebug: React.FC = () => {
   const webcamRef = useRef<Webcam>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const poseRef = useRef<Pose | null>(null);
-  const cameraRef = useRef<Camera | null>(null);
+  const frameRequestRef = useRef<number | null>(null);
+  const poseDisposedRef = useRef(false);
+  const poseProcessingRef = useRef(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -36,6 +48,14 @@ const MediaPipeDebug: React.FC = () => {
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [showLandmarks, setShowLandmarks] = useState(true);
   const [showConnections, setShowConnections] = useState(true);
+
+  const stopLoop = useCallback(() => {
+    if (frameRequestRef.current !== null) {
+      cancelAnimationFrame(frameRequestRef.current);
+      frameRequestRef.current = null;
+    }
+    poseProcessingRef.current = false;
+  }, []);
 
   const onPoseResults = useCallback((results: any) => {
     if (!canvasRef.current) {
@@ -72,23 +92,15 @@ const MediaPipeDebug: React.FC = () => {
     setConfidence(avgConfidence);
 
     if (showConnections) {
-      drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
-        color: '#00FF00',
-        lineWidth: 2
-      });
+      drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
     }
 
     if (showLandmarks) {
-      drawLandmarks(ctx, results.poseLandmarks, {
-        color: '#FF0000',
-        lineWidth: 1,
-        radius: 3
-      });
+      drawLandmarks(ctx, results.poseLandmarks, { color: '#FF0000', lineWidth: 1, radius: 3 });
     }
 
     try {
-      const angles = extractJointAngles(results.poseLandmarks);
-      setJointAngles(angles);
+      setJointAngles(extractJointAngles(results.poseLandmarks));
     } catch (angleError) {
       console.error('Error extracting joint angles:', angleError);
     }
@@ -96,8 +108,6 @@ const MediaPipeDebug: React.FC = () => {
     setDebugInfo({
       landmarkCount: results.poseLandmarks.length,
       avgConfidence,
-      firstLandmark: results.poseLandmarks[0],
-      lastLandmark: results.poseLandmarks[results.poseLandmarks.length - 1],
       imageSize: results.image ? { width: results.image.width, height: results.image.height } : null
     });
   }, [showConnections, showLandmarks]);
@@ -109,14 +119,15 @@ const MediaPipeDebug: React.FC = () => {
         const pose = new Pose({
           locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
         });
+        poseDisposedRef.current = false;
 
         pose.setOptions({
-          modelComplexity: 1,
+          modelComplexity: 0,
           smoothLandmarks: true,
           enableSegmentation: false,
           smoothSegmentation: false,
-          minDetectionConfidence: 0.3,
-          minTrackingConfidence: 0.3
+          minDetectionConfidence: 0.4,
+          minTrackingConfidence: 0.4
         });
 
         pose.onResults(onPoseResults);
@@ -129,69 +140,84 @@ const MediaPipeDebug: React.FC = () => {
       }
     };
 
-    initializePose();
+    void initializePose();
 
     return () => {
-      if (cameraRef.current) {
-        cameraRef.current.stop();
+      stopLoop();
+      poseDisposedRef.current = true;
+      if (poseRef.current) {
+        poseRef.current.close();
+        poseRef.current = null;
       }
     };
-  }, [onPoseResults]);
+  }, [onPoseResults, stopLoop]);
 
-  useEffect(() => {
-    if (poseRef.current) {
-      poseRef.current.onResults(onPoseResults);
-    }
-  }, [onPoseResults]);
+  const startLoop = useCallback(() => {
+    const tick = async () => {
+      if (poseDisposedRef.current) {
+        return;
+      }
+
+      const video = webcamRef.current?.video;
+      const pose = poseRef.current;
+      if (video && pose && !poseProcessingRef.current) {
+        poseProcessingRef.current = true;
+        try {
+          await pose.send({ image: video });
+        } catch (sendError) {
+          if (!poseDisposedRef.current) {
+            console.error('Pose frame send error:', sendError);
+          }
+        } finally {
+          poseProcessingRef.current = false;
+        }
+      }
+
+      frameRequestRef.current = requestAnimationFrame(() => {
+        void tick();
+      });
+    };
+
+    stopLoop();
+    frameRequestRef.current = requestAnimationFrame(() => {
+      void tick();
+    });
+  }, [stopLoop]);
 
   const startCamera = useCallback(async () => {
     try {
       setError('');
-
       if (!poseRef.current) {
         throw new Error('Pose not initialized');
       }
-
       if (!webcamRef.current?.video) {
         throw new Error('Webcam video element not available');
       }
 
-      await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: 640,
-          height: 480,
-          facingMode: 'user'
-        }
-      });
+      poseDisposedRef.current = false;
+      const video = webcamRef.current.video;
+      if (video.paused) {
+        await video.play();
+      }
 
-      const camera = new Camera(webcamRef.current.video, {
-        onFrame: async () => {
-          if (webcamRef.current?.video && poseRef.current) {
-            await poseRef.current.send({ image: webcamRef.current.video });
-          }
-        },
-        width: 640,
-        height: 480
-      });
+      const ready = await waitForVideoReady(video);
+      if (!ready) {
+        throw new Error('Camera stream did not become ready in time');
+      }
 
-      cameraRef.current = camera;
-      await camera.start();
+      startLoop();
       setIsActive(true);
     } catch (cameraError) {
       console.error('Error starting camera:', cameraError);
       setError(`Failed to start camera: ${String(cameraError)}`);
     }
-  }, []);
+  }, [startLoop]);
 
   const stopCamera = useCallback(() => {
-    if (cameraRef.current) {
-      cameraRef.current.stop();
-      cameraRef.current = null;
-    }
-
+    stopLoop();
     setIsActive(false);
     setPoseDetected(false);
-  }, []);
+  }, [stopLoop]);
 
   const resetTest = useCallback(() => {
     stopCamera();
@@ -370,21 +396,6 @@ const MediaPipeDebug: React.FC = () => {
           </Grid>
         </Paper>
       )}
-
-      <Paper sx={{ p: 2, mt: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Troubleshooting Tips
-        </Typography>
-        <Box component="ul" sx={{ pl: 2 }}>
-          <li>Ensure good lighting and a clear view of your full body.</li>
-          <li>Make sure webcam permissions are granted.</li>
-          <li>Try refreshing the page if MediaPipe fails to load.</li>
-          <li>Check the browser console for detailed error messages.</li>
-          <li>Verify internet access for MediaPipe CDN resources.</li>
-          <li>Stand 3 to 6 feet away from the camera for best detection.</li>
-          <li>Wear clothing that contrasts with the background.</li>
-        </Box>
-      </Paper>
     </Container>
   );
 };
