@@ -56,17 +56,33 @@ const Dashboard: React.FC = () => {
     }
 
     try {
-      setLoading(true);
-      setError('');
+      // Try to load from cache first
+      const cacheKey = `physio_sessions_${currentUser.uid}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.sessions) {
+            setSessionData(parsed);
+            setLoading(false);
+          }
+        } catch (e) {
+          console.error('Failed to parse cached dashboard data');
+        }
+      }
+
       const data = await apiService.getUserSessions(currentUser.uid);
       setSessionData(data);
+      localStorage.setItem(cacheKey, JSON.stringify(data));
     } catch (fetchError) {
-      setError('Failed to load dashboard data. Please make sure the backend is running.');
+      if (!sessionData) {
+        setError('Failed to load dashboard data. Please make sure the backend is running.');
+      }
       console.error('Error fetching user sessions:', fetchError);
     } finally {
       setLoading(false);
     }
-  }, [currentUser]);
+  }, [currentUser, sessionData]);
 
   useEffect(() => {
     fetchUserSessions();

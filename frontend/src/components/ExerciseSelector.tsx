@@ -220,12 +220,28 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
   useEffect(() => {
     const fetchExercises = async () => {
       try {
-        setLoading(true);
-        setError('');
+        // Try to load from cache first for instant UI
+        const cached = localStorage.getItem('physio_exercises');
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setExercises(parsed);
+              setLoading(false);
+            }
+          } catch (e) {
+            console.error('Failed to parse cached exercises');
+          }
+        }
+
         const fetchedExercises = await apiService.getExercises();
         setExercises(fetchedExercises);
+        localStorage.setItem('physio_exercises', JSON.stringify(fetchedExercises));
       } catch (fetchError) {
-        setError('Failed to load exercises. Please make sure the backend server is running.');
+        // Only show error if we don't even have cached data
+        if (exercises.length === 0) {
+          setError('Failed to load exercises. Please make sure the backend server is running.');
+        }
         console.error('Error fetching exercises:', fetchError);
       } finally {
         setLoading(false);
