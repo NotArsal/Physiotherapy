@@ -17,6 +17,7 @@ MODEL_DIR = BASE_DIR / "model"
 MODEL_PATH = MODEL_DIR / "bilstm_exercise_classifier.h5"
 LABEL_ENCODER_PATH = MODEL_DIR / "label_encoder.pkl"
 DATABASE_PATH = BASE_DIR / "physio_sessions.db"
+DATABASE_URL = os.getenv("DATABASE_URL") # Support for managed Postgres (Render/Heroku)
 
 CORS(
     app,
@@ -32,6 +33,34 @@ label_encoder = None
 # Stateless backend - current_exercise_state removed to support multi-worker environments
 
 def init_db():
+    if DATABASE_URL:
+        # PostgreSQL Logic
+        try:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+            conn = psycopg2.connect(DATABASE_URL)
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS sessions (
+                    id SERIAL PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    exercise TEXT NOT NULL,
+                    total_reps INTEGER NOT NULL,
+                    duration INTEGER NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    session_data TEXT
+                )
+            ''')
+            conn.commit()
+            conn.close()
+            print("PostgreSQL database initialized")
+            return
+        except ImportError:
+            print("psycopg2 not found. Falling back to SQLite.")
+        except Exception as e:
+            print(f"PostgreSQL init failed: {e}. Falling back to SQLite.")
+
+    # SQLite Fallback
     if os.path.exists(DATABASE_PATH):
         return
     
@@ -50,7 +79,14 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
-    print(f"Database initialized at {DATABASE_PATH}")
+    print(f"SQLite database initialized at {DATABASE_PATH}")
+
+def get_db_connection():
+    if DATABASE_URL:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        return psycopg2.connect(DATABASE_URL)
+    return sqlite3.connect(DATABASE_PATH)
 
 def load_models():
     """Load the trained model artifacts from the backend/model directory."""
@@ -206,7 +242,12 @@ def predict():
         predicted_exercise_normalized = normalize_exercise_name(predicted_exercise)
         selected_exercise_normalized = normalize_exercise_name(selected_exercise)
 
-        exercise_match = (predicted_exercise_normalized == selected_exercise_normalized) if selected_exercise_normalized else (confidence >= 0.7)
+        # Ensure exercise_match is always defined
+        exercise_match = False
+        if selected_exercise_normalized:
+            exercise_match = (predicted_exercise_normalized == selected_exercise_normalized)
+        else:
+            exercise_match = (confidence >= 0.7)
 
         response = {
             "exercise": predicted_exercise,
@@ -249,14 +290,26 @@ def log_session():
         timestamp = datetime.now().isoformat()
         session_data = json.dumps(data.get("session_data", []))
 
-        conn = sqlite3.connect(DATABASE_PATH)
+        conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO sessions (user_id, exercise, total_reps, duration, timestamp, session_data)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (user_id, exercise, total_reps, duration, timestamp, session_data))
+        
+        if DATABASE_URL:
+            # Postgres syntax
+            cursor.execute('''
+                INSERT INTO sessions (user_id, exercise, total_reps, duration, timestamp, session_data)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
+            ''', (user_id, exercise, total_reps, duration, timestamp, session_data))
+            session_id = cursor.fetchone()[0]
+        else:
+            # SQLite syntax
+            cursor.execute('''
+                INSERT INTO sessions (user_id, exercise, total_reps, duration, timestamp, session_data)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (user_id, exercise, total_reps, duration, timestamp, session_data))
+            session_id = cursor.lastrowid
+            
         conn.commit()
-        session_id = cursor.lastrowid
         conn.close()
 
         return jsonify(
@@ -273,10 +326,21 @@ def log_session():
 @app.route("/sessions/<user_id>", methods=["GET"])
 def get_user_sessions(user_id):
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = get_db_connection()
+        if not DATABASE_URL:
+            conn.row_factory = sqlite3.Row
+        
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM sessions WHERE user_id = ? ORDER BY timestamp DESC', (user_id,))
+        
+        if DATABASE_URL:
+            # Postgres
+            from psycopg2.extras import RealDictCursor
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute('SELECT * FROM sessions WHERE user_id = %s ORDER BY timestamp DESC', (user_id,))
+        else:
+            # SQLite
+            cursor.execute('SELECT * FROM sessions WHERE user_id = ? ORDER BY timestamp DESC', (user_id,))
+            
         rows = cursor.fetchall()
         conn.close()
 
@@ -318,10 +382,21 @@ def get_user_sessions(user_id):
 @app.route("/sessions", methods=["GET"])
 def get_all_sessions():
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = get_db_connection()
+        if not DATABASE_URL:
+            conn.row_factory = sqlite3.Row
+        
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM sessions ORDER BY timestamp DESC')
+        
+        if DATABASE_URL:
+            # Postgres
+            from psycopg2.extras import RealDictCursor
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute('SELECT * FROM sessions ORDER BY timestamp DESC')
+        else:
+            # SQLite
+            cursor.execute('SELECT * FROM sessions ORDER BY timestamp DESC')
+            
         rows = cursor.fetchall()
         conn.close()
 
