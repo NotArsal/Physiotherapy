@@ -634,8 +634,98 @@ export function detectInjuryRisk(
     }
   }
 
+  // 6. Detailed Exercise-Specific Form Corrections (ROM, Alignment, Cheating)
+  let exerciseCorrectionRisk = 0;
+
+  // A. Biceps Curls: Detect elbow swing or cheating
+  if (["barbell_biceps_curl", "hammer_curl", "biceps_curl"].includes(exerciseKey)) {
+    const leftShoulderAngle = jointAngles[0] || 0;
+    const rightShoulderAngle = jointAngles[1] || 0;
+    const maxShoulderAngle = Math.max(leftShoulderAngle, rightShoulderAngle);
+    
+    // If shoulders engage and elbows swing forward too much
+    if (maxShoulderAngle > 40) {
+      exerciseCorrectionRisk = Math.max(exerciseCorrectionRisk, Math.min(100, ((maxShoulderAngle - 40) / 20) * 50 + 50));
+      report.warnings.push("Elbow Swing! Keep elbows locked at your sides.");
+    }
+  }
+
+  // B. Shoulder Press / Overhead Press: Flared shoulders / asymmetric press
+  if (["shoulder_press", "wall_slide"].includes(exerciseKey)) {
+    const leftElbowAngle = jointAngles[2] || 0;
+    const rightElbowAngle = jointAngles[3] || 0;
+    const leftShoulderAngle = jointAngles[0] || 0;
+    const rightShoulderAngle = jointAngles[1] || 0;
+
+    // Detect asymmetric arm extensions
+    const armAsymmetry = Math.abs(leftElbowAngle - rightElbowAngle);
+    if (armAsymmetry > 25 && Math.max(leftShoulderAngle, rightShoulderAngle) > 90) {
+      exerciseCorrectionRisk = Math.max(exerciseCorrectionRisk, Math.min(100, ((armAsymmetry - 25) / 20) * 50 + 50));
+      report.warnings.push("Asymmetric Press! Press both arms evenly.");
+    }
+
+    // Detect incomplete extension overhead (doing half-reps)
+    if (Math.max(leftShoulderAngle, rightShoulderAngle) > 110 && Math.min(leftElbowAngle, rightElbowAngle) < 130) {
+      exerciseCorrectionRisk = Math.max(exerciseCorrectionRisk, 60);
+      report.warnings.push("Incomplete Press! Extend arms fully overhead.");
+    }
+  }
+
+  // C. Push Ups & Bench Press: Elbow flaring (putting high stress on shoulders)
+  if (["push_up", "bench_press", "incline_bench_press", "decline_bench_press"].includes(exerciseKey)) {
+    const leftShoulderAngle = jointAngles[0] || 0;
+    const rightShoulderAngle = jointAngles[1] || 0;
+    const maxShoulderAngle = Math.max(leftShoulderAngle, rightShoulderAngle);
+
+    if (maxShoulderAngle > 85) {
+      exerciseCorrectionRisk = Math.max(exerciseCorrectionRisk, Math.min(100, ((maxShoulderAngle - 85) / 15) * 50 + 50));
+      report.warnings.push("Elbow Flare! Tuck elbows to 45-70 degrees.");
+    }
+  }
+
+  // D. Straight Leg Raise: Leg raised too high (back strain)
+  if (exerciseKey === "straight_leg_raise") {
+    const leftHipAngle = jointAngles[4] || 180;
+    const rightHipAngle = jointAngles[5] || 180;
+    const minHipAngle = Math.min(leftHipAngle, rightHipAngle);
+
+    if (minHipAngle < 125) {
+      exerciseCorrectionRisk = Math.max(exerciseCorrectionRisk, Math.min(100, ((125 - minHipAngle) / 20) * 50 + 50));
+      report.warnings.push("Leg Too High! Keep below 45 degrees.");
+    }
+  }
+
+  // E. Glute Bridge: Arching lower back excessively (hyperextension)
+  if (exerciseKey === "glute_bridge") {
+    const spineAngle = jointAngles[8] || 0;
+    if (spineAngle > 25) {
+      exerciseCorrectionRisk = Math.max(exerciseCorrectionRisk, Math.min(100, ((spineAngle - 25) / 15) * 50 + 50));
+      report.warnings.push("Hyperextended Back! Engage glutes and core.");
+    }
+  }
+
+  // F. Bird Dog: Hyperextending leg upwards
+  if (exerciseKey === "bird_dog") {
+    const leftHipAngle = jointAngles[4] || 180;
+    const rightHipAngle = jointAngles[5] || 180;
+    const maxHipAngle = Math.max(leftHipAngle, rightHipAngle);
+    
+    if (maxHipAngle > 175 && leftHip && rightHip && leftShoulder && rightShoulder && (leftHip.y < leftShoulder.y || rightHip.y < rightShoulder.y)) {
+      exerciseCorrectionRisk = Math.max(exerciseCorrectionRisk, 65);
+      report.warnings.push("Leg Too High! Keep leg horizontal to the floor.");
+    }
+  }
+
   // Calculate aggregate risk score
-  const maxRisk = Math.max(spineRisk, kneeValgusRisk, velocityRisk, asymmetryRisk, legRaiseKneeRisk, headPostureRisk);
+  const maxRisk = Math.max(
+    spineRisk, 
+    kneeValgusRisk, 
+    velocityRisk, 
+    asymmetryRisk, 
+    legRaiseKneeRisk, 
+    headPostureRisk,
+    exerciseCorrectionRisk
+  );
   report.riskScore = Math.round(maxRisk);
   
   if (report.riskScore > 50) {
