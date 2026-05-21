@@ -42,13 +42,48 @@ if frontend_env:
     if frontend_env_clean not in allowed_origins:
         allowed_origins.append(frontend_env_clean)
 
+# Initialize standard Flask-CORS as primary handler for all resources
 CORS(
     app,
-    origins=allowed_origins,
-    allow_headers=["Content-Type", "Authorization"],
-    methods=["GET", "POST", "OPTIONS"],
-    supports_credentials=True,
+    resources={r"/*": {
+        "origins": allowed_origins,
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "expose_headers": ["Access-Control-Allow-Origin"]
+    }},
+    supports_credentials=True
 )
+
+# Custom robust preflight request handler to catch any edge cases or preflight failures
+@app.before_request
+def handle_options_preflight():
+    if request.method == "OPTIONS":
+        from flask import make_response
+        response = make_response()
+        response.status_code = 204
+        
+        origin = request.headers.get("Origin")
+        if origin:
+            origin_lower = origin.lower()
+            if origin in allowed_origins or "vercel.app" in origin_lower or "localhost" in origin_lower or "127.0.0.1" in origin_lower:
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+                response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+        return response
+
+# Custom post-request hook to guarantee CORS headers on all HTTP responses, including 500 error responses
+@app.after_request
+def inject_cors_headers(response):
+    origin = request.headers.get("Origin")
+    if origin:
+        origin_lower = origin.lower()
+        if origin in allowed_origins or "vercel.app" in origin_lower or "localhost" in origin_lower or "127.0.0.1" in origin_lower:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+            response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+    return response
 
 model = None
 label_encoder = None
