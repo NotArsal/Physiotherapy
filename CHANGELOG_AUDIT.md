@@ -39,6 +39,13 @@ This file records the system audit, fixes, cleanup, and follow-up recommendation
 - Added **Exercise-Aware Rejection Bypass** in the backend `/predict` endpoint to prevent "Poor pose detection" errors during upper-body and posture exercises.
 - Upgraded the frontend [frontend/src/components/ExerciseMonitor.tsx](frontend/src/components/ExerciseMonitor.tsx) to maintain and send a **True Temporal 30-Frame Rolling Window Buffer** to the backend, enabling true motion sequence classification rather than static tiled frames.
 - Implemented **Biomechanical Posture Correction Checks** in [frontend/src/utils/poseDetection.ts](frontend/src/utils/poseDetection.ts) for Forward Head Carriage (horizontal ear-to-shoulder offset) and Slouching (vertical head drop ratio) with live visual and vocal feedback warnings.
+- Added comprehensive **Exercise Form & Range-of-Motion (ROM) Correction Rules** in [frontend/src/utils/poseDetection.ts](frontend/src/utils/poseDetection.ts) to correct the execution of multiple exercises in real-time:
+  * **Biceps Curls**: Detects elbow swing/cheating using shoulders (shoulder angle > 40°).
+  * **Shoulder Press**: Detects asymmetric arm extension (delta > 25°) and incomplete lockouts (overhead angle < 130°).
+  * **Push-Ups & Bench Press**: Detects elbow flaring (shoulder angle > 85°) to protect rotator cuffs.
+  * **Straight Leg Raise**: Detects legs raised too high (hip angle < 125° / > 55°) to prevent lower back strain.
+  * **Glute Bridge**: Detects lower back hyperextension/arching (spine angle > 25°).
+  * **Bird Dog**: Detects over-extended vertical leg kicks to maintain a neutral horizontal posture.
 - Structured clean session lifecycle handlers in the frontend to clear the temporal buffer upon starting and stopping exercise sessions.
 - Resolved TypeScript compiler warnings by removing the unused `earMidY` variable.
 - Verified backend end-to-end API suite (`test_api.py`) and compiled an optimized production build of the frontend with zero errors.
