@@ -9,6 +9,14 @@ import numpy as np
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from tensorflow.keras.models import load_model
+from tensorflow.keras.layers import LSTM as KerasLSTM
+import keras
+
+@keras.saving.register_keras_serializable(package="app", name="LSTM")
+class LSTM(KerasLSTM):
+    def __init__(self, *args, **kwargs):
+        kwargs.pop('time_major', None)
+        super().__init__(*args, **kwargs)
 
 app = Flask(__name__)
 
@@ -51,9 +59,40 @@ def init_db():
                     session_data TEXT
                 )
             ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS protocols (
+                    user_id TEXT NOT NULL,
+                    exercise TEXT NOT NULL,
+                    target_reps INTEGER NOT NULL DEFAULT 10,
+                    safe_spine_angle REAL NOT NULL DEFAULT 30.0,
+                    safe_knee_angle REAL NOT NULL DEFAULT 90.0,
+                    safety_sensitivity TEXT NOT NULL DEFAULT 'medium',
+                    PRIMARY KEY (user_id, exercise)
+                )
+            ''')
+            # Seed default protocols
+            default_protocols = [
+                ('default', 'squat', 10, 30.0, 90.0, 'medium'),
+                ('default', 'deadlift', 10, 25.0, 110.0, 'medium'),
+                ('default', 'push_up', 10, 15.0, 90.0, 'medium'),
+                ('default', 'barbell_biceps_curl', 12, 15.0, 150.0, 'medium'),
+                ('default', 'shoulder_press', 10, 20.0, 140.0, 'medium'),
+                ('default', 'plank', 1, 10.0, 180.0, 'medium'),
+                ('default', 'leg_raises', 15, 15.0, 100.0, 'medium'),
+                ('default', 'russian_twist', 20, 30.0, 90.0, 'medium'),
+            ]
+            for p in default_protocols:
+                try:
+                    cursor.execute('''
+                        INSERT INTO protocols (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (user_id, exercise) DO NOTHING
+                    ''', p)
+                except Exception as e:
+                    print(f"Error seeding PostgreSQL protocol: {e}")
             conn.commit()
             conn.close()
-            print("PostgreSQL database initialized")
+            print("PostgreSQL database and protocols initialized")
             return
         except ImportError:
             print("psycopg2 not found. Falling back to SQLite.")
@@ -61,9 +100,6 @@ def init_db():
             print(f"PostgreSQL init failed: {e}. Falling back to SQLite.")
 
     # SQLite Fallback
-    if os.path.exists(DATABASE_PATH):
-        return
-    
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     cursor.execute('''
@@ -77,9 +113,39 @@ def init_db():
             session_data TEXT
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS protocols (
+            user_id TEXT NOT NULL,
+            exercise TEXT NOT NULL,
+            target_reps INTEGER NOT NULL DEFAULT 10,
+            safe_spine_angle REAL NOT NULL DEFAULT 30.0,
+            safe_knee_angle REAL NOT NULL DEFAULT 90.0,
+            safety_sensitivity TEXT NOT NULL DEFAULT 'medium',
+            PRIMARY KEY (user_id, exercise)
+        )
+    ''')
+    # Seed defaults in SQLite
+    default_protocols = [
+        ('default', 'squat', 10, 30.0, 90.0, 'medium'),
+        ('default', 'deadlift', 10, 25.0, 110.0, 'medium'),
+        ('default', 'push_up', 10, 15.0, 90.0, 'medium'),
+        ('default', 'barbell_biceps_curl', 12, 15.0, 150.0, 'medium'),
+        ('default', 'shoulder_press', 10, 20.0, 140.0, 'medium'),
+        ('default', 'plank', 1, 10.0, 180.0, 'medium'),
+        ('default', 'leg_raises', 15, 15.0, 100.0, 'medium'),
+        ('default', 'russian_twist', 20, 30.0, 90.0, 'medium'),
+    ]
+    for p in default_protocols:
+        try:
+            cursor.execute('''
+                INSERT OR IGNORE INTO protocols (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', p)
+        except Exception as e:
+            print(f"Error seeding SQLite protocol: {e}")
     conn.commit()
     conn.close()
-    print(f"SQLite database initialized at {DATABASE_PATH}")
+    print(f"SQLite database and protocols initialized at {DATABASE_PATH}")
 
 def get_db_connection():
     if DATABASE_URL:
@@ -93,7 +159,7 @@ def load_models():
     global model, label_encoder
 
     try:
-        model = load_model(MODEL_PATH)
+        model = load_model(MODEL_PATH, custom_objects={'LSTM': LSTM})
         with open(LABEL_ENCODER_PATH, "rb") as file:
             label_encoder = pickle.load(file)
         print("BiLSTM model loaded successfully")
@@ -101,6 +167,8 @@ def load_models():
         return True
     except Exception as exc:
         print(f"Error loading models: {exc}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -409,6 +477,115 @@ def get_all_sessions():
         return jsonify({"sessions": all_sessions})
     except Exception as exc:
         return jsonify({"error": f"Failed to retrieve all sessions: {exc}", "success": False}), 500
+
+
+@app.route("/protocols/default", methods=["GET"])
+def get_default_protocols():
+    try:
+        conn = get_db_connection()
+        if not DATABASE_URL:
+            conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        if DATABASE_URL:
+            from psycopg2.extras import RealDictCursor
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("SELECT * FROM protocols WHERE user_id = 'default'")
+        else:
+            cursor.execute("SELECT * FROM protocols WHERE user_id = 'default'")
+            
+        rows = cursor.fetchall()
+        conn.close()
+        
+        protocols = [dict(row) for row in rows]
+        return jsonify({"protocols": protocols, "success": True})
+    except Exception as exc:
+        return jsonify({"error": f"Failed to retrieve default protocols: {exc}", "success": False}), 500
+
+
+@app.route("/protocols/<user_id>", methods=["GET"])
+def get_user_protocols(user_id):
+    try:
+        conn = get_db_connection()
+        if not DATABASE_URL:
+            conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        if DATABASE_URL:
+            from psycopg2.extras import RealDictCursor
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("SELECT * FROM protocols WHERE user_id = %s", (user_id,))
+        else:
+            cursor.execute("SELECT * FROM protocols WHERE user_id = ?", (user_id,))
+            
+        rows = cursor.fetchall()
+        
+        # If user has no custom protocols, fall back to 'default'
+        if not rows:
+            if DATABASE_URL:
+                cursor.execute("SELECT * FROM protocols WHERE user_id = 'default'")
+            else:
+                cursor.execute("SELECT * FROM protocols WHERE user_id = 'default'")
+            rows = cursor.fetchall()
+            
+        conn.close()
+        protocols = [dict(row) for row in rows]
+        return jsonify({"user_id": user_id, "protocols": protocols, "success": True})
+    except Exception as exc:
+        return jsonify({"error": f"Failed to retrieve protocols for {user_id}: {exc}", "success": False}), 500
+
+
+@app.route("/protocols", methods=["POST"])
+def save_protocol():
+    try:
+        data = request.get_json(silent=True) or {}
+        
+        if isinstance(data, list):
+            protocols_list = data
+        else:
+            protocols_list = [data]
+            
+        if not protocols_list:
+            return jsonify({"error": "No data provided", "success": False}), 400
+            
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        for item in protocols_list:
+            user_id = item.get("user_id")
+            exercise = item.get("exercise")
+            
+            if not user_id or not exercise:
+                conn.close()
+                return jsonify({"error": "Missing user_id or exercise in protocol data", "success": False}), 400
+                
+            target_reps = int(item.get("target_reps", 10))
+            safe_spine_angle = float(item.get("safe_spine_angle", 30.0))
+            safe_knee_angle = float(item.get("safe_knee_angle", 90.0))
+            safety_sensitivity = item.get("safety_sensitivity", "medium")
+            
+            if DATABASE_URL:
+                cursor.execute('''
+                    INSERT INTO protocols (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (user_id, exercise) DO UPDATE SET
+                        target_reps = EXCLUDED.target_reps,
+                        safe_spine_angle = EXCLUDED.safe_spine_angle,
+                        safe_knee_angle = EXCLUDED.safe_knee_angle,
+                        safety_sensitivity = EXCLUDED.safety_sensitivity
+                ''', (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity))
+            else:
+                cursor.execute('''
+                    INSERT OR REPLACE INTO protocols (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity))
+                
+        conn.commit()
+        conn.close()
+        
+        return jsonify({"message": "Protocols saved successfully", "success": True})
+    except Exception as exc:
+        return jsonify({"error": f"Failed to save protocols: {exc}", "success": False}), 500
 
 
 # Initialize database and load models at module level for Gunicorn compatibility

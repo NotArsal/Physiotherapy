@@ -58,6 +58,15 @@ export interface UserSessionsResponse {
   summary: SessionSummary;
 }
 
+export interface ExerciseProtocol {
+  user_id: string;
+  exercise: string;
+  target_reps: number;
+  safe_spine_angle: number;
+  safe_knee_angle: number;
+  safety_sensitivity: string; // 'high' | 'medium' | 'low'
+}
+
 class ApiService {
   // Health check
   async healthCheck() {
@@ -138,6 +147,39 @@ class ApiService {
       return response.data;
     } catch (error) {
       console.error('Failed to get all sessions:', error);
+      throw error;
+    }
+  }
+
+  // Get default protocols
+  async getDefaultProtocols(): Promise<ExerciseProtocol[]> {
+    try {
+      const response = await api.get('/protocols/default');
+      return response.data.protocols;
+    } catch (error) {
+      console.error('Failed to get default protocols:', error);
+      throw error;
+    }
+  }
+
+  // Get user protocols (falls back to default inside backend)
+  async getProtocol(userId: string): Promise<ExerciseProtocol[]> {
+    try {
+      const response = await api.get(`/protocols/${userId}`);
+      return response.data.protocols;
+    } catch (error) {
+      console.error(`Failed to get protocols for user ${userId}:`, error);
+      throw error;
+    }
+  }
+
+  // Save or update user protocols
+  async saveProtocol(protocol: ExerciseProtocol | ExerciseProtocol[]): Promise<any> {
+    try {
+      const response = await api.post('/protocols', protocol);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to save protocol:', error);
       throw error;
     }
   }

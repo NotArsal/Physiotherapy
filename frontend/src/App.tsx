@@ -18,6 +18,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import BugReportIcon from '@mui/icons-material/BugReport';
+import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
@@ -25,6 +26,8 @@ import ExerciseSelector from './components/ExerciseSelector';
 import ExerciseMonitor from './components/ExerciseMonitor';
 import Dashboard from './components/Dashboard';
 import MediaPipeDebug from './components/MediaPipeDebug';
+import { TherapistPortal } from './components/TherapistPortal';
+
 
 // Create Material-UI theme
 const theme = createTheme({
@@ -46,11 +49,12 @@ const theme = createTheme({
   },
 });
 
-type AppView = 'exercises' | 'monitor' | 'dashboard' | 'debug';
+type AppView = 'exercises' | 'monitor' | 'dashboard' | 'debug' | 'therapist';
 
 const AppContent: React.FC = () => {
   const { currentUser, logout } = useAuth();
-  const [currentView, setCurrentView] = useState<AppView>('exercises');
+  const [currentView, setCurrentView] = useState<AppView>('therapist');
+  const [role, setRole] = useState<'patient' | 'therapist'>('therapist');
   const [selectedExercise, setSelectedExercise] = useState<string>('');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
@@ -99,33 +103,78 @@ const AppContent: React.FC = () => {
             PhysioTracker - AI Exercise Monitor
           </Typography>
           
-          {/* Navigation Tabs */}
-          <Tabs 
-            value={currentView === 'monitor' ? 'exercises' : currentView} 
-            onChange={handleTabChange}
-            textColor="inherit"
-            indicatorColor="secondary"
-            sx={{ mr: 2 }}
-          >
-            <Tab 
-              icon={<PlayArrowIcon />} 
-              label="Exercises" 
-              value="exercises"
-              sx={{ color: 'white' }}
-            />
-            <Tab 
-              icon={<DashboardIcon />} 
-              label="Dashboard" 
-              value="dashboard"
-              sx={{ color: 'white' }}
-            />
-            <Tab 
-              icon={<BugReportIcon />} 
-              label="Debug" 
-              value="debug"
-              sx={{ color: 'white' }}
-            />
-          </Tabs>
+          {/* Navigation Tabs (Conditional based on active Role Mode) */}
+          {role === 'patient' ? (
+            <Tabs 
+              value={currentView === 'monitor' ? 'exercises' : currentView} 
+              onChange={handleTabChange}
+              textColor="inherit"
+              indicatorColor="secondary"
+              sx={{ mr: 2 }}
+            >
+              <Tab 
+                icon={<PlayArrowIcon />} 
+                label="Exercises" 
+                value="exercises"
+                sx={{ color: 'white' }}
+              />
+              <Tab 
+                icon={<DashboardIcon />} 
+                label="Dashboard" 
+                value="dashboard"
+                sx={{ color: 'white' }}
+              />
+              <Tab 
+                icon={<BugReportIcon />} 
+                label="Debug" 
+                value="debug"
+                sx={{ color: 'white' }}
+              />
+            </Tabs>
+          ) : (
+            <Tabs 
+              value="therapist"
+              textColor="inherit"
+              indicatorColor="secondary"
+              sx={{ mr: 2 }}
+            >
+              <Tab 
+                icon={<SupervisorAccountIcon />} 
+                label="Therapist Portal" 
+                value="therapist"
+                sx={{ color: 'white' }}
+              />
+            </Tabs>
+          )}
+
+          {/* Premium Role Toggler Switch */}
+          <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: 'rgba(255,255,255,0.15)', px: 2, py: 0.5, borderRadius: 3, mr: 3 }}>
+            <Typography variant="body2" sx={{ mr: 1, color: 'white', fontWeight: 'bold' }}>
+              {role === 'therapist' ? 'Therapist Mode' : 'Patient Mode'}
+            </Typography>
+            <Button
+              variant="contained"
+              size="small"
+              color={role === 'therapist' ? 'secondary' : 'inherit'}
+              onClick={() => {
+                const nextRole = role === 'patient' ? 'therapist' : 'patient';
+                setRole(nextRole);
+                if (nextRole === 'therapist') {
+                  setCurrentView('therapist');
+                } else {
+                  setCurrentView('exercises');
+                }
+              }}
+              sx={{
+                borderRadius: 2,
+                textTransform: 'none',
+                fontWeight: 'bold',
+                minWidth: '90px'
+              }}
+            >
+              Swap Role
+            </Button>
+          </Box>
 
           {/* User Menu */}
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -178,6 +227,10 @@ const AppContent: React.FC = () => {
         
         {currentView === 'debug' && (
           <MediaPipeDebug />
+        )}
+
+        {currentView === 'therapist' && (
+          <TherapistPortal />
         )}
       </Box>
     </Box>

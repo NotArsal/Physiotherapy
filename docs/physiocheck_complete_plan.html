@@ -1,0 +1,603 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--blue:#1B4F8A;--accent:#2E86AB;--teal:#0F6E56;--amber:#BA7517;--coral:#993C1D;--green:#3B6D11}
+body{font-family:var(--font-sans);background:transparent;color:var(--color-text-primary)}
+.page{padding:1.5rem 0}
+.section-title{font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--color-text-secondary);margin-bottom:1.25rem;padding-bottom:.5rem;border-bottom:.5px solid var(--color-border-tertiary)}
+.tabs{display:flex;gap:4px;margin-bottom:1.5rem;flex-wrap:wrap}
+.tab{padding:6px 14px;font-size:13px;border:.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-secondary);cursor:pointer;transition:all .15s}
+.tab:hover{background:var(--color-background-secondary)}
+.tab.active{background:var(--color-background-info);color:var(--color-text-info);border-color:var(--color-border-info)}
+.panel{display:none}.panel.active{display:block}
+
+/* Requirement cards */
+.req-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:1.5rem}
+.req-card{background:var(--color-background-primary);border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem}
+.req-card h3{font-size:13px;font-weight:500;margin-bottom:.5rem;display:flex;align-items:center;gap:8px}
+.req-card ul{list-style:none;padding:0}
+.req-card ul li{font-size:13px;color:var(--color-text-secondary);padding:3px 0;border-bottom:.5px solid var(--color-border-tertiary);display:flex;align-items:flex-start;gap:6px}
+.req-card ul li:last-child{border:none}
+.req-card ul li::before{content:"→";color:var(--color-text-secondary);flex-shrink:0;margin-top:1px}
+.badge{font-size:10px;padding:2px 8px;border-radius:var(--border-radius-md);font-weight:500}
+.badge-blue{background:var(--color-background-info);color:var(--color-text-info)}
+.badge-green{background:var(--color-background-success);color:var(--color-text-success)}
+.badge-warn{background:var(--color-background-warning);color:var(--color-text-warning)}
+.badge-danger{background:var(--color-background-danger);color:var(--color-text-danger)}
+
+/* Phase timeline */
+.timeline{position:relative;padding-left:36px}
+.timeline::before{content:'';position:absolute;left:12px;top:0;bottom:0;width:1px;background:var(--color-border-secondary)}
+.phase-block{position:relative;margin-bottom:1.5rem}
+.phase-dot{position:absolute;left:-30px;top:4px;width:18px;height:18px;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;background:var(--color-background-primary)}
+.phase-dot.p1{border-color:#1B4F8A;color:#1B4F8A}
+.phase-dot.p2{border-color:#2E86AB;color:#2E86AB}
+.phase-dot.p3{border-color:#0F6E56;color:#0F6E56}
+.phase-header{font-size:14px;font-weight:500;margin-bottom:4px;display:flex;align-items:center;gap:10px}
+.phase-sub{font-size:12px;color:var(--color-text-secondary);margin-bottom:.75rem}
+.task-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.task-chip{background:var(--color-background-secondary);border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:8px 10px;font-size:12px;color:var(--color-text-secondary)}
+.task-chip strong{display:block;font-size:12px;font-weight:500;color:var(--color-text-primary);margin-bottom:2px}
+
+/* Tech stack */
+.tech-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.tech-card{background:var(--color-background-primary);border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:.875rem 1rem}
+.tech-card h4{font-size:12px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem}
+.tech-list{list-style:none}
+.tech-list li{font-size:13px;padding:4px 0;border-bottom:.5px solid var(--color-border-tertiary);display:flex;justify-content:space-between;align-items:center}
+.tech-list li:last-child{border:none}
+.tech-pill{font-size:10px;padding:1px 6px;border-radius:4px;background:var(--color-background-secondary);color:var(--color-text-secondary)}
+
+/* API / DB schema */
+.schema-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.schema-table{background:var(--color-background-primary);border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden}
+.schema-header{background:var(--color-background-info);color:var(--color-text-info);padding:8px 12px;font-size:12px;font-weight:500}
+.schema-row{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;border-bottom:.5px solid var(--color-border-tertiary);font-size:12px}
+.schema-row:last-child{border:none}
+.schema-row span:first-child{color:var(--color-text-primary)}
+.schema-row span:last-child{font-family:var(--font-mono);font-size:11px;color:var(--color-text-secondary)}
+.pk{color:var(--color-text-warning)!important;font-weight:500}
+.fk{color:var(--color-text-info)!important}
+
+/* API endpoints */
+.api-list{display:flex;flex-direction:column;gap:8px}
+.api-row{background:var(--color-background-primary);border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:10px 14px;display:flex;align-items:center;gap:12px;font-size:13px}
+.method{font-family:var(--font-mono);font-size:11px;padding:3px 8px;border-radius:4px;font-weight:600;min-width:44px;text-align:center}
+.GET{background:var(--color-background-success);color:var(--color-text-success)}
+.POST{background:var(--color-background-info);color:var(--color-text-info)}
+.PUT{background:var(--color-background-warning);color:var(--color-text-warning)}
+.WS{background:#E1F5EE;color:#0F6E56}
+.api-path{font-family:var(--font-mono);font-size:12px;color:var(--color-text-primary);flex:1}
+.api-desc{font-size:12px;color:var(--color-text-secondary)}
+
+/* Checklist */
+.check-section{margin-bottom:1.25rem}
+.check-section h4{font-size:12px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem}
+.check-list{list-style:none}
+.check-list li{display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-bottom:.5px solid var(--color-border-tertiary);font-size:13px}
+.check-list li:last-child{border:none}
+.check-box{width:16px;height:16px;border:.5px solid var(--color-border-secondary);border-radius:4px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .1s;margin-top:1px}
+.check-box.done{background:var(--color-background-success);border-color:var(--color-border-success)}
+.check-box.done::after{content:'✓';font-size:10px;color:var(--color-text-success);font-weight:700}
+.check-text{flex:1;line-height:1.5}
+.check-tag{font-size:10px;padding:1px 6px;border-radius:4px;flex-shrink:0;background:var(--color-background-secondary);color:var(--color-text-secondary)}
+
+/* Progress bar */
+.progress-bar{height:4px;background:var(--color-border-tertiary);border-radius:2px;margin-bottom:1.5rem;overflow:hidden}
+.progress-fill{height:100%;background:var(--color-background-info);border-radius:2px;transition:width .3s}
+.progress-label{font-size:12px;color:var(--color-text-secondary);margin-bottom:.5rem;display:flex;justify-content:space-between}
+</style>
+
+<div class="page">
+  <div class="tabs" id="tabs">
+    <button class="tab active" onclick="showPanel('requirements')">Requirements</button>
+    <button class="tab" onclick="showPanel('flow')">System Flow</button>
+    <button class="tab" onclick="showPanel('tech')">Tech Stack</button>
+    <button class="tab" onclick="showPanel('database')">Database</button>
+    <button class="tab" onclick="showPanel('api')">API Design</button>
+    <button class="tab" onclick="showPanel('roadmap')">Roadmap</button>
+    <button class="tab" onclick="showPanel('checklist')">Build Checklist</button>
+  </div>
+
+  <!-- REQUIREMENTS -->
+  <div class="panel active" id="panel-requirements">
+    <p class="section-title">Functional & Non-functional Requirements</p>
+    <div class="req-grid">
+      <div class="req-card">
+        <h3><i class="ti ti-eye" style="font-size:16px" aria-hidden="true"></i> Pose & Vision <span class="badge badge-blue">Core</span></h3>
+        <ul>
+          <li>Real-time webcam feed capture at ≥24 FPS</li>
+          <li>MediaPipe Pose: detect 33 body landmarks</li>
+          <li>Joint angle computation (knee, hip, shoulder, spine)</li>
+          <li>Velocity & acceleration tracking per joint</li>
+          <li>Symmetry scoring left/right body halves</li>
+          <li>Range of Motion (ROM) measurement</li>
+        </ul>
+      </div>
+      <div class="req-card">
+        <h3><i class="ti ti-brain" style="font-size:16px" aria-hidden="true"></i> AI Engine <span class="badge badge-blue">Core</span></h3>
+        <ul>
+          <li>Exercise phase segmentation (e.g. squat phases)</li>
+          <li>Phase 1: GRU temporal sequence classifier</li>
+          <li>Phase 2: Transformer + TCN model</li>
+          <li>Error classification: knee valgus, rounded back, incomplete ROM</li>
+          <li>Movement safety scoring per repetition</li>
+          <li>Injury risk flag before error occurs</li>
+        </ul>
+      </div>
+      <div class="req-card">
+        <h3><i class="ti ti-message" style="font-size:16px" aria-hidden="true"></i> Feedback <span class="badge badge-green">UX</span></h3>
+        <ul>
+          <li>Visual: skeleton overlay on webcam frame</li>
+          <li>Highlight incorrect joints in real time</li>
+          <li>Text corrections displayed on screen</li>
+          <li>Voice feedback via TTS / Web Speech API</li>
+          <li>Rep counter with quality score per rep</li>
+          <li>Post-session summary report</li>
+        </ul>
+      </div>
+      <div class="req-card">
+        <h3><i class="ti ti-user" style="font-size:16px" aria-hidden="true"></i> Patient Dashboard <span class="badge badge-green">UX</span></h3>
+        <ul>
+          <li>Session start / stop with exercise selection</li>
+          <li>Live skeleton + angle visualisation</li>
+          <li>Session history with playback</li>
+          <li>Progress charts (ROM, accuracy over time)</li>
+          <li>Exercise library with reference videos</li>
+          <li>Google OAuth authentication</li>
+        </ul>
+      </div>
+      <div class="req-card">
+        <h3><i class="ti ti-stethoscope" style="font-size:16px" aria-hidden="true"></i> Therapist Portal <span class="badge badge-warn">Clinical</span></h3>
+        <ul>
+          <li>Assign exercise protocols per patient</li>
+          <li>Set angle thresholds and rep targets</li>
+          <li>View patient session recordings & reports</li>
+          <li>Alert configuration for high injury risk</li>
+          <li>Export session data as PDF/CSV</li>
+          <li>Multi-patient management dashboard</li>
+        </ul>
+      </div>
+      <div class="req-card">
+        <h3><i class="ti ti-server" style="font-size:16px" aria-hidden="true"></i> Non-functional <span class="badge badge-danger">NFR</span></h3>
+        <ul>
+          <li>Inference latency &lt;100ms per frame</li>
+          <li>WebSocket round-trip &lt;200ms</li>
+          <li>Support 50 concurrent sessions (MVP)</li>
+          <li>JWT-secured API endpoints</li>
+          <li>HTTPS + data encryption at rest</li>
+          <li>Mobile-responsive patient UI</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOW -->
+  <div class="panel" id="panel-flow">
+    <p class="section-title">System Architecture Flow</p>
+    <svg width="100%" viewBox="0 0 640 860" role="img">
+      <title>PhysioCheck system architecture flow</title>
+      <desc>End-to-end data flow from webcam input through pose estimation, feature engineering, AI model, feedback, and storage layers</desc>
+      <defs>
+        <marker id="arr2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+
+      <!-- Layer labels left column -->
+      <text class="ts" x="6" y="62" fill="var(--color-text-secondary)" style="font-size:10px">INPUT</text>
+      <text class="ts" x="6" y="172" fill="var(--color-text-secondary)" style="font-size:10px">VISION</text>
+      <text class="ts" x="6" y="282" fill="var(--color-text-secondary)" style="font-size:10px">FEATURES</text>
+      <text class="ts" x="6" y="392" fill="var(--color-text-secondary)" style="font-size:10px">AI</text>
+      <text class="ts" x="6" y="502" fill="var(--color-text-secondary)" style="font-size:10px">FEEDBACK</text>
+      <text class="ts" x="6" y="612" fill="var(--color-text-secondary)" style="font-size:10px">BACKEND</text>
+      <text class="ts" x="6" y="722" fill="var(--color-text-secondary)" style="font-size:10px">STORAGE</text>
+      <text class="ts" x="6" y="822" fill="var(--color-text-secondary)" style="font-size:10px">PORTAL</text>
+
+      <!-- 1. Webcam -->
+      <g class="node c-gray">
+        <rect x="60" y="36" width="520" height="44" rx="8" stroke-width="0.5"/>
+        <text class="th" x="320" y="58" text-anchor="middle" dominant-baseline="central">Webcam input (browser WebRTC)</text>
+      </g>
+      <line x1="320" y1="80" x2="320" y2="110" stroke="var(--color-text-secondary)" stroke-width="0.5" marker-end="url(#arr2)"/>
+
+      <!-- 2. MediaPipe -->
+      <g class="node c-blue">
+        <rect x="60" y="110" width="520" height="54" rx="8" stroke-width="0.5"/>
+        <text class="th" x="320" y="131" text-anchor="middle" dominant-baseline="central">MediaPipe Pose estimation</text>
+        <text class="ts" x="320" y="151" text-anchor="middle" dominant-baseline="central">33 landmarks · x,y,z coords · visibility scores</text>
+      </g>
+      <line x1="320" y1="164" x2="320" y2="194" stroke="var(--color-text-secondary)" stroke-width="0.5" marker-end="url(#arr2)"/>
+
+      <!-- 3. Feature Engineering -->
+      <g class="node c-teal">
+        <rect x="60" y="194" width="520" height="54" rx="8" stroke-width="0.5"/>
+        <text class="th" x="320" y="215" text-anchor="middle" dominant-baseline="central">Feature engineering (OpenCV + NumPy)</text>
+        <text class="ts" x="320" y="235" text-anchor="middle" dominant-baseline="central">Joint angles · velocity · symmetry · ROM · spine curvature</text>
+      </g>
+      <line x1="320" y1="248" x2="320" y2="278" stroke="var(--color-text-secondary)" stroke-width="0.5" marker-end="url(#arr2)"/>
+
+      <!-- 4. AI Model -->
+      <g class="node c-purple">
+        <rect x="60" y="278" width="520" height="54" rx="8" stroke-width="0.5"/>
+        <text class="th" x="320" y="299" text-anchor="middle" dominant-baseline="central">Temporal AI model (GRU → Transformer + TCN)</text>
+        <text class="ts" x="320" y="319" text-anchor="middle" dominant-baseline="central">Phase detection · error classification · safety scoring</text>
+      </g>
+      <line x1="320" y1="332" x2="320" y2="362" stroke="var(--color-text-secondary)" stroke-width="0.5" marker-end="url(#arr2)"/>
+
+      <!-- 5. Feedback -->
+      <g style="cursor:pointer">
+        <rect x="60" y="362" width="156" height="54" rx="8" stroke-width="0.5" class="c-amber" fill="var(--color-background-warning)" stroke="var(--color-border-warning)"/>
+        <text class="th" x="138" y="383" text-anchor="middle" dominant-baseline="central" fill="var(--color-text-warning)">Visual</text>
+        <text class="ts" x="138" y="403" text-anchor="middle" dominant-baseline="central" fill="var(--color-text-warning)">Skeleton + joints</text>
+      </g>
+      <g style="cursor:pointer">
+        <rect x="242" y="362" width="156" height="54" rx="8" stroke-width="0.5" class="c-amber" fill="var(--color-background-warning)" stroke="var(--color-border-warning)"/>
+        <text class="th" x="320" y="383" text-anchor="middle" dominant-baseline="central" fill="var(--color-text-warning)">Text</text>
+        <text class="ts" x="320" y="403" text-anchor="middle" dominant-baseline="central" fill="var(--color-text-warning)">Corrective cues</text>
+      </g>
+      <g style="cursor:pointer">
+        <rect x="424" y="362" width="156" height="54" rx="8" stroke-width="0.5" class="c-amber" fill="var(--color-background-warning)" stroke="var(--color-border-warning)"/>
+        <text class="th" x="502" y="383" text-anchor="middle" dominant-baseline="central" fill="var(--color-text-warning)">Voice</text>
+        <text class="ts" x="502" y="403" text-anchor="middle" dominant-baseline="central" fill="var(--color-text-warning)">TTS coaching</text>
+      </g>
+      <line x1="320" y1="416" x2="320" y2="446" stroke="var(--color-text-secondary)" stroke-width="0.5" marker-end="url(#arr2)"/>
+
+      <!-- 6. Backend -->
+      <g class="node c-blue">
+        <rect x="60" y="446" width="520" height="54" rx="8" stroke-width="0.5"/>
+        <text class="th" x="320" y="467" text-anchor="middle" dominant-baseline="central">FastAPI backend + WebSocket server</text>
+        <text class="ts" x="320" y="487" text-anchor="middle" dominant-baseline="central">Inference API · session management · auth · analytics</text>
+      </g>
+      <line x1="240" y1="500" x2="240" y2="530" stroke="var(--color-text-secondary)" stroke-width="0.5" marker-end="url(#arr2)"/>
+      <line x1="400" y1="500" x2="400" y2="530" stroke="var(--color-text-secondary)" stroke-width="0.5" marker-end="url(#arr2)"/>
+
+      <!-- 7. Storage -->
+      <g class="node c-green">
+        <rect x="60" y="530" width="240" height="54" rx="8" stroke-width="0.5"/>
+        <text class="th" x="180" y="551" text-anchor="middle" dominant-baseline="central">PostgreSQL (primary)</text>
+        <text class="ts" x="180" y="571" text-anchor="middle" dominant-baseline="central">Users · sessions · analytics</text>
+      </g>
+      <g class="node c-teal">
+        <rect x="340" y="530" width="240" height="54" rx="8" stroke-width="0.5"/>
+        <text class="th" x="460" y="551" text-anchor="middle" dominant-baseline="central">MongoDB Atlas (sessions)</text>
+        <text class="ts" x="460" y="571" text-anchor="middle" dominant-baseline="central">Pose sequences · frame data</text>
+      </g>
+      <line x1="180" y1="584" x2="180" y2="640" stroke="var(--color-text-secondary)" stroke-width="0.5" marker-end="url(#arr2)"/>
+      <line x1="460" y1="584" x2="460" y2="640" stroke="var(--color-text-secondary)" stroke-width="0.5" marker-end="url(#arr2)"/>
+
+      <!-- 8. Dashboards -->
+      <g class="node c-coral">
+        <rect x="60" y="640" width="240" height="54" rx="8" stroke-width="0.5"/>
+        <text class="th" x="180" y="661" text-anchor="middle" dominant-baseline="central">Patient dashboard</text>
+        <text class="ts" x="180" y="681" text-anchor="middle" dominant-baseline="central">React · progress · history</text>
+      </g>
+      <g class="node c-purple">
+        <rect x="340" y="640" width="240" height="54" rx="8" stroke-width="0.5"/>
+        <text class="th" x="460" y="661" text-anchor="middle" dominant-baseline="central">Therapist portal</text>
+        <text class="ts" x="460" y="681" text-anchor="middle" dominant-baseline="central">Protocols · monitoring · exports</text>
+      </g>
+
+      <!-- WebSocket back-arrow -->
+      <path d="M580 500 L610 500 L610 280 L580 280" stroke="var(--color-text-secondary)" stroke-width="0.5" fill="none" marker-end="url(#arr2)" stroke-dasharray="4 3"/>
+      <text class="ts" x="622" y="392" text-anchor="middle" transform="rotate(90,622,392)" fill="var(--color-text-secondary)" style="font-size:10px">WebSocket</text>
+
+      <!-- Legend -->
+      <rect x="60" y="720" width="520" height="32" rx="6" fill="var(--color-background-secondary)" stroke="var(--color-border-tertiary)" stroke-width="0.5"/>
+      <line x1="90" y1="736" x2="114" y2="736" stroke="var(--color-text-secondary)" stroke-width="0.5" stroke-dasharray="4 3"/>
+      <text class="ts" x="120" y="740" fill="var(--color-text-secondary)">WebSocket real-time</text>
+      <line x1="264" y1="736" x2="288" y2="736" stroke="var(--color-text-secondary)" stroke-width="0.5" marker-end="url(#arr2)"/>
+      <text class="ts" x="294" y="740" fill="var(--color-text-secondary)">HTTP / REST</text>
+    </svg>
+  </div>
+
+  <!-- TECH STACK -->
+  <div class="panel" id="panel-tech">
+    <p class="section-title">Complete Technology Stack</p>
+    <div class="tech-grid">
+      <div class="tech-card">
+        <h4>Frontend</h4>
+        <ul class="tech-list">
+          <li>React 18 + Vite <span class="tech-pill">framework</span></li>
+          <li>Tailwind CSS <span class="tech-pill">styling</span></li>
+          <li>Framer Motion <span class="tech-pill">animation</span></li>
+          <li>Recharts / D3 <span class="tech-pill">charts</span></li>
+          <li>WebRTC API <span class="tech-pill">webcam</span></li>
+          <li>Web Speech API <span class="tech-pill">TTS</span></li>
+        </ul>
+      </div>
+      <div class="tech-card">
+        <h4>Backend</h4>
+        <ul class="tech-list">
+          <li>FastAPI (Python) <span class="tech-pill">server</span></li>
+          <li>Uvicorn <span class="tech-pill">ASGI</span></li>
+          <li>python-socketio <span class="tech-pill">WS</span></li>
+          <li>SQLAlchemy <span class="tech-pill">ORM</span></li>
+          <li>Pydantic v2 <span class="tech-pill">validation</span></li>
+          <li>Alembic <span class="tech-pill">migrations</span></li>
+        </ul>
+      </div>
+      <div class="tech-card">
+        <h4>AI / ML</h4>
+        <ul class="tech-list">
+          <li>MediaPipe Pose <span class="tech-pill">estimation</span></li>
+          <li>PyTorch 2 <span class="tech-pill">training</span></li>
+          <li>NumPy / Pandas <span class="tech-pill">features</span></li>
+          <li>OpenCV <span class="tech-pill">vision</span></li>
+          <li>Scikit-learn <span class="tech-pill">metrics</span></li>
+          <li>ONNX Runtime <span class="tech-pill">inference</span></li>
+        </ul>
+      </div>
+      <div class="tech-card">
+        <h4>Database</h4>
+        <ul class="tech-list">
+          <li>PostgreSQL 16 <span class="tech-pill">primary</span></li>
+          <li>MongoDB Atlas <span class="tech-pill">poses</span></li>
+          <li>Redis <span class="tech-pill">cache</span></li>
+          <li>Supabase <span class="tech-pill">hosting</span></li>
+          <li>AWS S3 <span class="tech-pill">recordings</span></li>
+        </ul>
+      </div>
+      <div class="tech-card">
+        <h4>Auth & Security</h4>
+        <ul class="tech-list">
+          <li>Google OAuth 2.0 <span class="tech-pill">identity</span></li>
+          <li>JWT (PyJWT) <span class="tech-pill">tokens</span></li>
+          <li>bcrypt <span class="tech-pill">hashing</span></li>
+          <li>HTTPS / TLS <span class="tech-pill">transport</span></li>
+          <li>CORS middleware <span class="tech-pill">security</span></li>
+        </ul>
+      </div>
+      <div class="tech-card">
+        <h4>Deployment & CI/CD</h4>
+        <ul class="tech-list">
+          <li>Vercel <span class="tech-pill">frontend</span></li>
+          <li>Render / AWS EC2 <span class="tech-pill">backend</span></li>
+          <li>Docker + compose <span class="tech-pill">containers</span></li>
+          <li>GitHub Actions <span class="tech-pill">CI/CD</span></li>
+          <li>Prometheus + Grafana <span class="tech-pill">monitoring</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- DATABASE -->
+  <div class="panel" id="panel-database">
+    <p class="section-title">Database Schema Design</p>
+    <div class="schema-grid">
+      <div class="schema-table">
+        <div class="schema-header">users</div>
+        <div class="schema-row"><span class="pk">id</span><span>UUID PK</span></div>
+        <div class="schema-row"><span>email</span><span>VARCHAR UNIQUE</span></div>
+        <div class="schema-row"><span>name</span><span>VARCHAR</span></div>
+        <div class="schema-row"><span>role</span><span>ENUM (patient, therapist)</span></div>
+        <div class="schema-row"><span>google_sub</span><span>VARCHAR</span></div>
+        <div class="schema-row"><span>created_at</span><span>TIMESTAMP</span></div>
+        <div class="schema-row"><span>therapist_id</span><span class="fk">UUID FK→users</span></div>
+      </div>
+      <div class="schema-table">
+        <div class="schema-header">exercise_protocols</div>
+        <div class="schema-row"><span class="pk">id</span><span>UUID PK</span></div>
+        <div class="schema-row"><span>therapist_id</span><span class="fk">UUID FK→users</span></div>
+        <div class="schema-row"><span>patient_id</span><span class="fk">UUID FK→users</span></div>
+        <div class="schema-row"><span>exercise_name</span><span>VARCHAR</span></div>
+        <div class="schema-row"><span>target_reps</span><span>INT</span></div>
+        <div class="schema-row"><span>target_sets</span><span>INT</span></div>
+        <div class="schema-row"><span>angle_thresholds</span><span>JSONB</span></div>
+        <div class="schema-row"><span>active</span><span>BOOLEAN</span></div>
+      </div>
+      <div class="schema-table">
+        <div class="schema-header">sessions</div>
+        <div class="schema-row"><span class="pk">id</span><span>UUID PK</span></div>
+        <div class="schema-row"><span>user_id</span><span class="fk">UUID FK→users</span></div>
+        <div class="schema-row"><span>protocol_id</span><span class="fk">UUID FK→protocols</span></div>
+        <div class="schema-row"><span>started_at</span><span>TIMESTAMP</span></div>
+        <div class="schema-row"><span>ended_at</span><span>TIMESTAMP</span></div>
+        <div class="schema-row"><span>total_reps</span><span>INT</span></div>
+        <div class="schema-row"><span>accuracy_score</span><span>FLOAT</span></div>
+        <div class="schema-row"><span>injury_flags</span><span>INT</span></div>
+      </div>
+      <div class="schema-table">
+        <div class="schema-header">posture_errors</div>
+        <div class="schema-row"><span class="pk">id</span><span>UUID PK</span></div>
+        <div class="schema-row"><span>session_id</span><span class="fk">UUID FK→sessions</span></div>
+        <div class="schema-row"><span>error_type</span><span>VARCHAR</span></div>
+        <div class="schema-row"><span>joint</span><span>VARCHAR</span></div>
+        <div class="schema-row"><span>phase</span><span>VARCHAR</span></div>
+        <div class="schema-row"><span>severity</span><span>ENUM(low,mid,high)</span></div>
+        <div class="schema-row"><span>timestamp_ms</span><span>BIGINT</span></div>
+      </div>
+      <div class="schema-table">
+        <div class="schema-header">rom_history (PostgreSQL)</div>
+        <div class="schema-row"><span class="pk">id</span><span>UUID PK</span></div>
+        <div class="schema-row"><span>user_id</span><span class="fk">UUID FK→users</span></div>
+        <div class="schema-row"><span>joint</span><span>VARCHAR</span></div>
+        <div class="schema-row"><span>max_angle</span><span>FLOAT</span></div>
+        <div class="schema-row"><span>min_angle</span><span>FLOAT</span></div>
+        <div class="schema-row"><span>measured_at</span><span>TIMESTAMP</span></div>
+      </div>
+      <div class="schema-table">
+        <div class="schema-header">pose_frames (MongoDB)</div>
+        <div class="schema-row"><span class="pk">_id</span><span>ObjectId</span></div>
+        <div class="schema-row"><span>session_id</span><span>UUID</span></div>
+        <div class="schema-row"><span>frame_ts</span><span>Number (ms)</span></div>
+        <div class="schema-row"><span>landmarks</span><span>Array[33]</span></div>
+        <div class="schema-row"><span>features</span><span>Object</span></div>
+        <div class="schema-row"><span>prediction</span><span>Object</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- API -->
+  <div class="panel" id="panel-api">
+    <p class="section-title">REST & WebSocket API Endpoints</p>
+    <div style="margin-bottom:1rem">
+      <p style="font-size:12px;color:var(--color-text-secondary);margin-bottom:.75rem;font-weight:500;text-transform:uppercase;letter-spacing:.08em">Auth</p>
+      <div class="api-list">
+        <div class="api-row"><span class="method POST">POST</span><span class="api-path">/auth/google</span><span class="api-desc">Exchange OAuth code → JWT token</span></div>
+        <div class="api-row"><span class="method POST">POST</span><span class="api-path">/auth/refresh</span><span class="api-desc">Refresh access token</span></div>
+      </div>
+    </div>
+    <div style="margin-bottom:1rem">
+      <p style="font-size:12px;color:var(--color-text-secondary);margin-bottom:.75rem;font-weight:500;text-transform:uppercase;letter-spacing:.08em">Sessions</p>
+      <div class="api-list">
+        <div class="api-row"><span class="method POST">POST</span><span class="api-path">/sessions/start</span><span class="api-desc">Create session, return session_id</span></div>
+        <div class="api-row"><span class="method PUT">PUT</span><span class="api-path">/sessions/{id}/end</span><span class="api-desc">Finalise session, compute summary</span></div>
+        <div class="api-row"><span class="method GET">GET</span><span class="api-path">/sessions/{id}</span><span class="api-desc">Fetch session detail + error log</span></div>
+        <div class="api-row"><span class="method GET">GET</span><span class="api-path">/sessions?user_id=&page=</span><span class="api-desc">Paginated session history</span></div>
+      </div>
+    </div>
+    <div style="margin-bottom:1rem">
+      <p style="font-size:12px;color:var(--color-text-secondary);margin-bottom:.75rem;font-weight:500;text-transform:uppercase;letter-spacing:.08em">Real-time Inference</p>
+      <div class="api-list">
+        <div class="api-row"><span class="method WS">WS</span><span class="api-path">/ws/session/{session_id}</span><span class="api-desc">Stream pose frames → receive predictions + feedback</span></div>
+      </div>
+    </div>
+    <div style="margin-bottom:1rem">
+      <p style="font-size:12px;color:var(--color-text-secondary);margin-bottom:.75rem;font-weight:500;text-transform:uppercase;letter-spacing:.08em">Analytics</p>
+      <div class="api-list">
+        <div class="api-row"><span class="method GET">GET</span><span class="api-path">/analytics/rom/{user_id}</span><span class="api-desc">ROM trend over time per joint</span></div>
+        <div class="api-row"><span class="method GET">GET</span><span class="api-path">/analytics/errors/{user_id}</span><span class="api-desc">Error frequency breakdown</span></div>
+        <div class="api-row"><span class="method GET">GET</span><span class="api-path">/analytics/progress/{user_id}</span><span class="api-desc">Accuracy trend, rep quality score</span></div>
+      </div>
+    </div>
+    <div style="margin-bottom:1rem">
+      <p style="font-size:12px;color:var(--color-text-secondary);margin-bottom:.75rem;font-weight:500;text-transform:uppercase;letter-spacing:.08em">Therapist</p>
+      <div class="api-list">
+        <div class="api-row"><span class="method POST">POST</span><span class="api-path">/protocols</span><span class="api-desc">Create exercise protocol for patient</span></div>
+        <div class="api-row"><span class="method PUT">PUT</span><span class="api-path">/protocols/{id}</span><span class="api-desc">Update thresholds / reps / sets</span></div>
+        <div class="api-row"><span class="method GET">GET</span><span class="api-path">/therapist/{id}/patients</span><span class="api-desc">List assigned patients with latest session</span></div>
+        <div class="api-row"><span class="method GET">GET</span><span class="api-path">/reports/{session_id}/pdf</span><span class="api-desc">Generate downloadable PDF report</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROADMAP -->
+  <div class="panel" id="panel-roadmap">
+    <p class="section-title">Development Roadmap — 3 Phases</p>
+    <div class="timeline">
+      <!-- Phase 1 -->
+      <div class="phase-block">
+        <div class="phase-dot p1">1</div>
+        <div class="phase-header">Phase 1 — Foundation MVP <span class="badge badge-blue">Weeks 1–6</span></div>
+        <div class="phase-sub">Core pose pipeline, rule-based feedback, basic patient dashboard</div>
+        <div class="task-row">
+          <div class="task-chip"><strong>Week 1–2</strong>Project setup, monorepo, Docker, CI/CD skeleton, Google OAuth</div>
+          <div class="task-chip"><strong>Week 2–3</strong>MediaPipe integration, webcam feed, landmark rendering on canvas</div>
+          <div class="task-chip"><strong>Week 3–4</strong>Feature engineering module: angles, velocity, ROM, symmetry</div>
+          <div class="task-chip"><strong>Week 4–5</strong>GRU model training (squat + lunge dataset), ONNX export, inference API</div>
+          <div class="task-chip"><strong>Week 5–6</strong>WebSocket pipeline, text/visual feedback, rep counter, session storage</div>
+          <div class="task-chip"><strong>Week 6</strong>Patient dashboard MVP: live view, session history, basic progress chart</div>
+        </div>
+      </div>
+
+      <!-- Phase 2 -->
+      <div class="phase-block">
+        <div class="phase-dot p2">2</div>
+        <div class="phase-header">Phase 2 — Clinical Layer <span class="badge badge-warn">Weeks 7–12</span></div>
+        <div class="phase-sub">Therapist portal, advanced AI, voice feedback, analytics</div>
+        <div class="task-row">
+          <div class="task-chip"><strong>Week 7–8</strong>Therapist portal: protocol builder, patient management, session viewer</div>
+          <div class="task-chip"><strong>Week 8–9</strong>Transformer + TCN model swap, per-exercise phase detection upgrade</div>
+          <div class="task-chip"><strong>Week 9–10</strong>Voice feedback (Web Speech API + TTS), alert system for injury flags</div>
+          <div class="task-chip"><strong>Week 10–11</strong>Advanced analytics: ROM trend, error heatmap, weekly progress report</div>
+          <div class="task-chip"><strong>Week 11–12</strong>PDF export, protocol templates, multi-patient therapist dashboard</div>
+          <div class="task-chip"><strong>Week 12</strong>Load testing, security audit, Vercel + Render production deploy</div>
+        </div>
+      </div>
+
+      <!-- Phase 3 -->
+      <div class="phase-block">
+        <div class="phase-dot p3">3</div>
+        <div class="phase-header">Phase 3 — Research Expansion <span class="badge badge-green">Weeks 13–20</span></div>
+        <div class="phase-sub">3D pose, injury prediction, adaptive AI, mobile app</div>
+        <div class="task-row">
+          <div class="task-chip"><strong>Week 13–14</strong>3D pose estimation (MotionBERT / 3D MediaPipe) integration</div>
+          <div class="task-chip"><strong>Week 14–15</strong>Injury risk prediction model (proactive flag before error occurs)</div>
+          <div class="task-chip"><strong>Week 15–16</strong>Adaptive exercise recommendation engine based on progress</div>
+          <div class="task-chip"><strong>Week 16–17</strong>Fatigue detection via velocity decay signal</div>
+          <div class="task-chip"><strong>Week 17–18</strong>Multi-user session support, concurrent load optimisation</div>
+          <div class="task-chip"><strong>Week 18–20</strong>React Native mobile app, Prometheus monitoring, clinical validation plan</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHECKLIST -->
+  <div class="panel" id="panel-checklist">
+    <p class="section-title">Build Checklist</p>
+    <div id="progress-label" class="progress-label"><span>Progress</span><span id="pct">0%</span></div>
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+    <div class="check-section">
+      <h4>Infrastructure</h4>
+      <ul class="check-list">
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Initialise monorepo (frontend/, backend/, ml/) with Git</span><span class="check-tag">Setup</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Configure Docker + docker-compose for local dev</span><span class="check-tag">Setup</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">GitHub Actions CI: lint + test on every PR</span><span class="check-tag">CI/CD</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Configure Vercel (frontend) + Render (backend) deployments</span><span class="check-tag">Deploy</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Provision PostgreSQL (Supabase) + MongoDB Atlas</span><span class="check-tag">DB</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Set up Redis for session caching</span><span class="check-tag">Cache</span></li>
+      </ul>
+    </div>
+    <div class="check-section">
+      <h4>Backend</h4>
+      <ul class="check-list">
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">FastAPI project scaffold with folder structure</span><span class="check-tag">Backend</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Google OAuth + JWT auth endpoints</span><span class="check-tag">Auth</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">SQLAlchemy models + Alembic migrations</span><span class="check-tag">DB</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Session CRUD endpoints (start, end, fetch, list)</span><span class="check-tag">API</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">WebSocket server for real-time pose stream</span><span class="check-tag">WS</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Inference worker: frame → features → model → prediction</span><span class="check-tag">AI</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Analytics API endpoints (ROM, errors, progress)</span><span class="check-tag">API</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Protocol management endpoints (therapist)</span><span class="check-tag">API</span></li>
+      </ul>
+    </div>
+    <div class="check-section">
+      <h4>ML Pipeline</h4>
+      <ul class="check-list">
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">MediaPipe Pose integration + landmark extraction script</span><span class="check-tag">CV</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Feature engineering module (angles, velocity, symmetry, ROM)</span><span class="check-tag">Features</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Collect / label exercise dataset (squat, lunge, shoulder press)</span><span class="check-tag">Data</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Train Phase 1 GRU classifier, evaluate on held-out set</span><span class="check-tag">Training</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Export model to ONNX for fast backend inference</span><span class="check-tag">Deploy</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Exercise phase segmentation logic</span><span class="check-tag">Logic</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Phase 2: Transformer + TCN training pipeline</span><span class="check-tag">Phase 2</span></li>
+      </ul>
+    </div>
+    <div class="check-section">
+      <h4>Frontend</h4>
+      <ul class="check-list">
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">React + Vite scaffold with Tailwind CSS</span><span class="check-tag">Frontend</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Google OAuth login page</span><span class="check-tag">Auth</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Webcam feed component with WebRTC</span><span class="check-tag">CV</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Canvas overlay for skeleton + joint highlights</span><span class="check-tag">UI</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">WebSocket hook for real-time inference stream</span><span class="check-tag">WS</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Feedback panel: text cues + voice TTS toggle</span><span class="check-tag">UX</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Patient dashboard: progress charts (Recharts)</span><span class="check-tag">Analytics</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Therapist portal: protocol builder + patient list</span><span class="check-tag">Clinical</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Session history page with error breakdown</span><span class="check-tag">UI</span></li>
+        <li><div class="check-box" onclick="toggle(this)"></div><span class="check-text">Mobile-responsive layout (all pages)</span><span class="check-tag">UX</span></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+function showPanel(id){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  event.target.classList.add('active');
+}
+function toggle(el){
+  el.classList.toggle('done');
+  updateProgress();
+}
+function updateProgress(){
+  const all=document.querySelectorAll('.check-box').length;
+  const done=document.querySelectorAll('.check-box.done').length;
+  const pct=Math.round(done/all*100);
+  document.getElementById('progress-fill').style.width=pct+'%';
+  document.getElementById('pct').textContent=pct+'%';
+}
+</script>

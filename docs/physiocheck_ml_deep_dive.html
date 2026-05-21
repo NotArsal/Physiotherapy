@@ -1,0 +1,474 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:1.5rem}
+.tab{padding:6px 14px;font-size:13px;border:.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-secondary);cursor:pointer;transition:all .15s}
+.tab:hover{background:var(--color-background-secondary)}
+.tab.active{background:var(--color-background-info);color:var(--color-text-info);border-color:var(--color-border-info)}
+.panel{display:none}.panel.active{display:block}
+.sec{font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--color-text-secondary);margin-bottom:1rem;padding-bottom:.4rem;border-bottom:.5px solid var(--color-border-tertiary)}
+.card{background:var(--color-background-primary);border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:12px}
+.card h3{font-size:14px;font-weight:500;margin-bottom:.5rem;display:flex;align-items:center;gap:8px}
+.card p{font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:.5rem}
+.card p:last-child{margin-bottom:0}
+.badge{font-size:10px;padding:2px 8px;border-radius:var(--border-radius-md);font-weight:500}
+.bi{background:var(--color-background-info);color:var(--color-text-info)}
+.bs{background:var(--color-background-success);color:var(--color-text-success)}
+.bw{background:var(--color-background-warning);color:var(--color-text-warning)}
+.bd{background:var(--color-background-danger);color:var(--color-text-danger)}
+.bp{background:#EEEDFE;color:#3C3489}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:16px}
+.kv{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-bottom:.5px solid var(--color-border-tertiary);font-size:13px}
+.kv:last-child{border:none}
+.kv span:first-child{color:var(--color-text-secondary)}
+.kv span:last-child{font-weight:500;color:var(--color-text-primary)}
+.tag-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:.5rem}
+.tag{font-size:11px;padding:3px 9px;border-radius:20px;background:var(--color-background-secondary);color:var(--color-text-secondary);border:.5px solid var(--color-border-tertiary)}
+.pill-row{display:flex;gap:8px;flex-wrap:wrap;margin:.75rem 0}
+.pill{font-size:12px;padding:4px 12px;border-radius:20px;border:.5px solid var(--color-border-secondary);color:var(--color-text-primary);background:var(--color-background-secondary)}
+.step-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:1rem}
+.step{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.75rem 1rem}
+.step .num{font-size:11px;font-weight:500;color:var(--color-text-info);margin-bottom:4px}
+.step .label{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:3px}
+.step .sub{font-size:12px;color:var(--color-text-secondary);line-height:1.5}
+.ds-card{background:var(--color-background-primary);border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;margin-bottom:12px}
+.ds-head{padding:.75rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:.5px solid var(--color-border-tertiary)}
+.ds-head h4{font-size:13px;font-weight:500}
+.ds-body{padding:.75rem 1rem}
+.ds-row{display:flex;justify-content:space-between;align-items:flex-start;padding:4px 0;font-size:12px;border-bottom:.5px solid var(--color-border-tertiary)}
+.ds-row:last-child{border:none}
+.ds-row span:first-child{color:var(--color-text-secondary);flex:0 0 130px}
+.ds-row span:last-child{color:var(--color-text-primary);text-align:right;flex:1}
+.warn-box{background:var(--color-background-warning);border:.5px solid var(--color-border-warning);border-radius:var(--border-radius-md);padding:.75rem 1rem;font-size:13px;color:var(--color-text-warning);margin-bottom:12px}
+.info-box{background:var(--color-background-info);border:.5px solid var(--color-border-info);border-radius:var(--border-radius-md);padding:.75rem 1rem;font-size:13px;color:var(--color-text-info);margin-bottom:12px}
+.suc-box{background:var(--color-background-success);border:.5px solid var(--color-border-success);border-radius:var(--border-radius-md);padding:.75rem 1rem;font-size:13px;color:var(--color-text-success);margin-bottom:12px}
+.model-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
+.phase-label{font-size:10px;padding:2px 10px;border-radius:20px;background:var(--color-background-secondary);border:.5px solid var(--color-border-secondary);color:var(--color-text-secondary);font-weight:500}
+</style>
+
+<div style="padding:1.5rem 0">
+<h2 class="sr-only">PhysioCheck ML and deep learning model reference</h2>
+
+<div class="tabs" id="tabs">
+  <button class="tab active" onclick="show('overview')">Overview</button>
+  <button class="tab" onclick="show('models')">Models in detail</button>
+  <button class="tab" onclick="show('pipeline')">Training pipeline</button>
+  <button class="tab" onclick="show('datasets')">Dataset requirements</button>
+  <button class="tab" onclick="show('inference')">Inference & deployment</button>
+  <button class="tab" onclick="show('eval')">Evaluation & metrics</button>
+</div>
+
+<!-- OVERVIEW -->
+<div class="panel active" id="panel-overview">
+  <p class="sec">What ML/DL does in PhysioCheck</p>
+
+  <div class="info-box">PhysioCheck uses ML at three distinct layers — pose estimation (pre-trained, no training needed), feature-based rule logic (no ML), and two trainable deep learning models that grow in sophistication across phases.</div>
+
+  <div class="step-grid">
+    <div class="step">
+      <div class="num">Layer 1 — Pre-trained</div>
+      <div class="label">MediaPipe Pose</div>
+      <div class="sub">Google's pre-trained landmark detector. Zero training required. Outputs 33 landmarks per frame.</div>
+    </div>
+    <div class="step">
+      <div class="num">Layer 2 — Rule-based</div>
+      <div class="label">Angle & threshold engine</div>
+      <div class="sub">Pure math. Computes joint angles, velocity, ROM. No ML — deterministic comparisons against therapist-set thresholds.</div>
+    </div>
+    <div class="step">
+      <div class="num">Layer 3 — Phase 1 model</div>
+      <div class="label">GRU classifier</div>
+      <div class="sub">Trained on labelled exercise sequences. Classifies posture state + error type in real time.</div>
+    </div>
+    <div class="step">
+      <div class="num">Layer 4 — Phase 2 model</div>
+      <div class="label">Transformer + TCN</div>
+      <div class="sub">Advanced temporal model for long-sequence understanding, personalized correction, and injury risk prediction.</div>
+    </div>
+  </div>
+
+  <p class="sec">Model summary</p>
+  <div class="grid2">
+    <div class="card">
+      <div class="model-header"><h3>GRU classifier</h3><span class="badge bi">Phase 1</span></div>
+      <div class="kv"><span>Task</span><span>Posture + error classification</span></div>
+      <div class="kv"><span>Input</span><span>Feature sequence (T × F)</span></div>
+      <div class="kv"><span>Output</span><span>5-class softmax</span></div>
+      <div class="kv"><span>Latency target</span><span>&lt; 30 ms</span></div>
+      <div class="kv"><span>Training data</span><span>~5,000 labelled reps</span></div>
+    </div>
+    <div class="card">
+      <div class="model-header"><h3>Transformer + TCN</h3><span class="badge bw">Phase 2</span></div>
+      <div class="kv"><span>Task</span><span>Phase detection + injury risk</span></div>
+      <div class="kv"><span>Input</span><span>Longer pose sequences</span></div>
+      <div class="kv"><span>Output</span><span>Phase label + risk score</span></div>
+      <div class="kv"><span>Latency target</span><span>&lt; 80 ms</span></div>
+      <div class="kv"><span>Training data</span><span>~20,000 labelled reps</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODELS IN DETAIL -->
+<div class="panel" id="panel-models">
+  <p class="sec">Phase 1 — GRU sequence classifier</p>
+  <div class="card">
+    <div class="model-header"><h3>Why GRU?</h3><span class="badge bi">Gated Recurrent Unit</span></div>
+    <p>Exercises are time-series data — a squat isn't a single frame, it's a sequence of frames. GRU processes this sequence step-by-step and remembers relevant context (e.g. "knee was bending") without the overhead of LSTM. It's faster and has fewer parameters, which matters for &lt;100ms real-time inference.</p>
+    <div class="tag-row">
+      <span class="tag">Lower latency than LSTM</span>
+      <span class="tag">Fewer parameters</span>
+      <span class="tag">Handles variable-length sequences</span>
+      <span class="tag">Proven on gesture/motion tasks</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>GRU architecture</h3>
+    <div class="kv"><span>Input shape</span><span>Batch × T (30 frames) × F (18 features)</span></div>
+    <div class="kv"><span>GRU layer 1</span><span>128 hidden units, return sequences</span></div>
+    <div class="kv"><span>GRU layer 2</span><span>64 hidden units, return last hidden state</span></div>
+    <div class="kv"><span>Dropout</span><span>0.3 between GRU layers</span></div>
+    <div class="kv"><span>Dense layer</span><span>64 units, ReLU</span></div>
+    <div class="kv"><span>Output layer</span><span>5 units, Softmax</span></div>
+    <div class="kv"><span>Loss</span><span>Categorical cross-entropy</span></div>
+    <div class="kv"><span>Optimizer</span><span>Adam (lr=1e-3)</span></div>
+    <div class="kv"><span>Output classes</span><span>Correct · Knee valgus · Rounded back · Incomplete ROM · Risky movement</span></div>
+  </div>
+
+  <p class="sec" style="margin-top:1.5rem">Phase 2 — Transformer + TCN</p>
+  <div class="card">
+    <div class="model-header"><h3>Why Transformer?</h3><span class="badge bw">Multi-head attention</span></div>
+    <p>GRU is great for short sequences but struggles to "look back" far in time — e.g. noticing that someone's hip dropped 15 frames ago causes a knee error now. Transformers with self-attention handle this by relating every frame to every other frame in the sequence. The result is more accurate phase detection and better capture of compound movement errors.</p>
+    <div class="tag-row">
+      <span class="tag">Long-range temporal dependencies</span>
+      <span class="tag">Parallelisable training</span>
+      <span class="tag">Better context per frame</span>
+      <span class="tag">Scales with data</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="model-header"><h3>Why TCN alongside Transformer?</h3><span class="badge bp">Temporal Convolution Network</span></div>
+    <p>TCNs are 1D dilated causal convolutions — they are exceptionally fast at inference (no recurrence, fully parallelisable), and they capture local temporal patterns (like the velocity spike just before an error) that Transformers sometimes miss. The two models are complementary: Transformer for global context, TCN for local motion patterns.</p>
+    <div class="tag-row">
+      <span class="tag">Dilated causal convolutions</span>
+      <span class="tag">No recurrence — fast inference</span>
+      <span class="tag">Local motion pattern detection</span>
+      <span class="tag">Works well on small datasets</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Transformer + TCN architecture</h3>
+    <div class="kv"><span>Input</span><span>Batch × T (90 frames) × F (18 features)</span></div>
+    <div class="kv"><span>Positional encoding</span><span>Sinusoidal, added to input</span></div>
+    <div class="kv"><span>Transformer encoder</span><span>4 layers, 4 heads, d_model=128</span></div>
+    <div class="kv"><span>TCN branch</span><span>4 dilated conv layers (kernel=3, dilations 1,2,4,8)</span></div>
+    <div class="kv"><span>Fusion</span><span>Concatenate Transformer + TCN outputs → Dense 128</span></div>
+    <div class="kv"><span>Phase head</span><span>5-class softmax (exercise phases)</span></div>
+    <div class="kv"><span>Error head</span><span>Multi-label sigmoid (error types)</span></div>
+    <div class="kv"><span>Risk head</span><span>Scalar sigmoid (injury probability 0–1)</span></div>
+    <div class="kv"><span>Loss</span><span>Weighted sum: CE + BCE + MSE</span></div>
+  </div>
+
+  <div class="card">
+    <div class="model-header"><h3>Optional Phase 3 — Graph Neural Network</h3><span class="badge bs">Phase 3</span></div>
+    <p>The human body is a graph — joints are nodes, bones are edges. A GNN (specifically ST-GCN — Spatial-Temporal Graph Convolutional Network) can model joint interdependencies directly. For example, it naturally captures that "knee valgus is caused by weak hip abductors" because those joints are connected in the graph. This is research-level and best approached after Phase 2 data is collected.</p>
+    <div class="tag-row">
+      <span class="tag">ST-GCN architecture</span>
+      <span class="tag">Models joint-bone relationships</span>
+      <span class="tag">Best for injury prediction</span>
+      <span class="tag">Needs 3D pose input</span>
+    </div>
+  </div>
+</div>
+
+<!-- TRAINING PIPELINE -->
+<div class="panel" id="panel-pipeline">
+  <p class="sec">End-to-end training pipeline</p>
+
+  <div class="step-grid">
+    <div class="step">
+      <div class="num">Step 1</div>
+      <div class="label">Data collection</div>
+      <div class="sub">Record subjects doing exercises via webcam. Collect from public datasets. Annotate error types per frame.</div>
+    </div>
+    <div class="step">
+      <div class="num">Step 2</div>
+      <div class="label">Pose extraction</div>
+      <div class="sub">Run MediaPipe on all videos. Extract 33 landmarks per frame. Store as numpy arrays with timestamps.</div>
+    </div>
+    <div class="step">
+      <div class="num">Step 3</div>
+      <div class="label">Feature engineering</div>
+      <div class="sub">Compute angles, velocity, ROM, symmetry. Normalise. Build sliding window sequences of T frames.</div>
+    </div>
+    <div class="step">
+      <div class="num">Step 4</div>
+      <div class="label">Labelling</div>
+      <div class="sub">Physio annotates each sequence window: exercise phase + error type + severity. Tool: Label Studio or custom UI.</div>
+    </div>
+    <div class="step">
+      <div class="num">Step 5</div>
+      <div class="label">Augmentation</div>
+      <div class="sub">Mirror sequences, add Gaussian noise to landmarks, temporal scaling, shift sequences. Doubles dataset size.</div>
+    </div>
+    <div class="step">
+      <div class="num">Step 6</div>
+      <div class="label">Train / val / test split</div>
+      <div class="sub">70/15/15 split. Split by subject (not by frame) to prevent data leakage across people.</div>
+    </div>
+    <div class="step">
+      <div class="num">Step 7</div>
+      <div class="label">Training</div>
+      <div class="sub">PyTorch training loop, early stopping on val loss, cosine LR schedule, mixed precision (fp16).</div>
+    </div>
+    <div class="step">
+      <div class="num">Step 8</div>
+      <div class="label">Evaluation</div>
+      <div class="sub">Accuracy, F1 per class, confusion matrix. Test on unseen subjects. Check latency on target hardware.</div>
+    </div>
+    <div class="step">
+      <div class="num">Step 9</div>
+      <div class="label">ONNX export</div>
+      <div class="sub">Export trained model to ONNX. Run ONNX Runtime for fast CPU inference in the FastAPI backend.</div>
+    </div>
+  </div>
+
+  <p class="sec" style="margin-top:1rem">Feature vector (18 features per frame)</p>
+  <div class="grid2">
+    <div class="card">
+      <h3>Angle features (6)</h3>
+      <div class="kv"><span>knee_angle_left</span><span>degrees</span></div>
+      <div class="kv"><span>knee_angle_right</span><span>degrees</span></div>
+      <div class="kv"><span>hip_angle_left</span><span>degrees</span></div>
+      <div class="kv"><span>hip_angle_right</span><span>degrees</span></div>
+      <div class="kv"><span>shoulder_angle</span><span>degrees</span></div>
+      <div class="kv"><span>spine_angle</span><span>degrees from vertical</span></div>
+    </div>
+    <div class="card">
+      <h3>Kinematic features (6)</h3>
+      <div class="kv"><span>knee_velocity</span><span>deg/frame</span></div>
+      <div class="kv"><span>hip_velocity</span><span>deg/frame</span></div>
+      <div class="kv"><span>spine_velocity</span><span>deg/frame</span></div>
+      <div class="kv"><span>knee_acceleration</span><span>deg/frame²</span></div>
+      <div class="kv"><span>wrist_height_norm</span><span>relative to shoulder</span></div>
+      <div class="kv"><span>centre_of_mass_y</span><span>normalised 0–1</span></div>
+    </div>
+    <div class="card">
+      <h3>Symmetry & ROM features (4)</h3>
+      <div class="kv"><span>knee_symmetry</span><span>|left − right| / mean</span></div>
+      <div class="kv"><span>shoulder_symmetry</span><span>|left − right| / mean</span></div>
+      <div class="kv"><span>rom_knee_session</span><span>rolling max ROM so far</span></div>
+      <div class="kv"><span>rom_hip_session</span><span>rolling max ROM so far</span></div>
+    </div>
+    <div class="card">
+      <h3>Context features (2)</h3>
+      <div class="kv"><span>normalised_frame_idx</span><span>position in sequence 0–1</span></div>
+      <div class="kv"><span>visibility_min</span><span>lowest landmark confidence</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- DATASETS -->
+<div class="panel" id="panel-datasets">
+  <p class="sec">Dataset requirements & sources</p>
+
+  <div class="warn-box">The most important thing: split your dataset by subject, not by frame. If frames from the same person appear in both train and test sets, your model will look much better than it really is — it has memorised that person's movement style.</div>
+
+  <p class="sec" style="margin-top:1rem">Public datasets to start with</p>
+
+  <div class="ds-card">
+    <div class="ds-head"><h4>InfiniteRep (Kaggle)</h4><span class="badge bs">Recommended first</span></div>
+    <div class="ds-body">
+      <div class="ds-row"><span>Content</span><span>33 exercise types, labelled reps, webcam quality</span></div>
+      <div class="ds-row"><span>Size</span><span>~15,000 video clips</span></div>
+      <div class="ds-row"><span>Pose format</span><span>Raw video — run MediaPipe to extract landmarks</span></div>
+      <div class="ds-row"><span>Labels</span><span>Exercise type, rep count — needs error annotation added</span></div>
+      <div class="ds-row"><span>Use for</span><span>Exercise recognition, rep counting, phase detection</span></div>
+    </div>
+  </div>
+
+  <div class="ds-card">
+    <div class="ds-head"><h4>NTU RGB+D 120</h4><span class="badge bi">Depth + skeleton</span></div>
+    <div class="ds-body">
+      <div class="ds-row"><span>Content</span><span>120 action classes including rehabilitation exercises</span></div>
+      <div class="ds-row"><span>Size</span><span>114,480 video samples, 106 subjects</span></div>
+      <div class="ds-row"><span>Pose format</span><span>Pre-extracted 3D skeleton (25 joints)</span></div>
+      <div class="ds-row"><span>Labels</span><span>Action class per clip</span></div>
+      <div class="ds-row"><span>Use for</span><span>Phase 2 Transformer pre-training, GNN (Phase 3)</span></div>
+    </div>
+  </div>
+
+  <div class="ds-card">
+    <div class="ds-head"><h4>UIPRMD (U of Idaho)</h4><span class="badge bp">Clinical rehab</span></div>
+    <div class="ds-body">
+      <div class="ds-row"><span>Content</span><span>10 functional movement screen exercises, correct + incorrect versions</span></div>
+      <div class="ds-row"><span>Size</span><span>100 subjects × 10 exercises × correct/incorrect</span></div>
+      <div class="ds-row"><span>Pose format</span><span>Vicon motion capture — convert to MediaPipe-equivalent joints</span></div>
+      <div class="ds-row"><span>Labels</span><span>Correct / incorrect binary per movement</span></div>
+      <div class="ds-row"><span>Use for</span><span>Error classification — gold-standard clinical ground truth</span></div>
+    </div>
+  </div>
+
+  <div class="ds-card">
+    <div class="ds-head"><h4>HAR datasets (UCI / WISDM)</h4><span class="badge bd">Supplementary</span></div>
+    <div class="ds-body">
+      <div class="ds-row"><span>Content</span><span>Human activity recognition — walking, sitting, standing, squatting</span></div>
+      <div class="ds-row"><span>Use for</span><span>Pre-training sequence models before fine-tuning on exercise data</span></div>
+      <div class="ds-row"><span>Note</span><span>Sensor-based, not vision — use only for temporal pre-training</span></div>
+    </div>
+  </div>
+
+  <p class="sec" style="margin-top:1.5rem">Custom data you must collect</p>
+  <div class="suc-box">Public datasets alone won't be enough — none have error annotations at the granularity PhysioCheck needs (e.g. "knee valgus at frame 43 of this squat"). You must collect and annotate your own data.</div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Custom data targets <span class="badge bs">Minimum for MVP</span></h3>
+      <div class="kv"><span>Exercises to cover</span><span>Squat, lunge, shoulder press, knee raise, bridge</span></div>
+      <div class="kv"><span>Subjects</span><span>≥ 20 people (varied body types)</span></div>
+      <div class="kv"><span>Reps per exercise</span><span>50 correct + 50 with each error type</span></div>
+      <div class="kv"><span>Error types per exercise</span><span>3–5 (e.g. knee valgus, forward lean, incomplete ROM)</span></div>
+      <div class="kv"><span>Total labelled sequences</span><span>~5,000 (Phase 1 minimum)</span></div>
+      <div class="kv"><span>Recording setup</span><span>Standard webcam, good lighting, sagittal + frontal views</span></div>
+    </div>
+    <div class="card">
+      <h3>Annotation requirements</h3>
+      <div class="kv"><span>Tool</span><span>Label Studio (free, self-hosted)</span></div>
+      <div class="kv"><span>What to label</span><span>Frame range of each rep + error type + severity</span></div>
+      <div class="kv"><span>Who annotates</span><span>Ideally a physiotherapist for ground truth</span></div>
+      <div class="kv"><span>Inter-annotator agreement</span><span>≥ 2 annotators, Cohen's Kappa ≥ 0.7</span></div>
+      <div class="kv"><span>Format</span><span>JSON with session_id, frame_start, frame_end, label, severity</span></div>
+    </div>
+  </div>
+
+  <p class="sec" style="margin-top:1rem">Data augmentation strategy</p>
+  <div class="grid2">
+    <div class="card">
+      <h3>Augmentation techniques</h3>
+      <div class="kv"><span>Horizontal flip</span><span>Mirror landmarks (simulate left-handed)</span></div>
+      <div class="kv"><span>Gaussian noise</span><span>σ=0.01 on landmark x,y,z</span></div>
+      <div class="kv"><span>Temporal scaling</span><span>Speed up/slow down sequence by ±20%</span></div>
+      <div class="kv"><span>Sequence shift</span><span>Slide window start by ±5 frames</span></div>
+      <div class="kv"><span>Body scale jitter</span><span>Scale limb lengths ±10% to handle height variation</span></div>
+      <div class="kv"><span>Rotation jitter</span><span>±10° on torso orientation</span></div>
+    </div>
+    <div class="card">
+      <h3>Class imbalance handling</h3>
+      <p>Correct posture reps will outnumber specific error types. Handle this with:</p>
+      <div class="tag-row">
+        <span class="tag">Weighted cross-entropy loss</span>
+        <span class="tag">SMOTE for minority classes</span>
+        <span class="tag">Oversample error sequences</span>
+        <span class="tag">Focal loss (Phase 2)</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- INFERENCE -->
+<div class="panel" id="panel-inference">
+  <p class="sec">Real-time inference architecture</p>
+
+  <div class="card">
+    <h3>Inference flow per frame</h3>
+    <div class="kv"><span>1. Webcam frame</span><span>Captured at 30 FPS in browser</span></div>
+    <div class="kv"><span>2. MediaPipe (browser)</span><span>Run MediaPipe Pose JS — landmarks extracted client-side</span></div>
+    <div class="kv"><span>3. Feature compute (browser)</span><span>Angles + velocity computed in JS — lightweight math only</span></div>
+    <div class="kv"><span>4. WebSocket send</span><span>Send feature vector (not raw video) to backend</span></div>
+    <div class="kv"><span>5. Sliding window buffer</span><span>Backend maintains last T frames per session</span></div>
+    <div class="kv"><span>6. ONNX inference</span><span>Run GRU/Transformer on T×F buffer — &lt;30ms</span></div>
+    <div class="kv"><span>7. Prediction + feedback</span><span>Class label + confidence + feedback text returned via WebSocket</span></div>
+    <div class="kv"><span>8. Render</span><span>Client renders skeleton overlay + text/voice feedback</span></div>
+  </div>
+
+  <div class="info-box">Key design choice: run MediaPipe in the browser (JS), not on the server. This avoids streaming raw video (expensive bandwidth). Only the feature vector (~18 floats per frame) travels over WebSocket.</div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Latency budget</h3>
+      <div class="kv"><span>MediaPipe (browser)</span><span>~15 ms/frame</span></div>
+      <div class="kv"><span>Feature compute (JS)</span><span>~2 ms/frame</span></div>
+      <div class="kv"><span>WebSocket RTT</span><span>~20–40 ms</span></div>
+      <div class="kv"><span>ONNX inference (CPU)</span><span>~20–30 ms</span></div>
+      <div class="kv"><span>Total round-trip</span><span>&lt; 100 ms</span></div>
+      <div class="kv"><span>Perceived feedback lag</span><span>Acceptable for exercise correction</span></div>
+    </div>
+    <div class="card">
+      <h3>Model size targets</h3>
+      <div class="kv"><span>GRU (ONNX)</span><span>&lt; 5 MB</span></div>
+      <div class="kv"><span>Transformer+TCN (ONNX)</span><span>&lt; 20 MB</span></div>
+      <div class="kv"><span>Inference thread</span><span>Single CPU thread per session</span></div>
+      <div class="kv"><span>Concurrent sessions</span><span>50 on 4-core server (GRU); 10–20 (Transformer)</span></div>
+      <div class="kv"><span>GPU acceleration</span><span>Optional — ONNX GPU provider if scaled</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Calibration step (per user, first session)</h3>
+    <p>Before scoring, the system captures 5 "reference reps" of each exercise from the user. This sets a personal baseline — what "correct" looks like for their body. Angle thresholds are adjusted ±10% from this baseline. This handles body structure variation without retraining the model.</p>
+    <div class="tag-row">
+      <span class="tag">Personal ROM baseline</span>
+      <span class="tag">Threshold auto-adjustment</span>
+      <span class="tag">No retraining needed</span>
+      <span class="tag">Stored per user in DB</span>
+    </div>
+  </div>
+</div>
+
+<!-- EVALUATION -->
+<div class="panel" id="panel-eval">
+  <p class="sec">Evaluation metrics & acceptance criteria</p>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Classification metrics (GRU)</h3>
+      <div class="kv"><span>Overall accuracy</span><span>≥ 85% on held-out subjects</span></div>
+      <div class="kv"><span>F1 per error class</span><span>≥ 0.75 for each error type</span></div>
+      <div class="kv"><span>False negative rate</span><span>&lt; 10% (missing a real error)</span></div>
+      <div class="kv"><span>False positive rate</span><span>&lt; 15% (false alarm)</span></div>
+      <div class="kv"><span>Confusion matrix</span><span>Inspect per-class, check off-diagonal clusters</span></div>
+    </div>
+    <div class="card">
+      <h3>Phase detection metrics (Transformer)</h3>
+      <div class="kv"><span>Phase accuracy</span><span>≥ 90% frame-level</span></div>
+      <div class="kv"><span>Phase boundary IoU</span><span>≥ 0.8 (phase start/end timing)</span></div>
+      <div class="kv"><span>Risk score calibration</span><span>AUC-ROC ≥ 0.85 vs injury events</span></div>
+      <div class="kv"><span>Error detection F1</span><span>≥ 0.80 per error type</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Generalisation checks</h3>
+    <div class="kv"><span>Cross-subject test</span><span>Evaluate on subjects not seen during training</span></div>
+    <div class="kv"><span>Body type variation</span><span>Test on BMI range, height range, age groups</span></div>
+    <div class="kv"><span>Lighting conditions</span><span>Test under dim, bright, backlit conditions</span></div>
+    <div class="kv"><span>Camera distance</span><span>Test at 1m, 2m, 3m from subject</span></div>
+    <div class="kv"><span>Clothing</span><span>Loose clothing reduces landmark quality — test for degradation</span></div>
+  </div>
+
+  <div class="card">
+    <h3>Real-world validation (before clinical deployment)</h3>
+    <p>Before any clinical claim is made, PhysioCheck needs observational validation with physiotherapists confirming the system's feedback matches their clinical judgement across ≥ 50 patients and ≥ 500 sessions. This is a prerequisite for any medical or healthcare use-case positioning.</p>
+    <div class="tag-row">
+      <span class="tag">Physio agreement rate ≥ 80%</span>
+      <span class="tag">No missed high-severity errors</span>
+      <span class="tag">IRB / ethics approval</span>
+      <span class="tag">Longitudinal ROM tracking validated</span>
+    </div>
+  </div>
+
+  <div class="warn-box">Do not ship injury risk prediction as a clinical safety feature without clinical validation. In the product, frame it as "movement quality guidance" rather than medical advice until validated.</div>
+</div>
+
+</div>
+
+<script>
+function show(id){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>

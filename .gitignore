@@ -92,3 +92,4 @@ Desktop.ini
 venv/
 backend/venv/
 backend/.venv/
+*.db

@@ -1,4 +1,5 @@
 import { Pose } from '@mediapipe/pose';
+import { ExerciseProtocol } from '../services/api';
 
 export interface JointAngles {
   leftShoulder: number;
@@ -432,3 +433,131 @@ export function detectExercisePhase(
 
   return newPhase;
 }
+
+export interface InjuryRiskReport {
+  isSafe: boolean;
+  riskScore: number; // 0 to 100
+  warnings: string[];
+  metrics: {
+    spineAngle: number;
+    kneeValgusRatio: number;
+    dropVelocity: number;
+    shoulderTilt: number;
+  };
+}
+
+export function detectInjuryRisk(
+  landmarks: any,
+  jointAngles: number[],
+  exerciseName: string,
+  protocol?: ExerciseProtocol | null,
+  previousLandmarks?: any,
+  deltaTime?: number // in seconds
+): InjuryRiskReport {
+  const report: InjuryRiskReport = {
+    isSafe: true,
+    riskScore: 0,
+    warnings: [],
+    metrics: {
+      spineAngle: jointAngles[8] || 0,
+      kneeValgusRatio: 1.0,
+      dropVelocity: 0,
+      shoulderTilt: 0
+    }
+  };
+
+  if (!landmarks || landmarks.length < 33) return report;
+
+  const leftShoulder = landmarks[11];
+  const rightShoulder = landmarks[12];
+  const leftHip = landmarks[23];
+  const rightHip = landmarks[24];
+  const leftKnee = landmarks[25];
+  const rightKnee = landmarks[26];
+
+  const exerciseKey = normalizeExerciseName(exerciseName);
+  const sensitivity = protocol?.safety_sensitivity || 'medium';
+
+  // 1. Spine Flexion Analysis
+  // High spine angle relative to gravity = torso bending forward.
+  // Rounded backs are dangerous in Squat, Deadlift, Push-ups, and Plank.
+  const spineAngle = jointAngles[8] || 0;
+  const maxSafeSpine = protocol?.safe_spine_angle ?? 30.0;
+  let spineRisk = 0;
+  
+  if (["squat", "deadlift", "push_up", "plank", "barbell_biceps_curl", "shoulder_press"].includes(exerciseKey)) {
+    if (spineAngle > maxSafeSpine) {
+      spineRisk = Math.min(100, ((spineAngle - maxSafeSpine) / 15) * 50 + 50);
+      report.warnings.push("Rounded Back! Keep your spine neutral.");
+    }
+  }
+
+  // 2. Knee Valgus Collapse Analysis (Knees caving inwards)
+  let kneeValgusRisk = 0;
+  if (leftHip && rightHip && leftKnee && rightKnee) {
+    const hipWidth = Math.abs(leftHip.x - rightHip.x);
+    const kneeWidth = Math.abs(leftKnee.x - rightKnee.x);
+    if (hipWidth > 0) {
+      const kneeValgusRatio = kneeWidth / hipWidth;
+      report.metrics.kneeValgusRatio = kneeValgusRatio;
+      
+      let valgusThreshold = 0.82; // medium
+      if (sensitivity === 'high') valgusThreshold = 0.90;
+      else if (sensitivity === 'low') valgusThreshold = 0.75;
+      
+      if (kneeValgusRatio < valgusThreshold && ["squat", "deadlift"].includes(exerciseKey)) {
+        kneeValgusRisk = Math.min(100, ((valgusThreshold - kneeValgusRatio) / 0.15) * 50 + 50);
+        report.warnings.push("Knees Caving In! Keep knees aligned.");
+      }
+    }
+  }
+
+  // 3. Drop Velocity Analysis (Uncontrolled descent)
+  let velocityRisk = 0;
+  if (previousLandmarks && previousLandmarks.length >= 33 && deltaTime && deltaTime > 0) {
+    const currentHipY = (leftHip.y + rightHip.y) / 2;
+    const prevLeftHip = previousLandmarks[23];
+    const prevRightHip = previousLandmarks[24];
+    const prevHipY = (prevLeftHip.y + prevRightHip.y) / 2;
+    
+    // y coordinate increases as user moves down the frame
+    const dy = currentHipY - prevHipY;
+    const dropVelocity = dy / deltaTime; // unit screen percentage per second
+    report.metrics.dropVelocity = dropVelocity;
+    
+    let maxSafeVelocity = 1.5; // medium
+    if (sensitivity === 'high') maxSafeVelocity = 1.0;
+    else if (sensitivity === 'low') maxSafeVelocity = 2.0;
+    
+    if (dropVelocity > maxSafeVelocity && ["squat", "deadlift"].includes(exerciseKey)) {
+      velocityRisk = Math.min(100, ((dropVelocity - maxSafeVelocity) / 1.0) * 50 + 50);
+      report.warnings.push("Dropping Too Fast! Control your descent.");
+    }
+  }
+
+  // 4. Shoulder Asymmetry / Barbell Tilt Analysis
+  let asymmetryRisk = 0;
+  if (leftShoulder && rightShoulder) {
+    const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+    if (shoulderWidth > 0) {
+      const shoulderTilt = Math.abs(leftShoulder.y - rightShoulder.y) / shoulderWidth;
+      report.metrics.shoulderTilt = shoulderTilt;
+      
+      if (shoulderTilt > 0.15 && ["squat", "deadlift", "shoulder_press", "barbell_biceps_curl"].includes(exerciseKey)) {
+        asymmetryRisk = Math.min(100, ((shoulderTilt - 0.15) / 0.1) * 50 + 50);
+        report.warnings.push("Asymmetrical Shoulders! Keep shoulders level.");
+      }
+    }
+  }
+
+  // Calculate aggregate risk score
+  const maxRisk = Math.max(spineRisk, kneeValgusRisk, velocityRisk, asymmetryRisk);
+  report.riskScore = Math.round(maxRisk);
+  
+  if (report.riskScore > 50) {
+    report.isSafe = false;
+  }
+
+  return report;
+}
+

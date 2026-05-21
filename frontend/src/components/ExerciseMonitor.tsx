@@ -22,14 +22,16 @@ import PauseIcon from '@mui/icons-material/Pause';
 import Webcam from 'react-webcam';
 import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
-import { apiService, PredictionResponse } from '../services/api';
+import { apiService, PredictionResponse, ExerciseProtocol } from '../services/api';
 import {
   extractJointAngles,
   speak,
   getRandomFeedback,
   getExerciseSpecificFeedback,
   getMilestoneFeedback,
-  detectExercisePhase
+  detectExercisePhase,
+  detectInjuryRisk,
+  InjuryRiskReport
 } from '../utils/poseDetection';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -100,6 +102,35 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const [aiModelDetails, setAiModelDetails] = useState<PredictionResponse | null>(null);
   const [consoleLog, setConsoleLog] = useState<string[]>([]);
   const [debugMode, setDebugMode] = useState(false);
+  const [activeProtocol, setActiveProtocol] = useState<ExerciseProtocol | null>(null);
+  const [injuryReport, setInjuryReport] = useState<InjuryRiskReport | null>(null);
+  const [injuryFlags, setInjuryFlags] = useState(0);
+
+  const injuryFlagsRef = useRef(0);
+  const previousLandmarksRef = useRef<any>(null);
+  const lastFrameTimeRef = useRef<number>(0);
+  const activeProtocolRef = useRef<ExerciseProtocol | null>(null);
+  const lastVoiceAlertAtRef = useRef(0);
+
+  useEffect(() => {
+    injuryFlagsRef.current = injuryFlags;
+  }, [injuryFlags]);
+
+  useEffect(() => {
+    activeProtocolRef.current = activeProtocol;
+  }, [activeProtocol]);
+
+  const playSpeechCoaching = useCallback((text: string, force: boolean = false) => {
+    if (!voiceEnabledRef.current) return;
+    const now = Date.now();
+    if (force || now - lastVoiceAlertAtRef.current > 4000) {
+      if ('speechSynthesis' in window) {
+        speechSynthesis.cancel();
+        speak(text);
+        lastVoiceAlertAtRef.current = now;
+      }
+    }
+  }, []);
 
   const addToConsoleLog = useCallback((message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -220,13 +251,44 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       }
 
       const now = Date.now();
-      if (now - lastPredictionAtRef.current < 300) {
-        return;
+      let deltaTime = 0;
+      if (lastFrameTimeRef.current > 0) {
+        deltaTime = (now - lastFrameTimeRef.current) / 1000;
       }
+      lastFrameTimeRef.current = now;
 
       try {
         const jointAngles = extractJointAngles(results.poseLandmarks);
         if (jointAngles.length !== 9 || jointAngles.some((angle) => angle < 0 || angle > 180 || Number.isNaN(angle))) {
+          return;
+        }
+
+        // Proactive Injury Risk Detection
+        const riskReport = detectInjuryRisk(
+          results.poseLandmarks,
+          jointAngles,
+          selectedExerciseRef.current,
+          activeProtocolRef.current,
+          previousLandmarksRef.current,
+          deltaTime
+        );
+        
+        setInjuryReport(riskReport);
+        previousLandmarksRef.current = results.poseLandmarks;
+
+        if (!riskReport.isSafe && riskReport.warnings.length > 0) {
+          const lastFlagKey = 'last_injury_flag_at';
+          const lastFlag = (window as any)[lastFlagKey] || 0;
+          if (now - lastFlag > 2000) {
+            const newFlags = injuryFlagsRef.current + 1;
+            setInjuryFlags(newFlags);
+            (window as any)[lastFlagKey] = now;
+          }
+          const primaryWarning = riskReport.warnings[0];
+          playSpeechCoaching(`Caution: ${primaryWarning}`, true);
+        }
+
+        if (now - lastPredictionAtRef.current < 300) {
           return;
         }
 
@@ -247,15 +309,18 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
             const newRepCount = repCountRef.current + 1;
             setRepCount(newRepCount);
 
-            // Trigger voice feedback on new rep
-            if (voiceEnabledRef.current) {
+            // Play voice coach for milestones / normal reps
+            const targetReps = activeProtocolRef.current?.target_reps ?? 10;
+            if (newRepCount >= targetReps) {
+              playSpeechCoaching(`Target reached! ${newRepCount} reps complete. Outstanding effort!`, true);
+            } else {
               const feedback =
                 newRepCount % 5 === 0 || newRepCount <= 3
                   ? getMilestoneFeedback(newRepCount)
                   : Math.random() > 0.5
                     ? getRandomFeedback('goodRep')
                     : getExerciseSpecificFeedback(selectedExerciseRef.current);
-              speak(feedback);
+              playSpeechCoaching(feedback, false);
             }
           }
           setCurrentPhase(newPhase);
@@ -457,12 +522,39 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       addToConsoleLog('Setting up exercise...');
       await apiService.resetSession();
 
+      addToConsoleLog('Fetching exercise protocol...');
+      let userProtocols: ExerciseProtocol[] = [];
+      try {
+        userProtocols = await apiService.getProtocol(currentUser?.uid || 'default');
+      } catch (err) {
+        addToConsoleLog('Failed to fetch protocol, using default.');
+      }
+      
+      const normalizedSelected = targetExercise.toLowerCase().trim().replace(/[-\s]+/g, '_');
+      const matchingProtocol = userProtocols.find(
+        (p) => p.exercise.toLowerCase().trim().replace(/[-\s]+/g, '_') === normalizedSelected
+      ) || null;
+      
+      setActiveProtocol(matchingProtocol);
+      activeProtocolRef.current = matchingProtocol;
+      
+      if (matchingProtocol) {
+        addToConsoleLog(`Loaded protocol: Target Reps = ${matchingProtocol.target_reps}, Safe Spine = ${matchingProtocol.safe_spine_angle}°, Safe Knee = ${matchingProtocol.safe_knee_angle}°, Sensitivity = ${matchingProtocol.safety_sensitivity}`);
+      } else {
+        addToConsoleLog('No custom protocol found. Using standard baseline thresholds.');
+      }
+
       isActiveRef.current = true;
       isPausedRef.current = false;
       setIsActive(true);
       setIsPaused(false);
       setRepCount(0);
       repCountRef.current = 0;
+      setInjuryFlags(0);
+      injuryFlagsRef.current = 0;
+      setInjuryReport(null);
+      previousLandmarksRef.current = null;
+      lastFrameTimeRef.current = 0;
       setSessionDuration(0);
       setSessionStartTime(new Date());
       setPredictedExercise('');
@@ -520,7 +612,15 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
           exercise: selectedExercise,
           total_reps: repCountRef.current,
           duration: sessionDuration,
-          session_data: prediction ? [prediction] : []
+          session_data: [
+            {
+              final_rep_count: repCountRef.current,
+              duration_seconds: sessionDuration,
+              injury_flags: injuryFlagsRef.current,
+              accuracy_score: prediction ? Math.round(prediction.confidence * 100) : 85,
+              timestamp: new Date().toISOString()
+            }
+          ]
         });
       }
 
@@ -643,11 +743,45 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                     color: 'white',
                     p: 2,
                     borderRadius: 2,
-                    textAlign: 'center'
+                    textAlign: 'center',
+                    zIndex: 5
                   }}
                 >
                   <Typography variant="h6">Position yourself in front of the camera</Typography>
                   <Typography variant="body2">Make sure your full body is visible</Typography>
+                </Box>
+              )}
+
+              {isActive && injuryReport && !injuryReport.isSafe && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 16,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    backgroundColor: 'rgba(211, 47, 47, 0.95)',
+                    color: 'white',
+                    px: 3,
+                    py: 1.5,
+                    borderRadius: 2,
+                    boxShadow: '0 0 15px rgba(211, 47, 47, 0.8)',
+                    zIndex: 10,
+                    textAlign: 'center',
+                    border: '2px solid #ff1744',
+                    animation: 'pulse 1.5s infinite ease-in-out',
+                    '@keyframes pulse': {
+                      '0%': { opacity: 0.9, transform: 'translateX(-50%) scale(1)' },
+                      '50%': { opacity: 1, transform: 'translateX(-50%) scale(1.03)', boxShadow: '0 0 25px rgba(255, 23, 68, 0.9)' },
+                      '100%': { opacity: 0.9, transform: 'translateX(-50%) scale(1)' }
+                    }
+                  }}
+                >
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                    ⚠️ INJURY RISK DETECTED
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    {injuryReport.warnings.join(' | ')}
+                  </Typography>
                 </Box>
               )}
             </Box>
@@ -721,6 +855,43 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                   <Typography variant="h6" color="text.secondary">
                     Repetitions
                   </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12}>
+              <Card sx={{ borderLeft: injuryReport && !injuryReport.isSafe ? '6px solid #d32f2f' : '6px solid #4caf50' }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom color={injuryReport && !injuryReport.isSafe ? 'error' : 'success'}>
+                    Safety & Protocol Status
+                  </Typography>
+                  {activeProtocol ? (
+                    <Box sx={{ mb: 1 }}>
+                      <Typography variant="caption" color="text.secondary" component="div">
+                        Active Protocol: Target Reps = <strong>{activeProtocol.target_reps}</strong> | Spine Limit = <strong>{activeProtocol.safe_spine_angle}°</strong>
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Box sx={{ mb: 1 }}>
+                      <Typography variant="caption" color="text.secondary" component="div">
+                        Using default clinical thresholds.
+                      </Typography>
+                    </Box>
+                  )}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                    <Typography variant="body2">Injury Risk Flags:</Typography>
+                    <Chip
+                      label={injuryFlags}
+                      color={injuryFlags > 0 ? 'error' : 'success'}
+                      size="small"
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                  </Box>
+                  {injuryReport && !injuryReport.isSafe && (
+                    <Alert severity="error" sx={{ mt: 1.5, py: 0 }}>
+                      {injuryReport.warnings[0]}
+                    </Alert>
+                  )}
                 </CardContent>
               </Card>
             </Grid>
