@@ -45,8 +45,6 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  LineChart,
-  Line,
   AreaChart,
   Area
 } from 'recharts';
@@ -140,6 +138,7 @@ export const TherapistPortal: React.FC = () => {
 
   useEffect(() => {
     void loadPatientData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPatient, selectedExercise]);
 
   const handleSaveProtocol = async () => {

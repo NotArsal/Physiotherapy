@@ -356,6 +356,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         }
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addToConsoleLog]);
 
   useEffect(() => {
