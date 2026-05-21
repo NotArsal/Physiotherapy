@@ -285,16 +285,30 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         setInjuryReport(riskReport);
         previousLandmarksRef.current = results.poseLandmarks;
 
-        if (!riskReport.isSafe && riskReport.warnings.length > 0) {
-          const lastFlagKey = 'last_injury_flag_at';
-          const lastFlag = (window as any)[lastFlagKey] || 0;
-          if (now - lastFlag > 2000) {
-            const newFlags = injuryFlagsRef.current + 1;
-            setInjuryFlags(newFlags);
-            (window as any)[lastFlagKey] = now;
-          }
+        if (riskReport.warnings.length > 0) {
           const primaryWarning = riskReport.warnings[0];
-          playSpeechCoaching(`Caution: ${primaryWarning}`, true);
+          
+          if (!riskReport.isSafe) {
+            const lastFlagKey = 'last_injury_flag_at';
+            const lastFlag = (window as any)[lastFlagKey] || 0;
+            if (now - lastFlag > 2000) {
+              const newFlags = injuryFlagsRef.current + 1;
+              setInjuryFlags(newFlags);
+              (window as any)[lastFlagKey] = now;
+            }
+            playSpeechCoaching(`Caution: ${primaryWarning}`, true);
+          } else {
+            // General Posture / Exercise Correction voice feedback
+            const lastCorrectionTime = (window as any)['last_correction_voiced_at'] || 0;
+            const lastCorrectionText = (window as any)['last_correction_voiced_text'] || '';
+            
+            // Speak if it's a new warning, or if 5 seconds have elapsed since speaking the same/another warning
+            if (primaryWarning !== lastCorrectionText || now - lastCorrectionTime > 5000) {
+              playSpeechCoaching(`Form correction: ${primaryWarning}`, false);
+              (window as any)['last_correction_voiced_at'] = now;
+              (window as any)['last_correction_voiced_text'] = primaryWarning;
+            }
+          }
         }
 
         if (now - lastPredictionAtRef.current < 300) {
@@ -345,7 +359,12 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
           (selectedNormalized === 'clamshell' && predictedNormalized === 'leg_raises') ||
           (selectedNormalized === 'bird_dog' && predictedNormalized === 'plank') ||
           (selectedNormalized === 'wall_slide' && predictedNormalized === 'shoulder_press') ||
-          (selectedNormalized === 'straight_leg_raise' && predictedNormalized === 'leg_raises');
+          (selectedNormalized === 'straight_leg_raise' && predictedNormalized === 'leg_raises') ||
+          // OCCLUSION ALIASES for close-up seated views
+          (selectedNormalized === 'lat_pulldown' && ['lat_pulldown', 'incline_bench_press', 'bench_press', 'pull_up', 'shoulder_press'].includes(predictedNormalized)) ||
+          (selectedNormalized === 'pull_up' && ['pull_up', 'lat_pulldown', 'incline_bench_press', 'bench_press', 'shoulder_press'].includes(predictedNormalized)) ||
+          (selectedNormalized === 'shoulder_press' && ['shoulder_press', 'wall_slide', 'pull_up', 'lat_pulldown'].includes(predictedNormalized)) ||
+          (selectedNormalized === 'wall_slide' && ['wall_slide', 'shoulder_press', 'pull_up', 'lat_pulldown'].includes(predictedNormalized));
 
         if (predictionResult.confidence >= 0.85 && isCorrectExercise) {
           setFormQuality('excellent');
@@ -771,7 +790,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                 </Box>
               )}
 
-              {isActive && injuryReport && !injuryReport.isSafe && (
+               {isActive && injuryReport && !injuryReport.isSafe && (
                 <Box
                   sx={{
                     position: 'absolute',
@@ -797,6 +816,33 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                 >
                   <Typography variant="subtitle1" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
                     ⚠️ INJURY RISK DETECTED
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    {injuryReport.warnings.join(' | ')}
+                  </Typography>
+                </Box>
+              )}
+
+              {isActive && injuryReport && injuryReport.isSafe && injuryReport.warnings.length > 0 && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 16,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    backgroundColor: 'rgba(237, 108, 2, 0.95)',
+                    color: 'white',
+                    px: 3,
+                    py: 1.5,
+                    borderRadius: 2,
+                    boxShadow: '0 0 15px rgba(237, 108, 2, 0.8)',
+                    zIndex: 10,
+                    textAlign: 'center',
+                    border: '2px solid #ff9800',
+                  }}
+                >
+                  <Typography variant="subtitle2" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                    ⚠️ FORM CORRECTION
                   </Typography>
                   <Typography variant="body2" sx={{ mt: 0.5 }}>
                     {injuryReport.warnings.join(' | ')}
@@ -879,9 +925,25 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
             </Grid>
 
             <Grid item xs={12}>
-              <Card sx={{ borderLeft: injuryReport && !injuryReport.isSafe ? '6px solid #d32f2f' : '6px solid #4caf50' }}>
+              <Card sx={{ 
+                borderLeft: injuryReport && !injuryReport.isSafe 
+                  ? '6px solid #d32f2f' 
+                  : injuryReport && injuryReport.warnings.length > 0
+                    ? '6px solid #ed6c02' 
+                    : '6px solid #4caf50' 
+              }}>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom color={injuryReport && !injuryReport.isSafe ? 'error' : 'success'}>
+                  <Typography 
+                    variant="h6" 
+                    gutterBottom 
+                    color={
+                      injuryReport && !injuryReport.isSafe 
+                        ? 'error' 
+                        : injuryReport && injuryReport.warnings.length > 0
+                          ? 'warning.main' 
+                          : 'success.main'
+                    }
+                  >
                     Safety & Protocol Status
                   </Typography>
                   {activeProtocol ? (
@@ -906,9 +968,17 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                       sx={{ fontWeight: 'bold' }}
                     />
                   </Box>
-                  {injuryReport && !injuryReport.isSafe && (
-                    <Alert severity="error" sx={{ mt: 1.5, py: 0 }}>
-                      {injuryReport.warnings[0]}
+                  {injuryReport && !injuryReport.isSafe ? (
+                    <Alert severity="error" sx={{ mt: 1.5, py: 0.5 }}>
+                      <strong>Critical:</strong> {injuryReport.warnings.join(' | ')}
+                    </Alert>
+                  ) : injuryReport && injuryReport.warnings.length > 0 ? (
+                    <Alert severity="warning" sx={{ mt: 1.5, py: 0.5 }}>
+                      <strong>Correction:</strong> {injuryReport.warnings.join(' | ')}
+                    </Alert>
+                  ) : (
+                    <Alert severity="success" sx={{ mt: 1.5, py: 0.5 }}>
+                      Form looks perfect! Keep going.
                     </Alert>
                   )}
                 </CardContent>

@@ -28,6 +28,34 @@ def test_predict_with_landmarks():
     assert response.status_code == 200
     assert "exercise" in response.json()
 
+def test_predict_occluded_closeup():
+    print("\nTesting /predict under extreme close-up occlusion...")
+    # Mock landmarks: 33 points, lower-body, elbows, and wrists occluded (low visibility)
+    landmarks = []
+    for i in range(33):
+        if i == 11: # Left Shoulder
+            landmarks.append({"x": 0.45, "y": 0.3, "visibility": 0.9})
+        elif i == 12: # Right Shoulder
+            landmarks.append({"x": 0.55, "y": 0.3, "visibility": 0.9})
+        else:
+            # Out of frame or occluded
+            landmarks.append({"x": 0.0, "y": 0.0, "visibility": 0.1})
+            
+    joint_angles = [90.0] * 9
+    
+    data = {
+        "joint_angles": joint_angles,
+        "landmarks": landmarks,
+        "selected_exercise": "lat_pulldown"
+    }
+    
+    response = requests.post(f"{BASE_URL}/predict", json=data)
+    res_data = response.json()
+    print(res_data)
+    assert response.status_code == 200
+    assert res_data.get("success") is True
+    assert "exercise" in res_data
+
 def test_session_persistence():
     print("\nTesting session persistence...")
     user_id = f"test_user_{int(time.time())}"
@@ -100,6 +128,7 @@ if __name__ == "__main__":
     try:
         test_health()
         test_predict_with_landmarks()
+        test_predict_occluded_closeup()
         test_session_persistence()
         test_protocols()
         print("\nAll tests passed!")

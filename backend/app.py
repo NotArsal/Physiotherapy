@@ -27,9 +27,24 @@ LABEL_ENCODER_PATH = MODEL_DIR / "label_encoder.pkl"
 DATABASE_PATH = BASE_DIR / "physio_sessions.db"
 DATABASE_URL = os.getenv("DATABASE_URL") # Support for managed Postgres (Render/Heroku)
 
+allowed_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://physiotherapy-frotend.vercel.app",
+    "https://physiotherapy-frontend.vercel.app",
+]
+frontend_env = os.getenv("FRONTEND_URL")
+if frontend_env:
+    # Ensure no trailing slash
+    frontend_env_clean = frontend_env.rstrip("/")
+    if frontend_env_clean not in allowed_origins:
+        allowed_origins.append(frontend_env_clean)
+
 CORS(
     app,
-    origins=["http://localhost:3000", "http://127.0.0.1:3000", os.getenv("FRONTEND_URL", "*")],
+    origins=allowed_origins,
     allow_headers=["Content-Type", "Authorization"],
     methods=["GET", "POST", "OPTIONS"],
     supports_credentials=True,
@@ -186,7 +201,7 @@ def load_models():
 # Global cache for latency optimization in real-time inference
 _TIME_SCALE_CACHE = np.linspace(0.98, 1.02, 30, dtype=np.float32).reshape(30, 1)
 
-def build_model_input(joint_angles, landmarks=None):
+def build_model_input(joint_angles, landmarks=None, selected_exercise=None):
     """
     Create deterministic time-series input for the BiLSTM model using raw landmarks.
     The model expects 33 landmarks (x, y, visibility) totaling 99 features.
@@ -195,6 +210,7 @@ def build_model_input(joint_angles, landmarks=None):
     2. A sequence of historical frames (represented as a list of lists of landmarks) -> uses true temporal motion.
     If leg landmarks are out of frame (low visibility), dynamically imputes a neutral
     standing posture under the shoulders to preserve upper-body exercise classification accuracy.
+    If arm landmarks are out of frame, dynamically projects expected arm postures based on selected_exercise.
     """
     import math
     if not landmarks or len(landmarks) == 0:
@@ -262,6 +278,76 @@ def build_model_input(joint_angles, landmarks=None):
                         }
                     else:
                         imputed_frame[idx] = [x, y, 0.0, v]
+
+        # ----------------------------------------------------
+        # DYNAMIC UPPER-BODY IMPUTATION FOR CLOSE-UP OCCLUSION
+        # ----------------------------------------------------
+        exercise_key = normalize_exercise_name(selected_exercise)
+        
+        # Check upper-body landmarks visibility: Elbows (13, 14), Wrists (15, 16)
+        le_x, le_y, le_v = get_lm_data(frame_landmarks[13])
+        re_x, re_y, re_v = get_lm_data(frame_landmarks[14])
+        lw_x, lw_y, lw_v = get_lm_data(frame_landmarks[15])
+        rw_x, rw_y, rw_v = get_lm_data(frame_landmarks[16])
+
+        upper_body_imputations = {}
+
+        if exercise_key in ["lat_pulldown", "pull_up", "shoulder_press", "wall_slide"]:
+            # Overhead exercises - project hands/elbows overhead if occluded
+            if lw_v < 0.4:
+                upper_body_imputations[15] = (ls_x, ls_y - 1.5 * shoulder_width, 1.0)
+            if rw_v < 0.4:
+                upper_body_imputations[16] = (rs_x, rs_y - 1.5 * shoulder_width, 1.0)
+            if le_v < 0.4:
+                upper_body_imputations[13] = (ls_x - 0.2 * shoulder_width, ls_y - 0.7 * shoulder_width, 1.0)
+            if re_v < 0.4:
+                upper_body_imputations[14] = (rs_x + 0.2 * shoulder_width, rs_y - 0.7 * shoulder_width, 1.0)
+
+        elif exercise_key in ["barbell_biceps_curl", "hammer_curl", "biceps_curl"]:
+            # Biceps curls - project hands/elbows at chest/side level if occluded
+            if lw_v < 0.4:
+                upper_body_imputations[15] = (ls_x, ls_y + 0.3 * shoulder_width, 1.0)
+            if rw_v < 0.4:
+                upper_body_imputations[16] = (rs_x, rs_y + 0.3 * shoulder_width, 1.0)
+            if le_v < 0.4:
+                upper_body_imputations[13] = (ls_x, ls_y + 0.8 * shoulder_width, 1.0)
+            if re_v < 0.4:
+                upper_body_imputations[14] = (rs_x, rs_y + 0.8 * shoulder_width, 1.0)
+
+        elif exercise_key in ["bench_press", "incline_bench_press", "decline_bench_press", "push_up", "chest_fly_machine"]:
+            # Pressing exercises - project hands/elbows forward/outward if occluded
+            if lw_v < 0.4:
+                upper_body_imputations[15] = (ls_x - 0.5 * shoulder_width, ls_y + 0.5 * shoulder_width, 1.0)
+            if rw_v < 0.4:
+                upper_body_imputations[16] = (rs_x + 0.5 * shoulder_width, rs_y + 0.5 * shoulder_width, 1.0)
+            if le_v < 0.4:
+                upper_body_imputations[13] = (ls_x - 0.7 * shoulder_width, ls_y + 0.6 * shoulder_width, 1.0)
+            if re_v < 0.4:
+                upper_body_imputations[14] = (rs_x + 0.7 * shoulder_width, rs_y + 0.6 * shoulder_width, 1.0)
+
+        else:
+            # Default for other exercises - if any arm joint is occluded, project down posture
+            if lw_v < 0.4 or rw_v < 0.4 or le_v < 0.4 or re_v < 0.4:
+                if lw_v < 0.4:
+                    upper_body_imputations[15] = (ls_x, ls_y + 1.8 * shoulder_width, 1.0)
+                if rw_v < 0.4:
+                    upper_body_imputations[16] = (rs_x, rs_y + 1.8 * shoulder_width, 1.0)
+                if le_v < 0.4:
+                    upper_body_imputations[13] = (ls_x, ls_y + 1.0 * shoulder_width, 1.0)
+                if re_v < 0.4:
+                    upper_body_imputations[14] = (rs_x, rs_y + 1.0 * shoulder_width, 1.0)
+
+        for idx, (x, y, v) in upper_body_imputations.items():
+            if idx < len(imputed_frame):
+                if isinstance(imputed_frame[idx], dict):
+                    imputed_frame[idx] = {
+                        'x': x,
+                        'y': y,
+                        'z': imputed_frame[idx].get('z', 0.0),
+                        'visibility': v
+                    }
+                else:
+                    imputed_frame[idx] = [x, y, 0.0, v]
 
         flat_landmarks = [
             val 
@@ -423,7 +509,7 @@ def predict():
             joint_angles.extend([0.0] * (9 - len(joint_angles)))
 
         # Use raw landmarks if available to match training distribution
-        model_input = build_model_input(joint_angles, landmarks)
+        model_input = build_model_input(joint_angles, landmarks, selected_exercise)
         prediction = model.predict(model_input, verbose=0)
 
         predicted_class_idx = int(np.argmax(prediction[0]))
@@ -444,7 +530,17 @@ def predict():
                 'straight_leg_raise': 'leg_raises'
             }
             mapped_selected = physio_mappings.get(selected_exercise_normalized, selected_exercise_normalized)
-            exercise_match = (predicted_exercise_normalized == mapped_selected)
+            
+            # Check for direct equivalence
+            if predicted_exercise_normalized == mapped_selected:
+                exercise_match = True
+            # Check for occlusion-induced upper-body equivalence under close-up seated views
+            elif mapped_selected in ['lat_pulldown', 'pull_up'] and predicted_exercise_normalized in ['lat_pulldown', 'incline_bench_press', 'bench_press', 'pull_up', 'shoulder_press']:
+                exercise_match = True
+            elif mapped_selected in ['shoulder_press', 'wall_slide'] and predicted_exercise_normalized in ['shoulder_press', 'wall_slide', 'pull_up', 'lat_pulldown']:
+                exercise_match = True
+            else:
+                exercise_match = False
         else:
             exercise_match = (confidence >= 0.7)
 
