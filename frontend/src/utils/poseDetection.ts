@@ -427,26 +427,34 @@ export function detectExercisePhase(
     if (elbowAngle < 90) newPhase = "down";
     else if (elbowAngle > 140) newPhase = "up";
   } else if (["barbell_biceps_curl", "hammer_curl", "biceps_curl"].includes(exerciseKey)) {
-    if (elbowAngle < 70) newPhase = "down"; // Fully contracted
-    else if (elbowAngle > 150) newPhase = "up"; // Fully extended
+    // Concentric (curled up): elbow angle decreases below 65
+    // Eccentric (extended down): elbow angle increases above 145
+    if (elbowAngle < 65) newPhase = "up";
+    else if (elbowAngle > 145) newPhase = "down";
   } else if (["tricep_dips", "tricep_pushdown"].includes(exerciseKey)) {
     if (elbowAngle < 90) newPhase = "down";
     else if (elbowAngle > 140) newPhase = "up";
-  } else if (["shoulder_press", "lateral_raise"].includes(exerciseKey)) {
-    if (shoulderAngle < 70) newPhase = "down";
+  } else if (exerciseKey === "shoulder_press") {
+    if (shoulderAngle < 80) newPhase = "down";
     else if (shoulderAngle > 150) newPhase = "up";
+  } else if (exerciseKey === "lateral_raise") {
+    if (shoulderAngle < 35) newPhase = "down";
+    else if (shoulderAngle > 85) newPhase = "up";
   } else if (["squat", "leg_extension"].includes(exerciseKey)) {
     if (kneeAngle < 100) newPhase = "down";
     else if (kneeAngle > 150) newPhase = "up";
   } else if (["deadlift", "romanian_deadlift"].includes(exerciseKey)) {
-    if (hipAngle < 130) newPhase = "down";
-    else if (hipAngle > 165) newPhase = "up";
-  } else if (["hip_thrust", "leg_raises"].includes(exerciseKey)) {
-    if (hipAngle < 100) newPhase = "down";
-    else if (hipAngle > 160) newPhase = "up";
-  } else if (exerciseKey === "glute_bridge") {
     if (hipAngle < 125) newPhase = "down";
     else if (hipAngle > 165) newPhase = "up";
+  } else if (exerciseKey === "hip_thrust") {
+    if (hipAngle < 115) newPhase = "down";
+    else if (hipAngle > 155) newPhase = "up";
+  } else if (exerciseKey === "leg_raises") {
+    if (hipAngle > 160) newPhase = "down";
+    else if (hipAngle < 110) newPhase = "up";
+  } else if (exerciseKey === "glute_bridge") {
+    if (hipAngle < 125) newPhase = "down";
+    else if (hipAngle > 160) newPhase = "up";
   } else if (exerciseKey === "clamshell") {
     if (hipAngle < 115) newPhase = "down";
     else if (hipAngle > 135) newPhase = "up";
@@ -522,6 +530,50 @@ export function detectInjuryRisk(
 
   const exerciseKey = normalizeExerciseName(exerciseName);
   const sensitivity = protocol?.safety_sensitivity || 'medium';
+
+  // 0. Joint Visibility and Camera Calibration Warnings
+  const visibilityThreshold = 0.45;
+  const leftElbow = landmarks[13];
+  const rightElbow = landmarks[14];
+  const leftWrist = landmarks[15];
+  const rightWrist = landmarks[16];
+  const leftAnkle = landmarks[27];
+  const rightAnkle = landmarks[28];
+
+  const isUpperBody = ["lat_pulldown", "pull_up", "shoulder_press", "wall_slide", "biceps_curl", "barbell_biceps_curl", "hammer_curl", "lateral_raise"].includes(exerciseKey);
+  const isLowerBody = ["squat", "deadlift", "romanian_deadlift", "hip_thrust", "glute_bridge", "straight_leg_raise", "leg_raises", "clamshell"].includes(exerciseKey);
+  const isFullBody = ["push_up", "plank", "bird_dog", "russian_twist"].includes(exerciseKey);
+
+  if (isUpperBody) {
+    const wristsMissing = (!leftWrist || leftWrist.visibility < visibilityThreshold) || (!rightWrist || rightWrist.visibility < visibilityThreshold);
+    const elbowsMissing = (!leftElbow || leftElbow.visibility < visibilityThreshold) || (!rightElbow || rightElbow.visibility < visibilityThreshold);
+    if (wristsMissing) {
+      report.warnings.push("Hands not visible! Adjust camera to show your hands.");
+      report.isSafe = false;
+      report.riskScore = Math.max(report.riskScore, 65);
+    } else if (elbowsMissing) {
+      report.warnings.push("Arms not visible! Adjust camera to show your elbows.");
+      report.isSafe = false;
+      report.riskScore = Math.max(report.riskScore, 55);
+    }
+  } else if (isLowerBody) {
+    const kneesMissing = (!leftKnee || leftKnee.visibility < visibilityThreshold) || (!rightKnee || rightKnee.visibility < visibilityThreshold);
+    const anklesMissing = (!leftAnkle || leftAnkle.visibility < visibilityThreshold) || (!rightAnkle || rightAnkle.visibility < visibilityThreshold);
+    if (kneesMissing || anklesMissing) {
+      report.warnings.push("Legs not visible! Step back so your legs are in frame.");
+      report.isSafe = false;
+      report.riskScore = Math.max(report.riskScore, 65);
+    }
+  } else if (isFullBody) {
+    const elbowsMissing = (!leftElbow || leftElbow.visibility < visibilityThreshold) || (!rightElbow || rightElbow.visibility < visibilityThreshold);
+    const hipsMissing = (!leftHip || leftHip.visibility < visibilityThreshold) || (!rightHip || rightHip.visibility < visibilityThreshold);
+    const kneesMissing = (!leftKnee || leftKnee.visibility < visibilityThreshold) || (!rightKnee || rightKnee.visibility < visibilityThreshold);
+    if (elbowsMissing || hipsMissing || kneesMissing) {
+      report.warnings.push("Full body not visible! Step back to show your entire body.");
+      report.isSafe = false;
+      report.riskScore = Math.max(report.riskScore, 65);
+    }
+  }
 
   // 1. Spine Flexion Analysis
   // High spine angle relative to gravity = torso bending forward.

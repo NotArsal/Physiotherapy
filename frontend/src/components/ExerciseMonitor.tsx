@@ -21,7 +21,6 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import Webcam from 'react-webcam';
 import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose';
-import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 import { apiService, PredictionResponse, ExerciseProtocol } from '../services/api';
 import {
   extractJointAngles,
@@ -84,6 +83,17 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const debugModeRef = useRef(false);
   const poseDetectedRef = useRef(false);
 
+  // ── EMA smoothing ──────────────────────────────────────────────────────────
+  const smoothedAnglesRef = useRef<number[]>(Array(9).fill(0));
+  const EMA_ALPHA = 0.55;
+
+  // ── Tempo / phase-duration tracking ───────────────────────────────────────
+  const phaseStartTimeRef = useRef<number>(0);          // when current phase began
+  const lastPhaseChangeTimeRef = useRef<number>(0);     // when last completed phase ended
+  const lastCompletedPhaseRef = useRef<string>('');     // phase that just finished
+  const lastCompletedDurationRef = useRef<number>(0);   // duration (s) of that phase
+  const lastTempoVoiceAtRef = useRef<number>(0);        // debounce for tempo voice
+
   const [isActive, setIsActive] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -105,6 +115,10 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const [activeProtocol, setActiveProtocol] = useState<ExerciseProtocol | null>(null);
   const [injuryReport, setInjuryReport] = useState<InjuryRiskReport | null>(null);
   const [injuryFlags, setInjuryFlags] = useState(0);
+  // Tempo UI states
+  const [tempoStatus, setTempoStatus] = useState<'good' | 'too_fast' | 'too_slow' | 'idle'>('idle');
+  const [lastPhaseDuration, setLastPhaseDuration] = useState<number>(0);
+  const [currentPhaseDuration, setCurrentPhaseDuration] = useState<number>(0);
 
   const injuryFlagsRef = useRef(0);
   const previousLandmarksRef = useRef<any>(null);
@@ -201,6 +215,94 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
     stopVideoStream(webcamRef.current?.video);
   }, []);
 
+  // ── Glowing neon skeleton renderer ─────────────────────────────────────────
+  const drawGlowingSkeleton = useCallback((
+    ctx: CanvasRenderingContext2D,
+    landmarks: any[],
+    warningText: string,
+    isSafe: boolean
+  ) => {
+    if (!landmarks || landmarks.length < 33) return;
+
+    const W = ctx.canvas.width;
+    const H = ctx.canvas.height;
+
+    // Determine per-landmark danger based on warning keywords
+    const warnLow = warningText.toLowerCase();
+
+    // Landmark index sets
+    const kneesIdx = [25, 26];
+    const anklesIdx = [27, 28];
+    const elbowsIdx = [13, 14];
+    const wristsIdx = [15, 16];
+    const shouldersIdx = [11, 12];
+    const hipsIdx = [23, 24];
+    const spineIdx = [11, 12, 23, 24];
+
+    const dangerIndices = new Set<number>();
+    if (warnLow.includes('knee') || warnLow.includes('leg')) {
+      kneesIdx.forEach(i => dangerIndices.add(i));
+      anklesIdx.forEach(i => dangerIndices.add(i));
+    }
+    if (warnLow.includes('hand') || warnLow.includes('arm') || warnLow.includes('elbow')) {
+      elbowsIdx.forEach(i => dangerIndices.add(i));
+      wristsIdx.forEach(i => dangerIndices.add(i));
+    }
+    if (warnLow.includes('back') || warnLow.includes('spine') || warnLow.includes('shoulder')) {
+      shouldersIdx.forEach(i => dangerIndices.add(i));
+      spineIdx.forEach(i => dangerIndices.add(i));
+    }
+    if (warnLow.includes('hip') || warnLow.includes('full body')) {
+      hipsIdx.forEach(i => dangerIndices.add(i));
+    }
+    if (!isSafe && dangerIndices.size === 0) {
+      // Generic danger: highlight everything
+      for (let i = 0; i < 33; i++) dangerIndices.add(i);
+    }
+
+    const safeColor = '#00E5FF';
+    const dangerColor = '#FF1744';
+    const safeBone = 'rgba(0, 229, 255, 0.75)';
+    const dangerBone = 'rgba(255, 23, 68, 0.75)';
+
+    // Draw bones (connections)
+    POSE_CONNECTIONS.forEach(([a, b]) => {
+      const lmA = landmarks[a];
+      const lmB = landmarks[b];
+      if (!lmA || !lmB) return;
+      if (lmA.visibility < 0.35 || lmB.visibility < 0.35) return;
+      const isDanger = dangerIndices.has(a) || dangerIndices.has(b);
+      const color = isDanger ? dangerBone : safeBone;
+      ctx.save();
+      ctx.shadowColor = isDanger ? dangerColor : safeColor;
+      ctx.shadowBlur = 12;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(lmA.x * W, lmA.y * H);
+      ctx.lineTo(lmB.x * W, lmB.y * H);
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    // Draw joints
+    landmarks.forEach((lm, i) => {
+      if (!lm || lm.visibility < 0.35) return;
+      const x = lm.x * W;
+      const y = lm.y * H;
+      const isDanger = dangerIndices.has(i);
+      const color = isDanger ? dangerColor : safeColor;
+      ctx.save();
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, isDanger ? 6 : 4, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.restore();
+    });
+  }, []);
+
   const onPoseResultsRef = useRef<(results: any) => Promise<void>>(async () => { });
 
   useEffect(() => {
@@ -225,9 +327,9 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         if (poseDetectedRef.current) {
           setPoseDetected(false);
         }
-        ctx.fillStyle = '#FF0000';
-        ctx.font = '16px Arial';
-        ctx.fillText('NO POSE DETECTED', 10, 30);
+        ctx.fillStyle = '#FF1744';
+        ctx.font = 'bold 16px Inter, Arial';
+        ctx.fillText('⚠ NO POSE DETECTED', 10, 30);
         return;
       }
 
@@ -243,16 +345,25 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         }
       }
 
+      // Draw neon skeleton using latest injury report for context
       try {
-        drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
-        drawLandmarks(ctx, results.poseLandmarks, { color: '#FF0000', lineWidth: 1, radius: 3 });
-        ctx.fillStyle = '#00FF00';
-        ctx.font = '16px Arial';
-        ctx.fillText('POSE DETECTED', 10, 30);
+        const latestInjury = (window as any).__latestInjuryReport__;
+        const warnText = latestInjury?.warnings?.join(' ') ?? '';
+        const isSafe = latestInjury?.isSafe ?? true;
+        drawGlowingSkeleton(ctx, results.poseLandmarks, warnText, isSafe);
+
+        // Status label
+        ctx.save();
+        ctx.fillStyle = isSafe && !warnText ? '#00E5FF' : '#FF1744';
+        ctx.font = 'bold 14px Inter, Arial';
+        ctx.shadowColor = isSafe && !warnText ? '#00E5FF' : '#FF1744';
+        ctx.shadowBlur = 8;
+        ctx.fillText(isSafe && !warnText ? '✓ POSE DETECTED' : '⚠ FORM ALERT', 10, 28);
+        ctx.restore();
 
         if (debugModeRef.current) {
           ctx.fillStyle = '#FFFF00';
-          ctx.font = '12px Arial';
+          ctx.font = '12px monospace';
           ctx.fillText(`Landmarks: ${results.poseLandmarks.length}`, 10, 50);
         }
       } catch (drawError) {
@@ -266,11 +377,22 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       }
       lastFrameTimeRef.current = now;
 
+      // Update live phase duration display every frame
+      if (phaseStartTimeRef.current > 0) {
+        setCurrentPhaseDuration(parseFloat(((now - phaseStartTimeRef.current) / 1000).toFixed(1)));
+      }
+
       try {
-        const jointAngles = extractJointAngles(results.poseLandmarks);
-        if (jointAngles.length !== 9 || jointAngles.some((angle) => angle < 0 || angle > 180 || Number.isNaN(angle))) {
+        const rawAngles = extractJointAngles(results.poseLandmarks);
+        if (rawAngles.length !== 9 || rawAngles.some((a) => a < 0 || a > 180 || Number.isNaN(a))) {
           return;
         }
+
+        // ── EMA smoothing ────────────────────────────────────────────────────
+        const prev = smoothedAnglesRef.current;
+        const smoothed = rawAngles.map((v, i) => EMA_ALPHA * v + (1 - EMA_ALPHA) * prev[i]);
+        smoothedAnglesRef.current = smoothed;
+        const jointAngles = smoothed;
 
         // Proactive Injury Risk Detection
         const riskReport = detectInjuryRisk(
@@ -281,13 +403,15 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
           previousLandmarksRef.current,
           deltaTime
         );
-        
+
+        // Cache for skeleton renderer (runs on rAF loop, can't close over state)
+        (window as any).__latestInjuryReport__ = riskReport;
         setInjuryReport(riskReport);
         previousLandmarksRef.current = results.poseLandmarks;
 
         if (riskReport.warnings.length > 0) {
           const primaryWarning = riskReport.warnings[0];
-          
+
           if (!riskReport.isSafe) {
             const lastFlagKey = 'last_injury_flag_at';
             const lastFlag = (window as any)[lastFlagKey] || 0;
@@ -301,8 +425,6 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
             // General Posture / Exercise Correction voice feedback
             const lastCorrectionTime = (window as any)['last_correction_voiced_at'] || 0;
             const lastCorrectionText = (window as any)['last_correction_voiced_text'] || '';
-            
-            // Speak if it's a new warning, or if 5 seconds have elapsed since speaking the same/another warning
             if (primaryWarning !== lastCorrectionText || now - lastCorrectionTime > 5000) {
               playSpeechCoaching(`Form correction: ${primaryWarning}`, false);
               (window as any)['last_correction_voiced_at'] = now;
@@ -328,6 +450,46 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         const newPhase = detectExercisePhase(jointAngles, selectedExerciseRef.current, previousPhase);
 
         if (newPhase !== 'hold' && previousPhase !== newPhase) {
+          // ── Tempo analysis on phase transition ──────────────────────────
+          const phaseDurationSec = phaseStartTimeRef.current > 0
+            ? (now - phaseStartTimeRef.current) / 1000
+            : 0;
+
+          if (phaseDurationSec > 0.15) { // ignore noise
+            lastCompletedPhaseRef.current = previousPhase;
+            lastCompletedDurationRef.current = phaseDurationSec;
+            setLastPhaseDuration(parseFloat(phaseDurationSec.toFixed(1)));
+
+            // Tempo thresholds: eccentric (down) ≥ 1.2 s, concentric (up) ≥ 0.6 s
+            const isEccentric = previousPhase === 'down';
+            const minDuration = isEccentric ? 1.2 : 0.6;
+            const isTooFast = phaseDurationSec < minDuration;
+            const isTooSlow = phaseDurationSec > (isEccentric ? 5.0 : 3.5);
+
+            if (isTooFast) {
+              setTempoStatus('too_fast');
+              if (now - lastTempoVoiceAtRef.current > 4000) {
+                playSpeechCoaching(
+                  isEccentric ? 'Slower! Control your descent.' : 'Slow down! Control the lift.',
+                  false
+                );
+                lastTempoVoiceAtRef.current = now;
+              }
+            } else if (isTooSlow) {
+              setTempoStatus('too_slow');
+              if (now - lastTempoVoiceAtRef.current > 4000) {
+                playSpeechCoaching('Keep moving! Don\'t rest mid-rep.', false);
+                lastTempoVoiceAtRef.current = now;
+              }
+            } else {
+              setTempoStatus('good');
+            }
+          }
+
+          phaseStartTimeRef.current = now;
+          setCurrentPhaseDuration(0);
+          // ────────────────────────────────────────────────────────────────
+
           if (previousPhase === 'down' && newPhase === 'up') {
             const newRepCount = repCountRef.current + 1;
             setRepCount(newRepCount);
@@ -604,6 +766,17 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       setPoseDetected(false);
       poseDetectedRef.current = false;
       lastPredictionAtRef.current = 0;
+      // Reset EMA and tempo refs
+      smoothedAnglesRef.current = Array(9).fill(0);
+      phaseStartTimeRef.current = 0;
+      lastPhaseChangeTimeRef.current = 0;
+      lastCompletedPhaseRef.current = '';
+      lastCompletedDurationRef.current = 0;
+      lastTempoVoiceAtRef.current = 0;
+      setTempoStatus('idle');
+      setLastPhaseDuration(0);
+      setCurrentPhaseDuration(0);
+      (window as any).__latestInjuryReport__ = null;
 
       const started = await startCamera();
       if (!started) {
@@ -747,6 +920,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                   width: '100%',
                   height: '100%',
                   objectFit: 'cover',
+                  objectPosition: 'center',
                   borderRadius: '8px'
                 }}
                 videoConstraints={{
@@ -765,6 +939,8 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                   left: 0,
                   width: '100%',
                   height: '100%',
+                  objectFit: 'cover',
+                  objectPosition: 'center',
                   borderRadius: '8px',
                   pointerEvents: 'none'
                 }}
@@ -919,6 +1095,57 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                   </Typography>
                   <Typography variant="h6" color="text.secondary">
                     Repetitions
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Live Tempo Guide widget */}
+            <Grid item xs={12}>
+              <Card sx={{
+                borderLeft: tempoStatus === 'too_fast' ? '6px solid #FF1744'
+                  : tempoStatus === 'too_slow' ? '6px solid #FF9800'
+                  : tempoStatus === 'good' ? '6px solid #00E5FF'
+                  : '6px solid #546E7A',
+                background: tempoStatus === 'too_fast' ? 'rgba(255,23,68,0.06)'
+                  : tempoStatus === 'too_slow' ? 'rgba(255,152,0,0.06)'
+                  : 'inherit'
+              }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    ⏱ Live Tempo Guide
+                    <Chip
+                      label={
+                        tempoStatus === 'too_fast' ? '⚡ Too Fast!' :
+                        tempoStatus === 'too_slow' ? '🐢 Too Slow' :
+                        tempoStatus === 'good' ? '✓ Good Pace' :
+                        'Waiting...'
+                      }
+                      color={
+                        tempoStatus === 'too_fast' ? 'error' :
+                        tempoStatus === 'too_slow' ? 'warning' :
+                        tempoStatus === 'good' ? 'success' :
+                        'default'
+                      }
+                      size="small"
+                    />
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2" color="text.secondary">Current phase:</Typography>
+                    <Typography variant="body2" fontWeight="bold">
+                      {currentPhaseDuration > 0 ? `${currentPhaseDuration}s` : '—'}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2" color="text.secondary">Last phase:</Typography>
+                    <Typography variant="body2" fontWeight="bold"
+                      sx={{ color: tempoStatus === 'too_fast' ? 'error.main' : tempoStatus === 'too_slow' ? 'warning.main' : 'text.primary' }}
+                    >
+                      {lastPhaseDuration > 0 ? `${lastPhaseDuration}s` : '—'}
+                    </Typography>
+                  </Box>
+                  <Typography variant="caption" color="text.disabled">
+                    Target: ≥1.2s eccentric (down) · ≥0.6s concentric (up)
                   </Typography>
                 </CardContent>
               </Card>
