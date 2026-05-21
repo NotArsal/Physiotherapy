@@ -214,6 +214,46 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       difficulty: 'Beginner',
       category: 'Arms',
       muscleGroups: ['Triceps']
+    },
+    glute_bridge: {
+      name: 'Glute Bridge',
+      description: 'Gentle lower back and hip stabilization exercise',
+      benefits: ['Lower back relief', 'Glute activation', 'Core stability'],
+      difficulty: 'Beginner',
+      category: 'Physiotherapy',
+      muscleGroups: ['Glutes', 'Hamstrings', 'Lower Back']
+    },
+    clamshell: {
+      name: 'Clamshells',
+      description: 'Hip abduction exercise to strengthen gluteus medius and improve hip stability',
+      benefits: ['Hip stability', 'Injury prevention', 'Knee alignment'],
+      difficulty: 'Beginner',
+      category: 'Physiotherapy',
+      muscleGroups: ['Gluteus Medius', 'Hip Abductors']
+    },
+    bird_dog: {
+      name: 'Bird Dog',
+      description: 'Core stabilization exercise extending opposite arm and leg on hands and knees',
+      benefits: ['Spinal alignment', 'Core balance', 'Coordination'],
+      difficulty: 'Intermediate',
+      category: 'Physiotherapy',
+      muscleGroups: ['Lower Back', 'Glutes', 'Shoulders', 'Core']
+    },
+    wall_slide: {
+      name: 'Wall Slides',
+      description: 'Scapular and upper back rehabilitation exercise against a wall',
+      benefits: ['Shoulder mobility', 'Scapular control', 'Posture correction'],
+      difficulty: 'Beginner',
+      category: 'Physiotherapy',
+      muscleGroups: ['Upper Back', 'Rotator Cuff', 'Shoulders']
+    },
+    straight_leg_raise: {
+      name: 'Straight Leg Raise',
+      description: 'Knee strengthening exercise performed lying on your back',
+      benefits: ['Knee rehabilitation', 'Quad strengthening', 'Hip flexor tone'],
+      difficulty: 'Beginner',
+      category: 'Physiotherapy',
+      muscleGroups: ['Quadriceps', 'Hip Flexors']
     }
   };
 
@@ -273,7 +313,8 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       Legs: '#fff8e1',
       Core: '#fce4ec',
       Glutes: '#f1f8e9',
-      'Full Body': '#e0f2f1'
+      'Full Body': '#e0f2f1',
+      Physiotherapy: '#e0f7fa'
     };
     return colors[category] || '#f5f5f5';
   };

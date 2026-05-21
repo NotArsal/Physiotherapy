@@ -73,7 +73,12 @@ const EXERCISES = [
   { id: 'shoulder_press', name: 'Shoulder Press' },
   { id: 'plank', name: 'Plank' },
   { id: 'leg_raises', name: 'Leg Raises' },
-  { id: 'russian_twist', name: 'Russian Twist' }
+  { id: 'russian_twist', name: 'Russian Twist' },
+  { id: 'glute_bridge', name: 'Glute Bridge (Physio)' },
+  { id: 'clamshell', name: 'Clamshells (Physio)' },
+  { id: 'bird_dog', name: 'Bird Dog (Physio)' },
+  { id: 'wall_slide', name: 'Wall Slides (Physio)' },
+  { id: 'straight_leg_raise', name: 'Straight Leg Raise (Physio)' }
 ];
 
 export const TherapistPortal: React.FC = () => {

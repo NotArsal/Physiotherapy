@@ -80,6 +80,11 @@ def init_db():
                 ('default', 'plank', 1, 10.0, 180.0, 'medium'),
                 ('default', 'leg_raises', 15, 15.0, 100.0, 'medium'),
                 ('default', 'russian_twist', 20, 30.0, 90.0, 'medium'),
+                ('default', 'glute_bridge', 10, 15.0, 90.0, 'medium'),
+                ('default', 'clamshell', 12, 10.0, 90.0, 'medium'),
+                ('default', 'bird_dog', 10, 15.0, 90.0, 'medium'),
+                ('default', 'wall_slide', 10, 15.0, 140.0, 'medium'),
+                ('default', 'straight_leg_raise', 12, 15.0, 160.0, 'medium'),
             ]
             for p in default_protocols:
                 try:
@@ -134,6 +139,11 @@ def init_db():
         ('default', 'plank', 1, 10.0, 180.0, 'medium'),
         ('default', 'leg_raises', 15, 15.0, 100.0, 'medium'),
         ('default', 'russian_twist', 20, 30.0, 90.0, 'medium'),
+        ('default', 'glute_bridge', 10, 15.0, 90.0, 'medium'),
+        ('default', 'clamshell', 12, 10.0, 90.0, 'medium'),
+        ('default', 'bird_dog', 10, 15.0, 90.0, 'medium'),
+        ('default', 'wall_slide', 10, 15.0, 140.0, 'medium'),
+        ('default', 'straight_leg_raise', 12, 15.0, 160.0, 'medium'),
     ]
     for p in default_protocols:
         try:
@@ -256,7 +266,16 @@ def get_exercises():
     if label_encoder is None:
         return jsonify({"error": "Label encoder not loaded"}), 500
 
-    return jsonify({"exercises": list(label_encoder.classes_)})
+    # Get model-trained exercises
+    exercises = list(label_encoder.classes_)
+    
+    # Append the new clinical physiotherapy exercises (without duplicates)
+    physio_exercises = ['glute_bridge', 'clamshell', 'bird_dog', 'wall_slide', 'straight_leg_raise']
+    for ex in physio_exercises:
+        if ex not in exercises:
+            exercises.append(ex)
+
+    return jsonify({"exercises": exercises})
 
 
 @app.route("/predict", methods=["POST"])
@@ -313,7 +332,16 @@ def predict():
         # Ensure exercise_match is always defined
         exercise_match = False
         if selected_exercise_normalized:
-            exercise_match = (predicted_exercise_normalized == selected_exercise_normalized)
+            # Map clinical physiotherapy exercises to their closest biometric model equivalents
+            physio_mappings = {
+                'glute_bridge': 'hip_thrust',
+                'clamshell': 'leg_raises',
+                'bird_dog': 'plank',
+                'wall_slide': 'shoulder_press',
+                'straight_leg_raise': 'leg_raises'
+            }
+            mapped_selected = physio_mappings.get(selected_exercise_normalized, selected_exercise_normalized)
+            exercise_match = (predicted_exercise_normalized == mapped_selected)
         else:
             exercise_match = (confidence >= 0.7)
 

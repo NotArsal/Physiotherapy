@@ -71,11 +71,31 @@ class ApiService {
   // Health check
   async healthCheck() {
     try {
-      // Increase timeout for health check to handle cold starts
-      const response = await api.get('/health', { timeout: 30000 });
+      console.log(`Checking backend health at: ${api.defaults.baseURL}`);
+      // Try the configured base URL with a 15-second timeout (half of previous to fail faster for fallback)
+      const response = await api.get('/health', { timeout: 15000 });
+      console.log('Primary backend health check succeeded:', response.data);
       return response.data;
     } catch (error) {
-      console.error('Health check failed:', error);
+      console.warn(`Health check failed at primary URL (${api.defaults.baseURL}):`, error);
+      
+      const fallbackUrl = 'http://localhost:5000';
+      if (api.defaults.baseURL !== fallbackUrl) {
+        console.warn(`Primary backend unresponsive. Attempting fallback to local backend at ${fallbackUrl}...`);
+        try {
+          // Perform a quick health check on the local backend (5 second timeout)
+          const localResponse = await axios.get(`${fallbackUrl}/health`, { timeout: 5000 });
+          if (localResponse.data && localResponse.data.status === 'healthy') {
+            console.log(`Local backend is healthy! Dynamically switching api.defaults.baseURL to ${fallbackUrl}`);
+            api.defaults.baseURL = fallbackUrl;
+            return localResponse.data;
+          }
+        } catch (localError) {
+          console.error(`Local backend fallback check failed at ${fallbackUrl}:`, localError);
+        }
+      }
+      
+      // If we already are on local fallback or local fallback failed, throw the original error
       throw error;
     }
   }

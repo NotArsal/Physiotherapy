@@ -306,6 +306,36 @@ export const voiceFeedback: VoiceFeedback = {
       "Focus on your lower chest",
       "Keep your core engaged",
       "Full range of motion"
+    ],
+    'glute_bridge': [
+      "Squeeze your glutes at the top",
+      "Keep your neck relaxed",
+      "Drive through your heels",
+      "Don't hyperextend your lower back"
+    ],
+    'clamshell': [
+      "Keep your feet glued together",
+      "Don't roll your hips backward",
+      "Squeeze your outer glute",
+      "Control the lowering phase"
+    ],
+    'bird_dog': [
+      "Keep your spine neutral",
+      "Extend your arm and leg straight out",
+      "Engage your abdominal wall",
+      "Avoid lifting your leg too high"
+    ],
+    'wall_slide': [
+      "Keep your lower back flat against the wall",
+      "Keep your elbows and wrists in contact",
+      "Slide up slowly",
+      "Control the descent and squeeze"
+    ],
+    'straight_leg_raise': [
+      "Lock your knee straight",
+      "Lifting only to 45 degrees",
+      "Keep your core activated",
+      "Lower slowly and repeat"
     ]
   }
 };
@@ -414,6 +444,21 @@ export function detectExercisePhase(
   } else if (["hip_thrust", "leg_raises"].includes(exerciseKey)) {
     if (hipAngle < 100) newPhase = "down";
     else if (hipAngle > 160) newPhase = "up";
+  } else if (exerciseKey === "glute_bridge") {
+    if (hipAngle < 125) newPhase = "down";
+    else if (hipAngle > 165) newPhase = "up";
+  } else if (exerciseKey === "clamshell") {
+    if (hipAngle < 115) newPhase = "down";
+    else if (hipAngle > 135) newPhase = "up";
+  } else if (exerciseKey === "bird_dog") {
+    if (shoulderAngle < 100) newPhase = "down";
+    else if (shoulderAngle > 145) newPhase = "up";
+  } else if (exerciseKey === "wall_slide") {
+    if (shoulderAngle < 95) newPhase = "down";
+    else if (shoulderAngle > 145) newPhase = "up";
+  } else if (exerciseKey === "straight_leg_raise") {
+    if (hipAngle > 165) newPhase = "down";
+    else if (hipAngle < 135) newPhase = "up";
   } else if (["pull_up", "lat_pulldown", "t_bar_row"].includes(exerciseKey)) {
     if (elbowAngle > 150) newPhase = "down";
     else if (elbowAngle < 80) newPhase = "up";
@@ -485,10 +530,20 @@ export function detectInjuryRisk(
   const maxSafeSpine = protocol?.safe_spine_angle ?? 30.0;
   let spineRisk = 0;
   
-  if (["squat", "deadlift", "push_up", "plank", "barbell_biceps_curl", "shoulder_press"].includes(exerciseKey)) {
+  if (["squat", "deadlift", "push_up", "plank", "barbell_biceps_curl", "shoulder_press", "glute_bridge", "bird_dog", "wall_slide"].includes(exerciseKey)) {
     if (spineAngle > maxSafeSpine) {
       spineRisk = Math.min(100, ((spineAngle - maxSafeSpine) / 15) * 50 + 50);
       report.warnings.push("Rounded Back! Keep your spine neutral.");
+    }
+  }
+
+  // 1b. Straight Leg Raise - Knee Flexion Analysis
+  let legRaiseKneeRisk = 0;
+  if (exerciseKey === "straight_leg_raise") {
+    const kneeAngle = Math.min(jointAngles[6] || 180, jointAngles[7] || 180);
+    if (kneeAngle < 155) {
+      legRaiseKneeRisk = Math.min(100, ((155 - kneeAngle) / 20) * 50 + 50);
+      report.warnings.push("Knee Bending! Keep your raised leg completely straight.");
     }
   }
 
@@ -551,7 +606,7 @@ export function detectInjuryRisk(
   }
 
   // Calculate aggregate risk score
-  const maxRisk = Math.max(spineRisk, kneeValgusRisk, velocityRisk, asymmetryRisk);
+  const maxRisk = Math.max(spineRisk, kneeValgusRisk, velocityRisk, asymmetryRisk, legRaiseKneeRisk);
   report.riskScore = Math.round(maxRisk);
   
   if (report.riskScore > 50) {

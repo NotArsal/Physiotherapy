@@ -328,8 +328,15 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
           setCurrentPhase(newPhase);
         }
 
+        const selectedNormalized = normalizeExerciseName(selectedExerciseRef.current);
+        const predictedNormalized = normalizeExerciseName(predictionResult.exercise || '');
         const isCorrectExercise =
-          normalizeExerciseName(predictionResult.exercise || '') === normalizeExerciseName(selectedExerciseRef.current);
+          predictedNormalized === selectedNormalized ||
+          (selectedNormalized === 'glute_bridge' && predictedNormalized === 'hip_thrust') ||
+          (selectedNormalized === 'clamshell' && predictedNormalized === 'leg_raises') ||
+          (selectedNormalized === 'bird_dog' && predictedNormalized === 'plank') ||
+          (selectedNormalized === 'wall_slide' && predictedNormalized === 'shoulder_press') ||
+          (selectedNormalized === 'straight_leg_raise' && predictedNormalized === 'leg_raises');
 
         if (predictionResult.confidence >= 0.85 && isCorrectExercise) {
           setFormQuality('excellent');
