@@ -605,8 +605,37 @@ export function detectInjuryRisk(
     }
   }
 
+  // 5. Forward Head Posture / Neck Strain / Slouching Analysis
+  let headPostureRisk = 0;
+  const leftEar = landmarks[7];
+  const rightEar = landmarks[8];
+  const nose = landmarks[0];
+
+  if (leftEar && rightEar && leftShoulder && rightShoulder && nose) {
+    const earMidX = (leftEar.x + rightEar.x) / 2;
+    const shoulderMidX = (leftShoulder.x + rightShoulder.x) / 2;
+    const shoulderMidY = (leftShoulder.y + rightShoulder.y) / 2;
+
+    const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x) || 0.2;
+
+    // Horizontal offset of head from shoulder alignment indicates forward carriage
+    const forwardHeadRatio = Math.abs(earMidX - shoulderMidX) / shoulderWidth;
+
+    // Vertical alignment relative to body scale indicates slouching/collapse
+    const headDropRatio = (shoulderMidY - nose.y) / shoulderWidth;
+
+    // Active triggers for posture-sensitive exercises
+    if (forwardHeadRatio > 0.40 && ["wall_slide", "shoulder_press", "plank", "bird_dog"].includes(exerciseKey)) {
+      headPostureRisk = Math.min(100, ((forwardHeadRatio - 0.40) / 0.2) * 50 + 50);
+      report.warnings.push("Forward Head! Align your neck and tuck your chin.");
+    } else if (headDropRatio < 0.35 && ["wall_slide", "shoulder_press", "barbell_biceps_curl", "hammer_curl"].includes(exerciseKey)) {
+      headPostureRisk = Math.min(100, ((0.35 - headDropRatio) / 0.15) * 50 + 50);
+      report.warnings.push("Slouching! Pull your shoulders back and stand tall.");
+    }
+  }
+
   // Calculate aggregate risk score
-  const maxRisk = Math.max(spineRisk, kneeValgusRisk, velocityRisk, asymmetryRisk, legRaiseKneeRisk);
+  const maxRisk = Math.max(spineRisk, kneeValgusRisk, velocityRisk, asymmetryRisk, legRaiseKneeRisk, headPostureRisk);
   report.riskScore = Math.round(maxRisk);
   
   if (report.riskScore > 50) {

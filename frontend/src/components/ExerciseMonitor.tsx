@@ -111,6 +111,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const lastFrameTimeRef = useRef<number>(0);
   const activeProtocolRef = useRef<ExerciseProtocol | null>(null);
   const lastVoiceAlertAtRef = useRef(0);
+  const historyBufferRef = useRef<any[]>([]);
 
   useEffect(() => {
     injuryFlagsRef.current = injuryFlags;
@@ -234,6 +235,14 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         setPoseDetected(true);
       }
 
+      // Push to 30-frame rolling window of raw landmarks for temporal prediction
+      if (results.poseLandmarks) {
+        historyBufferRef.current.push(results.poseLandmarks);
+        if (historyBufferRef.current.length > 30) {
+          historyBufferRef.current.shift();
+        }
+      }
+
       try {
         drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
         drawLandmarks(ctx, results.poseLandmarks, { color: '#FF0000', lineWidth: 1, radius: 3 });
@@ -293,7 +302,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         }
 
         lastPredictionAtRef.current = now;
-        const predictionResult = await apiService.predictExercise(jointAngles, selectedExerciseRef.current, results.poseLandmarks);
+        const predictionResult = await apiService.predictExercise(jointAngles, selectedExerciseRef.current, historyBufferRef.current);
 
         setPrediction(predictionResult);
         setConfidence(predictionResult.confidence);
@@ -496,6 +505,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       setLoading(true);
       setError('');
       addToConsoleLog('Initializing session...');
+      historyBufferRef.current = []; // Clear history buffer for new session
 
       // Helper to normalize strings for comparison
       const normalize = (s: string) => s.trim().toLowerCase().replace(/-/g, '_').replace(/ /g, '_');
@@ -613,6 +623,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       setIsPaused(false);
       stopFrameLoop();
       stopCameraStream();
+      historyBufferRef.current = []; // Clear history buffer on stop
 
       if (currentUser && sessionStartTime) {
         await apiService.logSession({

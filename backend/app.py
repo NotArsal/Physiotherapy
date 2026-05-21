@@ -162,7 +162,8 @@ def get_db_connection():
         import psycopg2
         from psycopg2.extras import RealDictCursor
         return psycopg2.connect(DATABASE_URL)
-    return sqlite3.connect(DATABASE_PATH)
+    # Add a timeout to SQLite to prevent "database is locked" errors in concurrent environments
+    return sqlite3.connect(DATABASE_PATH, timeout=10)
 
 def load_models():
     """Load the trained model artifacts from the backend/model directory."""
@@ -182,36 +183,126 @@ def load_models():
         return False
 
 
-
-
+# Global cache for latency optimization in real-time inference
+_TIME_SCALE_CACHE = np.linspace(0.98, 1.02, 30, dtype=np.float32).reshape(30, 1)
 
 def build_model_input(joint_angles, landmarks=None):
     """
     Create deterministic time-series input for the BiLSTM model using raw landmarks.
     The model expects 33 landmarks (x, y, visibility) totaling 99 features.
+    Supports either:
+    1. A single frame of landmarks (represented as a list of 33 landmarks) -> tiles to 30 timesteps.
+    2. A sequence of historical frames (represented as a list of lists of landmarks) -> uses true temporal motion.
+    If leg landmarks are out of frame (low visibility), dynamically imputes a neutral
+    standing posture under the shoulders to preserve upper-body exercise classification accuracy.
     """
-    if not landmarks or len(landmarks) < 33:
-        raise ValueError("Raw MediaPipe landmarks (33 points) are required for accurate inference")
+    import math
+    if not landmarks or len(landmarks) == 0:
+        raise ValueError("Raw MediaPipe landmarks are required for accurate inference")
 
-    # Extract raw landmarks (x, y, visibility for 33 points = 99 features)
-    flat_landmarks = []
-    for lm in landmarks[:33]:
+    # Helper to safely extract x, y, and visibility
+    def get_lm_data(lm):
         if isinstance(lm, dict):
-            flat_landmarks.extend([lm.get('x', 0), lm.get('y', 0), lm.get('visibility', 0)])
+            return float(lm.get('x', 0.0)), float(lm.get('y', 0.0)), float(lm.get('visibility', 0.0))
+        elif isinstance(lm, (list, tuple)) and len(lm) >= 3:
+            return float(lm[0]), float(lm[1]), float(lm[2])
+        return 0.0, 0.0, 0.0
+
+    def flatten_and_impute_frame(frame_landmarks):
+        if not frame_landmarks or len(frame_landmarks) < 33:
+            return np.zeros(99, dtype=np.float32)
+
+        # Create a mutable copy of landmarks
+        imputed_frame = list(frame_landmarks)
+
+        # Fetch shoulder positions to determine body scale and horizontal position
+        ls_x, ls_y, ls_v = get_lm_data(frame_landmarks[11]) # Left Shoulder
+        rs_x, rs_y, rs_v = get_lm_data(frame_landmarks[12]) # Right Shoulder
+
+        # Calculate shoulder width for scaling, or use sensible default if not fully visible
+        if ls_v > 0.5 and rs_v > 0.5:
+            shoulder_width = math.sqrt((rs_x - ls_x)**2 + (rs_y - ls_y)**2)
         else:
-            # Assume list or array [x, y, visibility]
-            flat_landmarks.extend(lm[:3])
-    
-    feature_vector = np.array(flat_landmarks, dtype=np.float32)
-    feature_vector = np.pad(feature_vector, (0, max(0, 99 - feature_vector.size)))[:99]
+            shoulder_width = 0.20 # screen ratio default
 
-    timesteps = 30
-    # Create a simple time series by tiling the single frame
-    # (Matches training data shape: 30 timesteps per sample)
-    time_series = np.tile(feature_vector, (timesteps, 1))
-    time_scale = np.linspace(0.98, 1.02, timesteps, dtype=np.float32).reshape(timesteps, 1)
+        # Check visibility of key lower-body joints: Hips (23, 24), Knees (25, 26), Ankles (27, 28)
+        lower_body_key_indices = [23, 24, 25, 26, 27, 28]
+        low_visibility_count = sum(1 for idx in lower_body_key_indices if get_lm_data(frame_landmarks[idx])[2] < 0.5)
 
-    return (time_series * time_scale).reshape(1, timesteps, 99)
+        # If lower body is mostly occluded (e.g. seated/close camera view), impute neutral standing alignment
+        if low_visibility_count >= 2:
+            # Hips directly below shoulders, knees and ankles directly below hips
+            hip_y = max(ls_y, rs_y) + 1.2 * shoulder_width
+            knee_y = hip_y + 1.5 * shoulder_width
+            ankle_y = knee_y + 1.5 * shoulder_width
+            heel_y = ankle_y + 0.1 * shoulder_width
+            toe_y = ankle_y + 0.2 * shoulder_width
+
+            imputations = {
+                23: (ls_x, hip_y, 1.0),       # Left Hip
+                24: (rs_x, hip_y, 1.0),       # Right Hip
+                25: (ls_x, knee_y, 1.0),      # Left Knee
+                26: (rs_x, knee_y, 1.0),      # Right Knee
+                27: (ls_x, ankle_y, 1.0),     # Left Ankle
+                28: (rs_x, ankle_y, 1.0),     # Right Ankle
+                29: (ls_x, heel_y, 1.0),      # Left Heel
+                30: (rs_x, heel_y, 1.0),      # Right Heel
+                31: (ls_x - 0.05, toe_y, 1.0),# Left Toe
+                32: (rs_x + 0.05, toe_y, 1.0),# Right Toe
+            }
+
+            for idx, (x, y, v) in imputations.items():
+                if idx < len(imputed_frame):
+                    if isinstance(imputed_frame[idx], dict):
+                        imputed_frame[idx] = {
+                            'x': x,
+                            'y': y,
+                            'z': imputed_frame[idx].get('z', 0.0),
+                            'visibility': v
+                        }
+                    else:
+                        imputed_frame[idx] = [x, y, 0.0, v]
+
+        flat_landmarks = [
+            val 
+            for lm in imputed_frame[:33] 
+            for val in get_lm_data(lm)
+        ]
+        
+        feature_vector = np.array(flat_landmarks, dtype=np.float32)
+        return np.pad(feature_vector, (0, max(0, 99 - feature_vector.size)))[:99]
+
+    # Detect if we were sent a sequence of frames or a single frame
+    is_sequence = False
+    if isinstance(landmarks, list) and len(landmarks) > 0:
+        first_el = landmarks[0]
+        # Check if first element is a container representing landmarks (like a list/dict of 33 points)
+        if isinstance(first_el, list) and len(first_el) >= 33:
+            is_sequence = True
+        elif isinstance(first_el, list) and len(first_el) > 0 and isinstance(first_el[0], (dict, list, tuple)):
+            is_sequence = True
+
+    processed_frames = []
+    if is_sequence:
+        for frame in landmarks:
+            processed_frames.append(flatten_and_impute_frame(frame))
+        
+        # Ensure we have exactly 30 frames for the BiLSTM
+        if len(processed_frames) < 30:
+            # Pad by repeating the latest frame
+            padding = [processed_frames[-1]] * (30 - len(processed_frames))
+            processed_frames.extend(padding)
+        elif len(processed_frames) > 30:
+            # Take only the last 30 frames
+            processed_frames = processed_frames[-30:]
+        
+        time_series = np.stack(processed_frames, axis=0)
+    else:
+        # Single frame mode - flatten and tile 30 times
+        flat = flatten_and_impute_frame(landmarks)
+        time_series = np.tile(flat, (30, 1))
+
+    return (time_series * _TIME_SCALE_CACHE).reshape(1, 30, 99)
 
 
 def normalize_exercise_name(exercise_name):
@@ -299,7 +390,19 @@ def predict():
 
         # Basic pose visibility check
         zero_count = sum(1 for angle in joint_angles[:9] if abs(angle) < 5.0)
-        if zero_count > 6:
+        
+        # Bypass strict visibility check if selected exercise is an upper-body or posture correction exercise
+        is_upper_body = False
+        if selected_exercise:
+            selected_ex_norm = normalize_exercise_name(selected_exercise)
+            upper_body_exercises = [
+                "shoulder_press", "barbell_biceps_curl", "hammer_curl", 
+                "lateral_raise", "wall_slide", "chest_fly_machine", 
+                "bench_press", "incline_bench_press", "decline_bench_press"
+            ]
+            is_upper_body = selected_ex_norm in upper_body_exercises
+
+        if zero_count > 6 and not is_upper_body:
             return jsonify(
                 {
                     "exercise": "unknown",

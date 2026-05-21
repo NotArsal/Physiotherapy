@@ -43,6 +43,7 @@ The service starts on `http://localhost:5000`.
 ## Notes
 
 - **Feature Alignment**: The classifier now receives raw landmarks (33 points) to match the original training data, significantly improving prediction accuracy.
-- **Database**: Sessions are stored in `physio_sessions.db`. If the file doesn't exist, it is created automatically on startup.
+- **Biometric Mapping**: Specialized clinical physiotherapy exercises (e.g., Glute Bridge, Clamshells) are dynamically mapped to their closest biomechanical equivalents to enable validation on the pre-trained neural network.
+- **Database**: Sessions and default clinical protocols are stored in `physio_sessions.db`. If the file doesn't exist, it is created automatically on startup.
 - **CORS**: Configured to allow requests from the Vercel frontend and localhost.
 - **Rep Counting**: Thresholds are defined in `detect_exercise_phase` and are tailored to specific joint angles per exercise.

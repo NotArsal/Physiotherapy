@@ -35,7 +35,13 @@ This file records the system audit, fixes, cleanup, and follow-up recommendation
 - Fixed anatomical angle mapping (Shoulder vs Elbow) to ensure accurate classification.
 - Resolved a critical `NameError` in the backend `/predict` endpoint.
 - Fixed a TypeScript `setLoading` reference error in `ExerciseMonitor.tsx` to unblock Vercel builds.
-- Added a resilient start-up sequence with retry logic and server wake-up feedback.
+- Integrated **Virtual Lower-Body Landmark Imputation** in the backend (`build_model_input` in [backend/app.py](backend/app.py)) to dynamically reconstruct neutral legs when hips/knees/ankles are out-of-frame, preserving upper-body classifier accuracy.
+- Added **Exercise-Aware Rejection Bypass** in the backend `/predict` endpoint to prevent "Poor pose detection" errors during upper-body and posture exercises.
+- Upgraded the frontend [frontend/src/components/ExerciseMonitor.tsx](frontend/src/components/ExerciseMonitor.tsx) to maintain and send a **True Temporal 30-Frame Rolling Window Buffer** to the backend, enabling true motion sequence classification rather than static tiled frames.
+- Implemented **Biomechanical Posture Correction Checks** in [frontend/src/utils/poseDetection.ts](frontend/src/utils/poseDetection.ts) for Forward Head Carriage (horizontal ear-to-shoulder offset) and Slouching (vertical head drop ratio) with live visual and vocal feedback warnings.
+- Structured clean session lifecycle handlers in the frontend to clear the temporal buffer upon starting and stopping exercise sessions.
+- Resolved TypeScript compiler warnings by removing the unused `earMidY` variable.
+- Verified backend end-to-end API suite (`test_api.py`) and compiled an optimized production build of the frontend with zero errors.
 
 ## Removed Unnecessary Files
 

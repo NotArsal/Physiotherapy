@@ -43,6 +43,8 @@ REACT_APP_FIREBASE_MEASUREMENT_ID=your_measurement_id
 ## Technical Notes
 
 - **Pose Detection**: Uses MediaPipe Pose (Task API) loaded via CDN.
+- **Intelligent API Fallback**: In `src/services/api.ts`, the frontend automatically attempts to connect to `http://localhost:5000` if the remote Render API times out due to cold starts.
+- **Clinical Exercises**: Includes a customized Therapist Portal and tailored UI for 5 new clinical physiotherapy exercises.
 - **Feature Alignment**: The monitor now sends raw landmarks to the backend for improved BiLSTM classification.
 - **Cleanup**: Implementation includes explicit webcam and MediaPipe context cleanup to prevent memory leaks during exercise transitions.
 - **Hosting**: Deployed on Vercel with automated CI/CD.
