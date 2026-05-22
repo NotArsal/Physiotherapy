@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import {
@@ -8,12 +8,15 @@ import {
   Avatar,
   Menu,
   MenuItem,
+  IconButton,
 } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
+import LightModeIcon from '@mui/icons-material/LightMode';
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
@@ -24,74 +27,6 @@ import MediaPipeDebug from './components/MediaPipeDebug';
 import { TherapistPortal } from './components/TherapistPortal';
 import NavHeader, { NavItem } from './components/ui/nav-header';
 import { PremiumToggle } from './components/ui/bouncy-toggle';
-
-// ── MUI theme (harmonized with Claude.com tinted-cream visual system) ────────
-const theme = createTheme({
-  palette: {
-    primary: { 
-      main: '#cc785c', // Signature Anthropic Coral
-      dark: '#a9583e', // Coral active / pressed state
-      contrastText: '#ffffff'
-    },
-    secondary: { 
-      main: '#efe9de', // Soft cream cards
-      contrastText: '#141413'
-    },
-    background: {
-      default: '#faf9f5', // Warm Tinted Cream Canvas
-      paper: '#efe9de',   // Slightly darker cream for cards
-    },
-    text: {
-      primary: '#141413',   // Warm Ink
-      secondary: '#6c6a64', // Muted text
-    }
-  },
-  typography: {
-    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    h1: { fontFamily: '"Cormorant Garamond", "EB Garamond", serif', fontWeight: 500, letterSpacing: '-0.03em', color: '#141413' },
-    h2: { fontFamily: '"Cormorant Garamond", "EB Garamond", serif', fontWeight: 500, letterSpacing: '-0.02em', color: '#141413' },
-    h3: { fontFamily: '"Cormorant Garamond", "EB Garamond", serif', fontWeight: 500, letterSpacing: '-0.02em', color: '#141413' },
-    h4: { fontFamily: '"Cormorant Garamond", "EB Garamond", serif', fontWeight: 500, letterSpacing: '-0.01em', color: '#141413' },
-    h5: { fontFamily: '"Cormorant Garamond", "EB Garamond", serif', fontWeight: 500, letterSpacing: '-0.01em', color: '#141413' },
-    h6: { fontFamily: '"Cormorant Garamond", "EB Garamond", serif', fontWeight: 500, letterSpacing: '0', color: '#141413' },
-    body1: { fontFamily: '"Inter", sans-serif', fontWeight: 400, color: '#252523' },
-    body2: { fontFamily: '"Inter", sans-serif', fontWeight: 400, color: '#3d3d3a' },
-    button: { fontFamily: '"Inter", sans-serif', fontWeight: 500, textTransform: 'none' },
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: '8px', // {rounded.md}
-          textTransform: 'none',
-          boxShadow: 'none',
-          '&:hover': {
-            boxShadow: 'none',
-          }
-        }
-      }
-    },
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          borderRadius: '12px', // {rounded.lg}
-          boxShadow: 'none',
-          border: '1px solid #e6dfd8', // Hairline border
-        }
-      }
-    },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          borderRadius: '12px', // {rounded.lg}
-          boxShadow: 'none',
-          border: '1px solid #e6dfd8', // Hairline border
-          backgroundColor: '#efe9de'
-        }
-      }
-    }
-  }
-});
 
 type AppView = 'exercises' | 'monitor' | 'dashboard' | 'debug' | 'therapist';
 
@@ -106,8 +41,13 @@ const THERAPIST_NAV: NavItem[] = [
   { label: 'Therapist Portal', value: 'therapist', icon: <SupervisorAccountIcon style={{ fontSize: 14 }} /> },
 ];
 
+interface AppContentProps {
+  darkMode: boolean;
+  toggleDarkMode: () => void;
+}
+
 // ── Main App Content ──────────────────────────────────────────────────────────
-const AppContent: React.FC = () => {
+const AppContent: React.FC<AppContentProps> = ({ darkMode, toggleDarkMode }) => {
   const { currentUser, logout } = useAuth();
   const [currentView, setCurrentView] = useState<AppView>('therapist');
   const [role, setRole] = useState<'patient' | 'therapist'>('therapist');
@@ -178,17 +118,17 @@ const AppContent: React.FC = () => {
 
   if (!currentUser) return <Login />;
 
-
   return (
-    <Box sx={{ flexGrow: 1 }}>
+    <Box sx={{ flexGrow: 1, minHeight: '100vh', bgcolor: 'background.default', transition: 'background-color 0.2s' }}>
       {/* ── Custom Navbar ───────────────────────────────────────────────────── */}
       <nav
         style={{
-          background: '#faf9f5',
-          borderBottom: '1px solid #e6dfd8',
+          background: darkMode ? '#181715' : '#faf9f5',
+          borderBottom: `1px solid ${darkMode ? '#32302b' : '#e6dfd8'}`,
           position: 'sticky',
           top: 0,
           zIndex: 1100,
+          transition: 'all 0.2s'
         }}
       >
         <div className="flex items-center justify-between w-full px-6 py-3 gap-3">
@@ -199,7 +139,7 @@ const AppContent: React.FC = () => {
               variant="h6"
               component="span"
               sx={{ 
-                color: '#141413', 
+                color: darkMode ? '#faf9f5' : '#141413', 
                 fontWeight: 500, 
                 letterSpacing: '-0.02em', 
                 whiteSpace: 'nowrap', 
@@ -223,15 +163,34 @@ const AppContent: React.FC = () => {
 
           {/* Right Column (Controls) ────────────────────────────────────────── */}
           <div className="flex-1 md:w-1/3 md:flex-initial flex justify-end gap-3 items-center">
+            {/* Dark/Light mode switcher ──────────────────────────────────────── */}
+            <IconButton 
+              onClick={toggleDarkMode} 
+              sx={{ 
+                color: '#cc785c',
+                bgcolor: darkMode ? 'rgba(204,120,92,0.1)' : 'rgba(20,20,19,0.02)',
+                '&:hover': {
+                  bgcolor: darkMode ? 'rgba(204,120,92,0.2)' : 'rgba(20,20,19,0.05)'
+                }
+              }}
+              size="small"
+            >
+              {darkMode ? <LightModeIcon sx={{ fontSize: 18 }} /> : <DarkModeIcon sx={{ fontSize: 18 }} />}
+            </IconButton>
+
             {/* Role toggle ───────────────────────────────────────────────────── */}
             <div
               className="flex items-center gap-2 rounded-full px-3 py-1 shrink-0"
-              style={{ background: '#efe9de', border: '1px solid #e6dfd8' }}
+              style={{ 
+                background: darkMode ? '#22211e' : '#efe9de', 
+                border: `1px solid ${darkMode ? '#32302b' : '#e6dfd8'}`,
+                transition: 'all 0.2s'
+              }}
             >
               <Typography 
                 variant="caption" 
                 sx={{ 
-                  color: '#141413', 
+                  color: darkMode ? '#faf9f5' : '#141413', 
                   fontWeight: 600, 
                   letterSpacing: 0.5, 
                   textTransform: 'uppercase', 
@@ -252,7 +211,7 @@ const AppContent: React.FC = () => {
               <Typography 
                 variant="body2" 
                 sx={{ 
-                  color: '#6c6a64', 
+                  color: darkMode ? '#a9a69e' : '#6c6a64', 
                   display: { xs: 'none', lg: 'block' }, 
                   maxWidth: 120, 
                   overflow: 'hidden', 
@@ -273,7 +232,7 @@ const AppContent: React.FC = () => {
                     height: 32, 
                     border: '1px solid #cc785c', 
                     fontSize: '0.85rem',
-                    bgcolor: '#efe9de',
+                    bgcolor: darkMode ? '#22211e' : '#efe9de',
                     color: '#cc785c',
                     fontFamily: '"Inter", sans-serif',
                     fontWeight: 600
@@ -290,14 +249,15 @@ const AppContent: React.FC = () => {
                 anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
                 PaperProps={{
                   sx: {
-                    bgcolor: '#efe9de',
-                    border: '1px solid #e6dfd8',
+                    bgcolor: darkMode ? '#22211e' : '#efe9de',
+                    border: `1px solid ${darkMode ? '#32302b' : '#e6dfd8'}`,
+                    backgroundImage: 'none',
                     '& .MuiMenuItem-root': {
                       fontFamily: '"Inter", sans-serif',
-                      color: '#141413',
+                      color: darkMode ? '#faf9f5' : '#141413',
                       fontSize: '0.85rem',
                       '&:hover': {
-                        bgcolor: '#faf9f5',
+                        bgcolor: darkMode ? '#181715' : '#faf9f5',
                       }
                     }
                   }
@@ -313,7 +273,7 @@ const AppContent: React.FC = () => {
       </nav>
 
       {/* ── Page content ────────────────────────────────────────────────────── */}
-      <Box component="main">
+      <Box component="main" sx={{ py: 1 }}>
         {currentView === 'exercises' && (
           <ExerciseSelector onExerciseSelect={handleExerciseSelect} />
         )}
@@ -331,14 +291,107 @@ const AppContent: React.FC = () => {
   );
 };
 
-// ── App root ──────────────────────────────────────────────────────────────────
-const App: React.FC = () => (
-  <ThemeProvider theme={theme}>
-    <CssBaseline />
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
-  </ThemeProvider>
-);
+// ── App root with dynamic theme ───────────────────────────────────────────────
+const App: React.FC = () => {
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('physio_dark_mode');
+    return saved === 'true';
+  });
+
+  const toggleDarkMode = () => {
+    setDarkMode(prev => {
+      const next = !prev;
+      localStorage.setItem('physio_dark_mode', String(next));
+      return next;
+    });
+  };
+
+  const currentTheme = useMemo(() => {
+    const canvasColor = darkMode ? '#181715' : '#faf9f5';
+    const paperColor = darkMode ? '#22211e' : '#efe9de';
+    const textColor = darkMode ? '#faf9f5' : '#141413';
+    const textSecondary = darkMode ? '#a9a69e' : '#6c6a64';
+    const borderHairline = darkMode ? '#32302b' : '#e6dfd8';
+
+    return createTheme({
+      palette: {
+        mode: darkMode ? 'dark' : 'light',
+        primary: { 
+          main: '#cc785c', // Signature Anthropic Coral
+          dark: '#a9583e', // Coral active / pressed state
+          contrastText: '#ffffff'
+        },
+        secondary: { 
+          main: paperColor, 
+          contrastText: textColor
+        },
+        background: {
+          default: canvasColor,
+          paper: paperColor,
+        },
+        text: {
+          primary: textColor,
+          secondary: textSecondary,
+        }
+      },
+      typography: {
+        fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        h1: { fontFamily: '"Cormorant Garamond", "EB Garamond", serif', fontWeight: 500, letterSpacing: '-0.03em', color: textColor },
+        h2: { fontFamily: '"Cormorant Garamond", "EB Garamond", serif', fontWeight: 500, letterSpacing: '-0.02em', color: textColor },
+        h3: { fontFamily: '"Cormorant Garamond", "EB Garamond", serif', fontWeight: 500, letterSpacing: '-0.02em', color: textColor },
+        h4: { fontFamily: '"Cormorant Garamond", "EB Garamond", serif', fontWeight: 500, letterSpacing: '-0.01em', color: textColor },
+        h5: { fontFamily: '"Cormorant Garamond", "EB Garamond", serif', fontWeight: 500, letterSpacing: '-0.01em', color: textColor },
+        h6: { fontFamily: '"Cormorant Garamond", "EB Garamond", serif', fontWeight: 500, letterSpacing: '0', color: textColor },
+        body1: { fontFamily: '"Inter", sans-serif', fontWeight: 400, color: darkMode ? '#eae8e1' : '#252523' },
+        body2: { fontFamily: '"Inter", sans-serif', fontWeight: 400, color: darkMode ? '#d1cec5' : '#3d3d3a' },
+        button: { fontFamily: '"Inter", sans-serif', fontWeight: 500, textTransform: 'none' },
+      },
+      components: {
+        MuiButton: {
+          styleOverrides: {
+            root: {
+              borderRadius: '8px',
+              textTransform: 'none',
+              boxShadow: 'none',
+              '&:hover': {
+                boxShadow: 'none',
+              }
+            }
+          }
+        },
+        MuiPaper: {
+          styleOverrides: {
+            root: {
+              borderRadius: '12px',
+              boxShadow: 'none',
+              border: `1px solid ${borderHairline}`,
+              backgroundImage: 'none'
+            }
+          }
+        },
+        MuiCard: {
+          styleOverrides: {
+            root: {
+              borderRadius: '12px',
+              boxShadow: 'none',
+              border: `1px solid ${borderHairline}`,
+              backgroundColor: paperColor,
+              backgroundImage: 'none'
+            }
+          }
+        }
+      }
+    });
+  }, [darkMode]);
+
+  return (
+    <ThemeProvider theme={currentTheme}>
+      <CssBaseline />
+      <AuthProvider>
+        <AppContent darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+      </AuthProvider>
+    </ThemeProvider>
+  );
+};
 
 export default App;

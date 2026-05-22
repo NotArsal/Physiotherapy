@@ -32,8 +32,10 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField
+  TextField,
+  IconButton
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import PersonIcon from '@mui/icons-material/Person';
 import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
@@ -42,6 +44,9 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
+import DownloadIcon from '@mui/icons-material/Download';
 import {
   ResponsiveContainer,
   BarChart,
@@ -56,6 +61,14 @@ import {
 } from 'recharts';
 import { apiService, ExerciseProtocol, UserSession } from '../services/api';
 
+interface Prescription {
+  exercise: string;
+  targetReps: number;
+  safeSpineAngle: number;
+  safeKneeAngle: number;
+  safetySensitivity: string;
+}
+
 interface Patient {
   id: string;
   name: string;
@@ -67,6 +80,7 @@ interface Patient {
   safeSpineAngle?: number;
   safeKneeAngle?: number;
   safetySensitivity?: string;
+  prescriptions?: Prescription[];
 }
 
 const EXERCISES = [
@@ -86,6 +100,9 @@ const EXERCISES = [
 ];
 
 export const TherapistPortal: React.FC = () => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
+
   const [patients, setPatients] = useState<Patient[]>(() => {
     const saved = localStorage.getItem('physio_patients');
     if (saved) {
@@ -134,12 +151,75 @@ export const TherapistPortal: React.FC = () => {
   const [safeSpineAngle, setSafeSpineAngle] = useState<number>(30);
   const [safeKneeAngle, setSafeKneeAngle] = useState<number>(90);
   const [safetySensitivity, setSafetySensitivity] = useState<string>('medium');
+
+  const formatExerciseName = (exerciseId: string): string => {
+    const found = EXERCISES.find(ex => ex.id === exerciseId);
+    return found ? found.name : exerciseId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  const handleRemovePrescription = (exerciseId: string) => {
+    if (!selectedPatient.id) return;
+    
+    setPatients(prevPatients => {
+      const updated = prevPatients.map(p => {
+        if (p.id === selectedPatient.id) {
+          const prescriptions = p.prescriptions ? p.prescriptions.filter(pr => pr.exercise !== exerciseId) : [];
+          const first = prescriptions[0];
+          return {
+            ...p,
+            assignedExercise: first ? first.exercise : undefined,
+            targetReps: first ? first.targetReps : undefined,
+            safeSpineAngle: first ? first.safeSpineAngle : undefined,
+            safeKneeAngle: first ? first.safeKneeAngle : undefined,
+            safetySensitivity: first ? first.safetySensitivity : undefined,
+            prescriptions: prescriptions
+          };
+        }
+        return p;
+      });
+      localStorage.setItem('physio_patients', JSON.stringify(updated));
+      return updated;
+    });
+
+    setSelectedPatient(prev => {
+      const prescriptions = prev.prescriptions ? prev.prescriptions.filter(pr => pr.exercise !== exerciseId) : [];
+      const first = prescriptions[0];
+      return {
+        ...prev,
+        assignedExercise: first ? first.exercise : undefined,
+        targetReps: first ? first.targetReps : undefined,
+        safeSpineAngle: first ? first.safeSpineAngle : undefined,
+        safeKneeAngle: first ? first.safeKneeAngle : undefined,
+        safetySensitivity: first ? first.safetySensitivity : undefined,
+        prescriptions: prescriptions
+      };
+    });
+
+    setSnackbar({
+      open: true,
+      message: `Removed prescription for ${formatExerciseName(exerciseId)}`,
+      severity: 'success'
+    });
+  };
+
+  const handleEditPrescription = (presc: Prescription) => {
+    setSelectedExercise(presc.exercise);
+    setTargetReps(presc.targetReps);
+    setSafeSpineAngle(presc.safeSpineAngle);
+    setSafeKneeAngle(presc.safeKneeAngle);
+    setSafetySensitivity(presc.safetySensitivity);
+    setSnackbar({
+      open: true,
+      message: `Loaded parameters for ${formatExerciseName(presc.exercise)}. Modify parameters and click "Save & Prescribe" on the right to update.`,
+      severity: 'info'
+    });
+  };
   
   const [sessions, setSessions] = useState<UserSession[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [currentTab, setCurrentTab] = useState<number>(0);
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({
     open: false,
     message: '',
     severity: 'success'
@@ -219,12 +299,25 @@ export const TherapistPortal: React.FC = () => {
     try {
       // 1. Fetch protocol settings - Check if we have local prescription stored in the patient object first
       const patientInState = patients.find(p => p.id === selectedPatient.id);
-      if (patientInState && patientInState.assignedExercise === selectedExercise) {
-        setTargetReps(patientInState.targetReps ?? 10);
-        setSafeSpineAngle(patientInState.safeSpineAngle ?? 30);
-        setSafeKneeAngle(patientInState.safeKneeAngle ?? 90);
-        setSafetySensitivity(patientInState.safetySensitivity ?? 'medium');
-      } else {
+      let localFound = false;
+      if (patientInState) {
+        const existingPresc = patientInState.prescriptions?.find(pr => pr.exercise === selectedExercise);
+        if (existingPresc) {
+          setTargetReps(existingPresc.targetReps ?? 10);
+          setSafeSpineAngle(existingPresc.safeSpineAngle ?? 30);
+          setSafeKneeAngle(existingPresc.safeKneeAngle ?? 90);
+          setSafetySensitivity(existingPresc.safetySensitivity ?? 'medium');
+          localFound = true;
+        } else if (patientInState.assignedExercise === selectedExercise) {
+          setTargetReps(patientInState.targetReps ?? 10);
+          setSafeSpineAngle(patientInState.safeSpineAngle ?? 30);
+          setSafeKneeAngle(patientInState.safeKneeAngle ?? 90);
+          setSafetySensitivity(patientInState.safetySensitivity ?? 'medium');
+          localFound = true;
+        }
+      }
+
+      if (!localFound) {
         // Fallback to backend API
         try {
           const protocols = await apiService.getProtocol(selectedPatient.id);
@@ -310,13 +403,29 @@ export const TherapistPortal: React.FC = () => {
       setPatients(prevPatients => {
         const updated = prevPatients.map(p => {
           if (p.id === selectedPatient.id) {
+            const prescriptions = p.prescriptions ? [...p.prescriptions] : [];
+            const idx = prescriptions.findIndex(pr => pr.exercise === selectedExercise);
+            const newPrescription = {
+              exercise: selectedExercise,
+              targetReps: targetReps,
+              safeSpineAngle: safeSpineAngle,
+              safeKneeAngle: safeKneeAngle,
+              safetySensitivity: safetySensitivity
+            };
+            if (idx >= 0) {
+              prescriptions[idx] = newPrescription;
+            } else {
+              prescriptions.push(newPrescription);
+            }
+
             return {
               ...p,
               assignedExercise: selectedExercise,
               targetReps: targetReps,
               safeSpineAngle: safeSpineAngle,
               safeKneeAngle: safeKneeAngle,
-              safetySensitivity: safetySensitivity
+              safetySensitivity: safetySensitivity,
+              prescriptions: prescriptions
             };
           }
           return p;
@@ -326,14 +435,32 @@ export const TherapistPortal: React.FC = () => {
       });
 
       // Update selectedPatient local state so UI reflects immediately
-      setSelectedPatient(prev => ({
-        ...prev,
-        assignedExercise: selectedExercise,
-        targetReps: targetReps,
-        safeSpineAngle: safeSpineAngle,
-        safeKneeAngle: safeKneeAngle,
-        safetySensitivity: safetySensitivity
-      }));
+      setSelectedPatient(prev => {
+        const prescriptions = prev.prescriptions ? [...prev.prescriptions] : [];
+        const idx = prescriptions.findIndex(pr => pr.exercise === selectedExercise);
+        const newPrescription = {
+          exercise: selectedExercise,
+          targetReps: targetReps,
+          safeSpineAngle: safeSpineAngle,
+          safeKneeAngle: safeKneeAngle,
+          safetySensitivity: safetySensitivity
+        };
+        if (idx >= 0) {
+          prescriptions[idx] = newPrescription;
+        } else {
+          prescriptions.push(newPrescription);
+        }
+
+        return {
+          ...prev,
+          assignedExercise: selectedExercise,
+          targetReps: targetReps,
+          safeSpineAngle: safeSpineAngle,
+          safeKneeAngle: safeKneeAngle,
+          safetySensitivity: safetySensitivity,
+          prescriptions: prescriptions
+        };
+      });
 
       setSnackbar({
         open: true,
@@ -353,6 +480,71 @@ export const TherapistPortal: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDownloadTherapistReport = () => {
+    if (!selectedPatient.id || sessions.length === 0) return;
+
+    const completedReps = sessions.reduce((acc, curr) => acc + curr.total_reps, 0);
+    const avgRepsVal = sessions.length > 0 ? Math.round(completedReps / sessions.length) : 0;
+    const totalWarnings = sessions.reduce((acc, curr) => {
+      const detail = curr.session_data?.[0];
+      return acc + (detail?.injury_flags ?? 0);
+    }, 0);
+    const compliance = sessions.length > 0 
+      ? Math.round((sessions.filter(s => {
+          const detail = s.session_data?.[0];
+          return (detail?.injury_flags ?? 0) === 0;
+        }).length / sessions.length) * 100)
+      : 100;
+
+    let csv = "CLINICAL PHYSIOTHERAPY PROGRESS REPORT\n";
+    csv += `Patient Name,${selectedPatient.name}\n`;
+    csv += `Patient ID/Email,${selectedPatient.id}\n`;
+    csv += `Patient Age,${selectedPatient.age}\n`;
+    csv += `Assigned Condition,${selectedPatient.condition}\n`;
+    csv += `Risk Profile,${selectedPatient.riskProfile}\n`;
+    csv += `Report Generated,${new Date().toLocaleString()}\n\n`;
+
+    csv += "PRESCRIBED PROTOCOL PARAMETERS\n";
+    csv += `Target Exercise,${formatExerciseName(selectedExercise)}\n`;
+    csv += `Prescribed Target Reps,${targetReps}\n`;
+    csv += `Safe Spine Angle Flexion Limit,${safeSpineAngle}°\n`;
+    csv += `Minimum Knee Flexion Range,${safeKneeAngle}°\n`;
+    csv += `Safety System Sensitivity,${safetySensitivity.toUpperCase()}\n\n`;
+
+    csv += "CLINICAL SUMMARY METRICS\n";
+    csv += `Total Sessions Logged,${sessions.length}\n`;
+    csv += `Compliance Rate (sets without warnings),${compliance}%\n`;
+    csv += `Average Repetitions per Session,${avgRepsVal}\n`;
+    csv += `Total Postural Safety Flags,${totalWarnings}\n\n`;
+
+    csv += "SESSION LOG DETAILS\n";
+    csv += "Session #,Date & Time,Reps Completed,Duration (seconds),Postural Warnings,Accuracy Score (%)\n";
+
+    [...sessions].reverse().forEach((s, idx) => {
+      const dateStr = new Date(s.timestamp).toLocaleString();
+      const detail = s.session_data?.[0] || {};
+      const warnings = detail.injury_flags ?? 0;
+      const accuracy = detail.accuracy_score !== undefined ? `${detail.accuracy_score}%` : 'N/A';
+      csv += `Session ${idx + 1},"${dateStr}",${s.total_reps},${Math.round(s.duration)},${warnings},"${accuracy}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Clinical_Report_${selectedPatient.name.replace(/\s+/g, '_')}_${formatExerciseName(selectedExercise).replace(/\s+/g, '_')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setSnackbar({
+      open: true,
+      message: `Downloaded progress report for ${selectedPatient.name}`,
+      severity: 'success'
+    });
   };
 
   // KPI Calculations
@@ -398,7 +590,7 @@ export const TherapistPortal: React.FC = () => {
             component="h1" 
             gutterBottom 
             sx={{ 
-              color: '#141413', 
+              color: 'text.primary', 
               fontFamily: '"Cormorant Garamond", serif', 
               fontWeight: 500, 
               letterSpacing: '-0.02em' 
@@ -406,7 +598,7 @@ export const TherapistPortal: React.FC = () => {
           >
             Therapist Clinical Portal
           </Typography>
-          <Typography variant="subtitle1" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif' }}>
+          <Typography variant="subtitle1" sx={{ color: 'text.secondary', fontFamily: '"Inter", sans-serif' }}>
             Prescribe dynamic safety protocols, configure real-time angles, and analyze patient biomechanics.
           </Typography>
         </Box>
@@ -418,7 +610,7 @@ export const TherapistPortal: React.FC = () => {
             fontWeight: 'bold', 
             border: '1px solid #cc785c', 
             color: '#cc785c', 
-            bgcolor: '#efe9de',
+            bgcolor: isDark ? 'rgba(204, 120, 92, 0.1)' : 'rgba(239, 233, 222, 0.5)',
             fontFamily: '"Inter", sans-serif'
           }}
         />
@@ -427,9 +619,9 @@ export const TherapistPortal: React.FC = () => {
       <Grid container spacing={3}>
         {/* Left Column: Patient Directory */}
         <Grid item xs={12} md={3}>
-          <Paper sx={{ p: 2, height: '100%', borderRadius: 3, bgcolor: '#efe9de', border: '1px solid #e6dfd8', boxShadow: 'none', display: 'flex', flexDirection: 'column' }}>
+          <Paper sx={{ p: 2, height: '100%', borderRadius: 3, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', boxShadow: 'none', display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, px: 1 }}>
-              <Typography variant="h6" sx={{ fontFamily: '"Cormorant Garamond", serif', fontWeight: 500, fontSize: '1.25rem', color: '#141413' }}>
+              <Typography variant="h6" sx={{ fontFamily: '"Cormorant Garamond", serif', fontWeight: 500, fontSize: '1.25rem', color: 'text.primary' }}>
                 Patient Directory
               </Typography>
               <Button
@@ -453,7 +645,7 @@ export const TherapistPortal: React.FC = () => {
                 Register
               </Button>
             </Box>
-            <Divider sx={{ mb: 2, borderColor: '#e6dfd8' }} />
+            <Divider sx={{ mb: 2, borderColor: 'divider' }} />
             <List sx={{ width: '100%', flexGrow: 1, overflowY: 'auto', maxHeight: '70vh' }}>
               {patients.map((patient) => {
                 const isSelected = patient.id === selectedPatient.id;
@@ -467,11 +659,12 @@ export const TherapistPortal: React.FC = () => {
                       borderRadius: 2,
                       mb: 1,
                       transition: 'all 0.2s',
-                      backgroundColor: isSelected ? '#faf9f5' : 'transparent',
+                      backgroundColor: isSelected ? 'background.default' : 'transparent',
                       borderLeft: isSelected ? '4px solid #cc785c' : '4px solid transparent',
-                      border: isSelected ? '1px solid #e6dfd8' : '1px solid transparent',
+                      border: isSelected ? '1px solid' : '1px solid transparent',
+                      borderColor: isSelected ? 'divider' : 'transparent',
                       '&:hover': {
-                        backgroundColor: isSelected ? '#faf9f5' : 'rgba(20,20,19,0.02)'
+                        backgroundColor: isSelected ? 'background.default' : isDark ? 'rgba(255,255,255,0.02)' : 'rgba(20,20,19,0.02)'
                       }
                     }}
                   >
@@ -506,8 +699,8 @@ export const TherapistPortal: React.FC = () => {
 
         {/* Right Column: Protocol Editor & Analytics */}
         <Grid item xs={12} md={9}>
-          <Paper sx={{ width: '100%', borderRadius: 3, overflow: 'hidden', bgcolor: '#efe9de', border: '1px solid #e6dfd8', boxShadow: 'none' }}>
-            <Box sx={{ borderBottom: 1, borderColor: '#e6dfd8', bgcolor: '#efe9de' }}>
+          <Paper sx={{ width: '100%', borderRadius: 3, overflow: 'hidden', bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
               <Tabs
                 value={currentTab}
                 onChange={(_, newValue) => setCurrentTab(newValue)}
@@ -517,7 +710,7 @@ export const TherapistPortal: React.FC = () => {
                     fontWeight: 600, 
                     fontFamily: '"Inter", sans-serif', 
                     textTransform: 'none',
-                    color: '#6c6a64',
+                    color: 'text.secondary',
                     '&.Mui-selected': { color: '#cc785c' }
                   }
                 }}
@@ -531,162 +724,293 @@ export const TherapistPortal: React.FC = () => {
 
             {/* Tab 0: Protocol Form */}
             {currentTab === 0 && (
-              <Box sx={{ p: 4, bgcolor: '#faf9f5' }}>
+              <Box sx={{ p: 4, bgcolor: 'background.default' }}>
                 <Grid container spacing={4}>
-                  {/* Selector Header */}
-                  <Grid item xs={12} md={6}>
-                    <FormControl fullWidth variant="outlined">
-                      <InputLabel id="exercise-label" sx={{ fontFamily: '"Inter", sans-serif' }}>Select Target Exercise</InputLabel>
-                      <Select
-                        labelId="exercise-label"
-                        value={selectedExercise}
-                        onChange={(e) => setSelectedExercise(e.target.value)}
-                        label="Select Target Exercise"
-                        sx={{ borderRadius: 2, bgcolor: '#faf9f5', fontFamily: '"Inter", sans-serif' }}
-                      >
-                        {EXERCISES.map((ex) => (
-                          <MenuItem key={ex.id} value={ex.id} sx={{ fontFamily: '"Inter", sans-serif' }}>
-                            {ex.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Box sx={{ p: 1.5, bgcolor: '#efe9de', borderRadius: 2, borderLeft: '4px solid #cc785c', border: '1px solid #e6dfd8', borderLeftWidth: '4px' }}>
-                      <Typography variant="body2" fontWeight="600" sx={{ color: '#141413', fontFamily: '"Inter", sans-serif' }}>
-                        Active Patient: {selectedPatient.name} ({selectedPatient.age} y/o)
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif' }}>
-                        Condition: {selectedPatient.condition}
-                      </Typography>
-                    </Box>
-                  </Grid>
-
-                  <Grid item xs={12}>
-                    <Divider sx={{ my: 1, borderColor: '#e6dfd8' }} />
-                  </Grid>
-
-                  {/* Protocol Parameters */}
-                  <Grid item xs={12} md={6}>
-                    <Box sx={{ mb: 4 }}>
-                      <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        Target Repetitions: <strong>{targetReps} reps</strong>
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Number of completed repetitions prescribed for each set.
-                      </Typography>
-                      <Slider
-                        value={targetReps}
-                        onChange={(_, v) => setTargetReps(v as number)}
-                        min={1}
-                        max={30}
-                        step={1}
-                        valueLabelDisplay="auto"
-                        marks={[{ value: 5, label: '5' }, { value: 10, label: '10' }, { value: 15, label: '15' }, { value: 20, label: '20' }, { value: 25, label: '25' }]}
-                      />
-                    </Box>
-
-                    <Box sx={{ mb: 4 }}>
-                      <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        Max Safe Spine Flexion Limit: <strong>{safeSpineAngle}°</strong>
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Crucial for lifting exercises. Triggers real-time warnings if back tilts or rounds beyond threshold.
-                      </Typography>
-                      <Slider
-                        value={safeSpineAngle}
-                        onChange={(_, v) => setSafeSpineAngle(v as number)}
-                        min={5}
-                        max={50}
-                        step={1}
-                        valueLabelDisplay="auto"
-                        color="warning"
-                        marks={[{ value: 10, label: '10°' }, { value: 20, label: '20°' }, { value: 30, label: '30°' }, { value: 40, label: '40°' }]}
-                      />
-                    </Box>
-                  </Grid>
-
-                  <Grid item xs={12} md={6}>
-                    <Box sx={{ mb: 4 }}>
-                      <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        Minimum Knee Flexion Range: <strong>{safeKneeAngle}°</strong>
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Protects ACL/knee health. Configures depth guidelines during squats or leg extensions.
-                      </Typography>
-                      <Slider
-                        value={safeKneeAngle}
-                        onChange={(_, v) => setSafeKneeAngle(v as number)}
-                        min={45}
-                        max={140}
-                        step={5}
-                        valueLabelDisplay="auto"
-                        color="secondary"
-                        marks={[{ value: 60, label: '60°' }, { value: 90, label: '90°' }, { value: 120, label: '120°' }]}
-                      />
-                    </Box>
-
-                    <Box sx={{ mb: 4 }}>
-                      <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                        Safety System Sensitivity
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                        Defines tolerance levels for valgus caving and descent speeds before injury flags are raised.
-                      </Typography>
-                      <RadioGroup
-                        row
-                        value={safetySensitivity}
-                        onChange={(e) => setSafetySensitivity(e.target.value)}
-                      >
-                        <FormControlLabel
-                          value="high"
-                          control={<Radio color="error" />}
-                          label={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                              <Chip label="High (Strict)" size="small" color="error" variant="outlined" />
-                            </Box>
-                          }
-                        />
-                        <FormControlLabel
-                          value="medium"
-                          control={<Radio color="warning" />}
-                          label={<Chip label="Medium (Balanced)" size="small" color="warning" variant="outlined" />}
-                        />
-                        <FormControlLabel
-                          value="low"
-                          control={<Radio color="success" />}
-                          label={<Chip label="Low (Relaxed)" size="small" color="success" variant="outlined" />}
-                        />
-                      </RadioGroup>
-                    </Box>
-                  </Grid>
-
-                  <Grid item xs={12}>
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2 }}>
-                      <Button
-                        variant="contained"
-                        size="large"
-                        startIcon={<SaveIcon />}
-                        onClick={handleSaveProtocol}
-                        disabled={saving}
-                        sx={{
-                          bgcolor: '#cc785c',
-                          color: 'white',
-                          borderRadius: 2,
-                          px: 4,
-                          py: 1.5,
-                          boxShadow: 'none',
-                          fontWeight: 600,
-                          fontFamily: '"Inter", sans-serif',
-                          '&:hover': {
-                            bgcolor: '#a9583e'
-                          }
+                  {/* Left Pane: Active Prescribed Programs */}
+                  <Grid item xs={12} md={5}>
+                    <Typography 
+                      variant="h6" 
+                      gutterBottom 
+                      sx={{ 
+                        fontFamily: '"Cormorant Garamond", serif', 
+                        fontWeight: 600, 
+                        fontSize: '1.35rem', 
+                        color: 'text.primary',
+                        mb: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1
+                      }}
+                    >
+                      <FitnessCenterIcon sx={{ color: '#cc785c', fontSize: 20 }} /> Active Prescriptions
+                    </Typography>
+                    
+                    {!selectedPatient.prescriptions || selectedPatient.prescriptions.length === 0 ? (
+                      <Box 
+                        sx={{ 
+                          p: 3, 
+                          border: '1px dashed', 
+                          borderColor: 'divider', 
+                          borderRadius: 2, 
+                          textAlign: 'center',
+                          bgcolor: 'background.paper',
+                          mt: 1
                         }}
                       >
-                        {saving ? 'Synchronizing...' : 'Save & Sync Protocol'}
-                      </Button>
-                    </Box>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic', fontFamily: '"Inter", sans-serif' }}>
+                          No exercises currently prescribed. Use the panel on the right to configure and add a safety protocol.
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: '60vh', overflowY: 'auto', pr: 1 }}>
+                        {selectedPatient.prescriptions.map((presc) => (
+                          <Box 
+                            key={presc.exercise} 
+                            sx={{ 
+                              p: 2, 
+                              bgcolor: 'background.paper', 
+                              border: '1px solid',
+                              borderColor: 'divider', 
+                              borderRadius: 2,
+                              position: 'relative',
+                              transition: 'all 0.2s',
+                              '&:hover': {
+                                borderColor: '#cc785c'
+                              }
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                              <Typography variant="subtitle2" fontWeight="bold" sx={{ color: 'text.primary', fontSize: '0.9rem', fontFamily: '"Inter", sans-serif' }}>
+                                {formatExerciseName(presc.exercise)}
+                              </Typography>
+                              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => handleEditPrescription(presc)}
+                                  sx={{ 
+                                    color: '#cc785c',
+                                    p: 0.5,
+                                    '&:hover': { bgcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(20,20,19,0.05)' }
+                                  }}
+                                  title="Edit parameters"
+                                >
+                                  <EditIcon fontSize="small" sx={{ fontSize: 16 }} />
+                                </IconButton>
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => handleRemovePrescription(presc.exercise)}
+                                  sx={{ 
+                                    color: 'error.main',
+                                    p: 0.5,
+                                    '&:hover': { bgcolor: 'rgba(211,47,47,0.1)' }
+                                  }}
+                                  title="Remove prescription"
+                                >
+                                  <DeleteIcon fontSize="small" sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Box>
+                            </Box>
+                            
+                            <Grid container spacing={1} sx={{ mt: 0.5 }}>
+                              <Grid item xs={6}>
+                                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontFamily: '"Inter", sans-serif' }}>
+                                  Reps: <strong>{presc.targetReps}</strong>
+                                </Typography>
+                              </Grid>
+                              <Grid item xs={6}>
+                                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontFamily: '"Inter", sans-serif', textTransform: 'capitalize' }}>
+                                  Sens: <strong>{presc.safetySensitivity}</strong>
+                                </Typography>
+                              </Grid>
+                              <Grid item xs={6}>
+                                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontFamily: '"Inter", sans-serif' }}>
+                                  Spine: <strong>≤ {presc.safeSpineAngle}°</strong>
+                                </Typography>
+                              </Grid>
+                              <Grid item xs={6}>
+                                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontFamily: '"Inter", sans-serif' }}>
+                                  Knee: <strong>≥ {presc.safeKneeAngle}°</strong>
+                                </Typography>
+                              </Grid>
+                            </Grid>
+                          </Box>
+                        ))}
+                      </Box>
+                    )}
+                  </Grid>
+
+                  {/* Right Pane: Configure & Prescribe Form */}
+                  <Grid item xs={12} md={7} sx={{ borderLeft: { md: `1px solid ${theme.palette.divider}` }, pl: { md: 4 } }}>
+                    <Typography 
+                      variant="h6" 
+                      gutterBottom 
+                      sx={{ 
+                        fontFamily: '"Cormorant Garamond", serif', 
+                        fontWeight: 600, 
+                        fontSize: '1.35rem', 
+                        color: 'text.primary',
+                        mb: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1
+                      }}
+                    >
+                      ✦ Configure & Prescribe
+                    </Typography>
+                    
+                    <Grid container spacing={3}>
+                      {/* Selector Header */}
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth variant="outlined">
+                          <InputLabel id="exercise-label" sx={{ fontFamily: '"Inter", sans-serif' }}>Select Target Exercise</InputLabel>
+                          <Select
+                            labelId="exercise-label"
+                            value={selectedExercise}
+                            onChange={(e) => setSelectedExercise(e.target.value)}
+                            label="Select Target Exercise"
+                            sx={{ borderRadius: 2, bgcolor: 'background.paper', fontFamily: '"Inter", sans-serif' }}
+                          >
+                            {EXERCISES.map((ex) => (
+                              <MenuItem key={ex.id} value={ex.id} sx={{ fontFamily: '"Inter", sans-serif' }}>
+                                {ex.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <Box sx={{ p: 1.5, bgcolor: 'background.paper', borderRadius: 2, borderLeft: '4px solid #cc785c', border: '1px solid', borderColor: 'divider', borderLeftWidth: '4px' }}>
+                          <Typography variant="body2" fontWeight="600" sx={{ color: 'text.primary', fontFamily: '"Inter", sans-serif' }}>
+                            Active Patient: {selectedPatient.name} ({selectedPatient.age} y/o)
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: '"Inter", sans-serif' }}>
+                            Condition: {selectedPatient.condition}
+                          </Typography>
+                        </Box>
+                      </Grid>
+
+                      <Grid item xs={12}>
+                        <Divider sx={{ my: 0.5, borderColor: 'divider' }} />
+                      </Grid>
+
+                      {/* Protocol Parameters */}
+                      <Grid item xs={12} md={6}>
+                        <Box sx={{ mb: 3 }}>
+                          <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.primary', fontFamily: '"Inter", sans-serif' }}>
+                            Target Repetitions: <strong>{targetReps} reps</strong>
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontFamily: '"Inter", sans-serif' }}>
+                            Number of completed repetitions prescribed.
+                          </Typography>
+                          <Slider
+                            value={targetReps}
+                            onChange={(_, v) => setTargetReps(v as number)}
+                            min={1}
+                            max={30}
+                            step={1}
+                            valueLabelDisplay="auto"
+                            marks={[{ value: 5, label: '5' }, { value: 10, label: '10' }, { value: 15, label: '15' }, { value: 20, label: '20' }, { value: 25, label: '25' }]}
+                          />
+                        </Box>
+
+                        <Box sx={{ mb: 3 }}>
+                          <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.primary', fontFamily: '"Inter", sans-serif' }}>
+                            Max Safe Spine Flexion Limit: <strong>{safeSpineAngle}°</strong>
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontFamily: '"Inter", sans-serif' }}>
+                            Triggers warnings if spine rounds beyond threshold.
+                          </Typography>
+                          <Slider
+                            value={safeSpineAngle}
+                            onChange={(_, v) => setSafeSpineAngle(v as number)}
+                            min={5}
+                            max={50}
+                            step={1}
+                            valueLabelDisplay="auto"
+                            color="warning"
+                            marks={[{ value: 10, label: '10°' }, { value: 20, label: '20°' }, { value: 30, label: '30°' }, { value: 40, label: '40°' }]}
+                          />
+                        </Box>
+                      </Grid>
+
+                      <Grid item xs={12} md={6}>
+                        <Box sx={{ mb: 3 }}>
+                          <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.primary', fontFamily: '"Inter", sans-serif' }}>
+                            Minimum Knee Flexion Range: <strong>{safeKneeAngle}°</strong>
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontFamily: '"Inter", sans-serif' }}>
+                            Configures depth guidelines for joints.
+                          </Typography>
+                          <Slider
+                            value={safeKneeAngle}
+                            onChange={(_, v) => setSafeKneeAngle(v as number)}
+                            min={45}
+                            max={140}
+                            step={5}
+                            valueLabelDisplay="auto"
+                            color="secondary"
+                            marks={[{ value: 60, label: '60°' }, { value: 90, label: '90°' }, { value: 120, label: '120°' }]}
+                          />
+                        </Box>
+
+                        <Box sx={{ mb: 3 }}>
+                          <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ color: 'text.primary', fontFamily: '"Inter", sans-serif' }}>
+                            Safety System Sensitivity
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontFamily: '"Inter", sans-serif' }}>
+                            Defines warning thresholds for posture deviations.
+                          </Typography>
+                          <RadioGroup
+                            row
+                            value={safetySensitivity}
+                            onChange={(e) => setSafetySensitivity(e.target.value)}
+                          >
+                            <FormControlLabel
+                              value="high"
+                              control={<Radio color="error" size="small" />}
+                              label={<Chip label="High (Strict)" size="small" color="error" variant="outlined" sx={{ fontSize: '0.65rem' }} />}
+                            />
+                            <FormControlLabel
+                              value="medium"
+                              control={<Radio color="warning" size="small" />}
+                              label={<Chip label="Medium (Balanced)" size="small" color="warning" variant="outlined" sx={{ fontSize: '0.65rem' }} />}
+                            />
+                            <FormControlLabel
+                              value="low"
+                              control={<Radio color="success" size="small" />}
+                              label={<Chip label="Low (Relaxed)" size="small" color="success" variant="outlined" sx={{ fontSize: '0.65rem' }} />}
+                            />
+                          </RadioGroup>
+                        </Box>
+                      </Grid>
+
+                      <Grid item xs={12}>
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 1 }}>
+                          <Button
+                            variant="contained"
+                            size="medium"
+                            startIcon={<SaveIcon />}
+                            onClick={handleSaveProtocol}
+                            disabled={saving}
+                            sx={{
+                              bgcolor: '#cc785c',
+                              color: 'white',
+                              borderRadius: 2,
+                              px: 4,
+                              py: 1.2,
+                              boxShadow: 'none',
+                              fontWeight: 600,
+                              fontFamily: '"Inter", sans-serif',
+                              '&:hover': {
+                                bgcolor: '#a9583e'
+                              }
+                            }}
+                          >
+                            {saving ? 'Synchronizing...' : 'Save & Prescribe'}
+                          </Button>
+                        </Box>
+                      </Grid>
+                    </Grid>
                   </Grid>
                 </Grid>
               </Box>
@@ -694,24 +1018,64 @@ export const TherapistPortal: React.FC = () => {
 
             {/* Tab 1: Analytics Dashboard */}
             {currentTab === 1 && (
-              <Box sx={{ p: 4, bgcolor: '#faf9f5' }}>
+              <Box sx={{ p: 4, bgcolor: 'background.default' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                  <Box>
+                    <Typography 
+                      variant="h6" 
+                      sx={{ 
+                        fontFamily: '"Cormorant Garamond", serif', 
+                        fontWeight: 600, 
+                        fontSize: '1.4rem', 
+                        color: 'text.primary' 
+                      }}
+                    >
+                      Clinical Analytics: {selectedPatient.name}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontFamily: '"Inter", sans-serif' }}>
+                      Age: {selectedPatient.age} | Condition: {selectedPatient.condition} | Risk Profile: {selectedPatient.riskProfile}
+                    </Typography>
+                  </Box>
+                  {sessions.length > 0 && (
+                    <Button
+                      variant="contained"
+                      startIcon={<DownloadIcon />}
+                      onClick={handleDownloadTherapistReport}
+                      sx={{
+                        bgcolor: '#cc785c',
+                        color: 'white',
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        fontFamily: '"Inter", sans-serif',
+                        boxShadow: 'none',
+                        '&:hover': {
+                          bgcolor: '#a9583e'
+                        }
+                      }}
+                    >
+                      Download Clinical Report
+                    </Button>
+                  )}
+                </Box>
                 {sessions.length === 0 ? (
-                  <Alert severity="info" sx={{ borderRadius: 2, bgcolor: '#efe9de', color: '#141413', border: '1px solid #e6dfd8' }}>
+                  <Alert severity="info" sx={{ borderRadius: 2, bgcolor: 'background.paper', color: 'text.primary', border: '1px solid', borderColor: 'divider' }}>
                     No session data logged for {selectedPatient.name} doing {selectedExercise.replace(/_/g, ' ')} yet.
                   </Alert>
                 ) : (
                   <Grid container spacing={3}>
                     {/* Key Metrics Cards */}
                     <Grid item xs={12} md={4}>
-                      <Card sx={{ bgcolor: '#efe9de', boxShadow: 'none', border: '1px solid #e6dfd8' }}>
+                      <Card sx={{ bgcolor: 'background.paper', boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
                         <CardContent>
-                          <Typography variant="subtitle2" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif', fontWeight: 600, fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+                          <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontFamily: '"Inter", sans-serif', fontWeight: 600, fontSize: '0.75rem', letterSpacing: '0.05em' }}>
                             PRESCRIBED COMPLIANCE RATE
                           </Typography>
                           <Typography variant="h4" sx={{ color: '#cc785c', mt: 1, fontFamily: '"Cormorant Garamond", serif', fontWeight: 600 }}>
                             {complianceRate}%
                           </Typography>
-                          <Typography variant="caption" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif', mt: 1, display: 'block' }}>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: '"Inter", sans-serif', mt: 1, display: 'block' }}>
                             Percentage of sets with ZERO safety warning flags.
                           </Typography>
                         </CardContent>
@@ -719,15 +1083,15 @@ export const TherapistPortal: React.FC = () => {
                     </Grid>
 
                     <Grid item xs={12} md={4}>
-                      <Card sx={{ bgcolor: '#efe9de', boxShadow: 'none', border: '1px solid #e6dfd8' }}>
+                      <Card sx={{ bgcolor: 'background.paper', boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
                         <CardContent>
-                          <Typography variant="subtitle2" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif', fontWeight: 600, fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+                          <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontFamily: '"Inter", sans-serif', fontWeight: 600, fontSize: '0.75rem', letterSpacing: '0.05em' }}>
                             AVERAGE REPS PER SESSION
                           </Typography>
-                          <Typography variant="h4" sx={{ color: '#141413', mt: 1, fontFamily: '"Cormorant Garamond", serif', fontWeight: 600 }}>
+                          <Typography variant="h4" sx={{ color: 'text.primary', mt: 1, fontFamily: '"Cormorant Garamond", serif', fontWeight: 600 }}>
                             {avgReps} / {targetReps}
                           </Typography>
-                          <Typography variant="caption" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif', mt: 1, display: 'block' }}>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: '"Inter", sans-serif', mt: 1, display: 'block' }}>
                             Target rep completion rate.
                           </Typography>
                         </CardContent>
@@ -735,15 +1099,15 @@ export const TherapistPortal: React.FC = () => {
                     </Grid>
 
                     <Grid item xs={12} md={4}>
-                      <Card sx={{ bgcolor: '#efe9de', boxShadow: 'none', border: '1px solid #e6dfd8' }}>
+                      <Card sx={{ bgcolor: 'background.paper', boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
                         <CardContent>
-                          <Typography variant="subtitle2" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif', fontWeight: 600, fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+                          <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontFamily: '"Inter", sans-serif', fontWeight: 600, fontSize: '0.75rem', letterSpacing: '0.05em' }}>
                             TOTAL INJURY WARNINGS FLAGGED
                           </Typography>
                           <Typography variant="h4" sx={{ color: '#c62828', mt: 1, fontFamily: '"Cormorant Garamond", serif', fontWeight: 600 }}>
                             {totalInjuryFlags}
                           </Typography>
-                          <Typography variant="caption" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif', mt: 1, display: 'block' }}>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: '"Inter", sans-serif', mt: 1, display: 'block' }}>
                             Total caving / back arches flagged by AI.
                           </Typography>
                         </CardContent>
@@ -752,17 +1116,17 @@ export const TherapistPortal: React.FC = () => {
 
                     {/* Chart 1: Repetition and Duration Trends */}
                     <Grid item xs={12} md={6}>
-                      <Paper sx={{ p: 2, borderRadius: 2, border: '1px solid #e6dfd8', bgcolor: '#efe9de', boxShadow: 'none' }}>
-                        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#141413', fontFamily: '"Cormorant Garamond", serif', fontWeight: 600, fontSize: '1.15rem' }}>
+                      <Paper sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', boxShadow: 'none' }}>
+                        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.primary', fontFamily: '"Cormorant Garamond", serif', fontWeight: 600, fontSize: '1.15rem' }}>
                           <TrendingUpIcon sx={{ color: '#cc785c' }} /> Session Performance History
                         </Typography>
                         <Box sx={{ width: '100%', height: 260, mt: 2 }}>
                           <ResponsiveContainer>
                             <AreaChart data={chartData}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#e6dfd8" />
-                              <XAxis dataKey="name" stroke="#6c6a64" style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.7rem' }} />
-                              <YAxis stroke="#6c6a64" style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.7rem' }} />
-                              <Tooltip contentStyle={{ backgroundColor: '#faf9f5', border: '1px solid #e6dfd8', fontFamily: 'Inter, sans-serif' }} />
+                              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#32302b' : '#e6dfd8'} />
+                              <XAxis dataKey="name" stroke={isDark ? '#a9a69e' : '#6c6a64'} style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.7rem' }} />
+                              <YAxis stroke={isDark ? '#a9a69e' : '#6c6a64'} style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.7rem' }} />
+                              <Tooltip contentStyle={{ backgroundColor: isDark ? '#22211e' : '#faf9f5', border: `1px solid ${isDark ? '#32302b' : '#e6dfd8'}`, color: isDark ? '#faf9f5' : '#141413', fontFamily: 'Inter, sans-serif' }} />
                               <Legend wrapperStyle={{ fontFamily: 'Inter, sans-serif', fontSize: '0.75rem' }} />
                               <Area type="monotone" dataKey="reps" stroke="#cc785c" fill="rgba(204, 120, 92, 0.2)" name="Reps Done" />
                               <Area type="monotone" dataKey="duration" stroke="#82ca9d" fill="rgba(130, 202, 157, 0.2)" name="Duration (s)" />
@@ -774,18 +1138,18 @@ export const TherapistPortal: React.FC = () => {
 
                     {/* Chart 2: Injury Warnings and Form Accuracy */}
                     <Grid item xs={12} md={6}>
-                      <Paper sx={{ p: 2, borderRadius: 2, border: '1px solid #e6dfd8', bgcolor: '#efe9de', boxShadow: 'none' }}>
-                        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#141413', fontFamily: '"Cormorant Garamond", serif', fontWeight: 600, fontSize: '1.15rem' }}>
+                      <Paper sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', boxShadow: 'none' }}>
+                        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.primary', fontFamily: '"Cormorant Garamond", serif', fontWeight: 600, fontSize: '1.15rem' }}>
                           <WarningAmberIcon sx={{ color: '#c62828' }} /> Postural Safety Warnings & Accuracy
                         </Typography>
                         <Box sx={{ width: '100%', height: 260, mt: 2 }}>
                           <ResponsiveContainer>
                             <BarChart data={chartData}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#e6dfd8" />
-                              <XAxis dataKey="name" stroke="#6c6a64" style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.7rem' }} />
+                              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#32302b' : '#e6dfd8'} />
+                              <XAxis dataKey="name" stroke={isDark ? '#a9a69e' : '#6c6a64'} style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.7rem' }} />
                               <YAxis yAxisId="left" orientation="left" stroke="#c62828" style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.7rem' }} />
                               <YAxis yAxisId="right" orientation="right" stroke="#00c853" style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.7rem' }} />
-                              <Tooltip contentStyle={{ backgroundColor: '#faf9f5', border: '1px solid #e6dfd8', fontFamily: 'Inter, sans-serif' }} />
+                              <Tooltip contentStyle={{ backgroundColor: isDark ? '#22211e' : '#faf9f5', border: `1px solid ${isDark ? '#32302b' : '#e6dfd8'}`, color: isDark ? '#faf9f5' : '#141413', fontFamily: 'Inter, sans-serif' }} />
                               <Legend wrapperStyle={{ fontFamily: 'Inter, sans-serif', fontSize: '0.75rem' }} />
                               <Bar yAxisId="left" dataKey="injuryFlags" fill="#c62828" name="Injury Flags" />
                               <Bar yAxisId="right" dataKey="accuracy" fill="#00c853" name="Accuracy (%)" />
@@ -822,18 +1186,19 @@ export const TherapistPortal: React.FC = () => {
             p: 1.5,
             width: '100%',
             maxWidth: 500,
-            bgcolor: '#faf9f5',
-            border: '1px solid #e6dfd8',
+            bgcolor: 'background.default',
+            border: '1px solid',
+            borderColor: 'divider',
             boxShadow: 'none'
           }
         }}
       >
         <form onSubmit={handleRegisterPatient}>
-          <DialogTitle sx={{ fontFamily: '"Cormorant Garamond", serif', fontWeight: 500, color: '#141413', fontSize: '1.5rem', pb: 1 }}>
+          <DialogTitle sx={{ fontFamily: '"Cormorant Garamond", serif', fontWeight: 500, color: 'text.primary', fontSize: '1.5rem', pb: 1 }}>
             Register New Patient
           </DialogTitle>
           <DialogContent>
-            <Typography variant="body2" sx={{ mb: 3, color: '#6c6a64', fontFamily: '"Inter", sans-serif' }}>
+            <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary', fontFamily: '"Inter", sans-serif' }}>
               Create a clinical patient profile to set customized angle constraints and track session progress.
             </Typography>
             
@@ -922,7 +1287,7 @@ export const TherapistPortal: React.FC = () => {
                 textTransform: 'none', 
                 fontWeight: 600, 
                 fontFamily: '"Inter", sans-serif',
-                color: '#6c6a64' 
+                color: 'text.secondary' 
               }}
             >
               Cancel

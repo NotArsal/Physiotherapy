@@ -261,10 +261,10 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       for (let i = 0; i < 33; i++) dangerIndices.add(i);
     }
 
-    const safeColor = '#00E5FF';
-    const dangerColor = '#FF1744';
-    const safeBone = 'rgba(0, 229, 255, 0.75)';
-    const dangerBone = 'rgba(255, 23, 68, 0.75)';
+    const safeColor = '#6e8570'; // Elegant sage green
+    const dangerColor = '#c62828'; // Rich deep crimson red
+    const safeBone = 'rgba(110, 133, 112, 0.75)'; // Transparent sage green
+    const dangerBone = 'rgba(198, 40, 40, 0.75)'; // Transparent deep red
 
     // Draw bones (connections)
     POSE_CONNECTIONS.forEach(([a, b]) => {
@@ -275,8 +275,6 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       const isDanger = dangerIndices.has(a) || dangerIndices.has(b);
       const color = isDanger ? dangerBone : safeBone;
       ctx.save();
-      ctx.shadowColor = isDanger ? dangerColor : safeColor;
-      ctx.shadowBlur = 12;
       ctx.strokeStyle = color;
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -294,8 +292,6 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       const isDanger = dangerIndices.has(i);
       const color = isDanger ? dangerColor : safeColor;
       ctx.save();
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 18;
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(x, y, isDanger ? 6 : 4, 0, 2 * Math.PI);
@@ -328,7 +324,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         if (poseDetectedRef.current) {
           setPoseDetected(false);
         }
-        ctx.fillStyle = '#FF1744';
+        ctx.fillStyle = '#c62828';
         ctx.font = 'bold 16px Inter, Arial';
         ctx.fillText('⚠ NO POSE DETECTED', 10, 30);
         return;
@@ -355,15 +351,13 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
 
         // Status label
         ctx.save();
-        ctx.fillStyle = isSafe && !warnText ? '#00E5FF' : '#FF1744';
+        ctx.fillStyle = isSafe && !warnText ? '#6e8570' : '#c62828';
         ctx.font = 'bold 14px Inter, Arial';
-        ctx.shadowColor = isSafe && !warnText ? '#00E5FF' : '#FF1744';
-        ctx.shadowBlur = 8;
         ctx.fillText(isSafe && !warnText ? '✓ POSE DETECTED' : '⚠ FORM ALERT', 10, 28);
         ctx.restore();
 
         if (debugModeRef.current) {
-          ctx.fillStyle = '#FFFF00';
+          ctx.fillStyle = '#6c6a64';
           ctx.font = '12px monospace';
           ctx.fillText(`Landmarks: ${results.poseLandmarks.length}`, 10, 50);
         }
@@ -745,9 +739,36 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
             const patientsList = JSON.parse(saved);
             const patientId = currentUser.uid || currentUser.email?.toLowerCase() || 'current_user';
             const patient = patientsList.find((p: any) => p.id === patientId);
-            if (patient && patient.assignedExercise && 
-                patient.assignedExercise.toLowerCase().trim().replace(/[-\s]+/g, '_') === normalizedSelected) {
-              localOverride = patient;
+            if (patient) {
+              // 1. Scan patient.prescriptions matching target exercise
+              if (patient.prescriptions && Array.isArray(patient.prescriptions)) {
+                const matchedPresc = patient.prescriptions.find((pr: any) => 
+                  pr.exercise && pr.exercise.toLowerCase().trim().replace(/[-\s]+/g, '_') === normalizedSelected
+                );
+                if (matchedPresc) {
+                  localOverride = {
+                    id: patient.id,
+                    exercise: matchedPresc.exercise,
+                    targetReps: matchedPresc.targetReps,
+                    safeSpineAngle: matchedPresc.safeSpineAngle,
+                    safeKneeAngle: matchedPresc.safeKneeAngle,
+                    safetySensitivity: matchedPresc.safetySensitivity
+                  };
+                }
+              }
+              
+              // 2. Fall back to legacy assignedExercise attributes
+              if (!localOverride && patient.assignedExercise && 
+                  patient.assignedExercise.toLowerCase().trim().replace(/[-\s]+/g, '_') === normalizedSelected) {
+                localOverride = {
+                  id: patient.id,
+                  exercise: patient.assignedExercise,
+                  targetReps: patient.targetReps,
+                  safeSpineAngle: patient.safeSpineAngle,
+                  safeKneeAngle: patient.safeKneeAngle,
+                  safetySensitivity: patient.safetySensitivity
+                };
+              }
             }
           } catch (e) {
             console.error("Failed to parse local patient list inside ExerciseMonitor", e);
@@ -758,11 +779,11 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       if (localOverride) {
         finalProtocol = {
           user_id: localOverride.id,
-          exercise: localOverride.assignedExercise,
-          target_reps: localOverride.targetReps || 10,
-          safe_spine_angle: localOverride.safeSpineAngle || 35,
-          safe_knee_angle: localOverride.safeKneeAngle || 90,
-          safety_sensitivity: localOverride.safetySensitivity || 50
+          exercise: localOverride.exercise,
+          target_reps: localOverride.targetReps !== undefined ? Number(localOverride.targetReps) : 10,
+          safe_spine_angle: localOverride.safeSpineAngle !== undefined ? Number(localOverride.safeSpineAngle) : 35,
+          safe_knee_angle: localOverride.safeKneeAngle !== undefined ? Number(localOverride.safeKneeAngle) : 90,
+          safety_sensitivity: localOverride.safetySensitivity !== undefined ? String(localOverride.safetySensitivity) : '50'
         };
         addToConsoleLog('⚡ Loaded prescribed local safety thresholds from Therapist Portal!');
       }
@@ -1016,19 +1037,19 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                     top: 16,
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    backgroundColor: 'rgba(211, 47, 47, 0.95)',
-                    color: 'white',
+                    backgroundColor: 'rgba(186, 26, 26, 0.95)', // Flat premium rich crimson
+                    color: '#faf9f5',
                     px: 3,
                     py: 1.5,
                     borderRadius: 2,
-                    boxShadow: '0 0 15px rgba(211, 47, 47, 0.8)',
+                    boxShadow: 'none', // Flat styling, no glow
                     zIndex: 10,
                     textAlign: 'center',
-                    border: '2px solid #ff1744',
-                    animation: 'pulse 1.5s infinite ease-in-out',
-                    '@keyframes pulse': {
+                    border: '1px solid #8c1d18',
+                    animation: 'pulseFlat 1.5s infinite ease-in-out',
+                    '@keyframes pulseFlat': {
                       '0%': { opacity: 0.9, transform: 'translateX(-50%) scale(1)' },
-                      '50%': { opacity: 1, transform: 'translateX(-50%) scale(1.03)', boxShadow: '0 0 25px rgba(255, 23, 68, 0.9)' },
+                      '50%': { opacity: 1, transform: 'translateX(-50%) scale(1.02)' },
                       '100%': { opacity: 0.9, transform: 'translateX(-50%) scale(1)' }
                     }
                   }}
@@ -1049,15 +1070,15 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                     top: 16,
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    backgroundColor: 'rgba(237, 108, 2, 0.95)',
+                    backgroundColor: 'rgba(216, 67, 21, 0.95)', // Flat premium burnt orange
                     color: 'white',
                     px: 3,
                     py: 1.5,
                     borderRadius: 2,
-                    boxShadow: '0 0 15px rgba(237, 108, 2, 0.8)',
+                    boxShadow: 'none', // Flat styling, no glow
                     zIndex: 10,
                     textAlign: 'center',
-                    border: '2px solid #ff9800',
+                    border: '1px solid #d84315', // Flat premium burnt rust
                   }}
                 >
                   <Typography variant="subtitle2" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
@@ -1146,10 +1167,10 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
             {/* Live Tempo Guide widget */}
             <Grid item xs={12}>
               <Card sx={{
-                borderLeft: tempoStatus === 'too_fast' ? '6px solid #FF1744'
-                  : tempoStatus === 'too_slow' ? '6px solid #FF9800'
-                  : tempoStatus === 'good' ? '6px solid #00E5FF'
-                  : '6px solid #546E7A',
+                borderLeft: tempoStatus === 'too_fast' ? '6px solid #c62828'
+                  : tempoStatus === 'too_slow' ? '6px solid #d84315'
+                  : tempoStatus === 'good' ? '6px solid #6e8570'
+                  : '6px solid #6c6a64',
                 background: tempoStatus === 'too_fast' ? 'rgba(255,23,68,0.06)'
                   : tempoStatus === 'too_slow' ? 'rgba(255,152,0,0.06)'
                   : 'inherit'

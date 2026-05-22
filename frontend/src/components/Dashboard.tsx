@@ -19,7 +19,8 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel
+  InputLabel,
+  Button
 } from '@mui/material';
 import {
   BarChart,
@@ -39,6 +40,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import TimerIcon from '@mui/icons-material/Timer';
 import AssessmentIcon from '@mui/icons-material/Assessment';
+import DownloadIcon from '@mui/icons-material/Download';
 import { apiService, UserSessionsResponse, UserSession } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -182,6 +184,58 @@ const Dashboard: React.FC = () => {
     return { filteredSessions, summary, dailyReps, exerciseBreakdown, progressData };
   };
 
+  const handleDownloadReport = () => {
+    if (!sessionData || !sessionData.sessions || sessionData.sessions.length === 0) return;
+
+    const filtered = filterSessionsByPeriod(sessionData.sessions);
+    const sum = getFilteredSummary(filtered);
+
+    let csv = "PHYSIOTHERAPY PROGRESS REPORT\n";
+    csv += `Patient Email / ID,${currentUser?.email || currentUser?.uid || 'N/A'}\n`;
+    csv += `Report Generated,${new Date().toLocaleString()}\n`;
+    csv += `Selected Period,${selectedPeriod === 'week' ? 'Last 7 Days' : selectedPeriod === 'month' ? 'Last 30 Days' : 'All Time'}\n\n`;
+
+    csv += "SUMMARY STATISTICS\n";
+    csv += `Total Sessions Completed,${sum.total_sessions}\n`;
+    csv += `Total Repetitions Done,${sum.total_reps}\n`;
+    csv += `Total Time Active,${formatDuration(sum.total_duration)}\n`;
+    csv += `Unique Exercises Performed,${Object.keys(sum.exercise_breakdown).length}\n\n`;
+
+    csv += "EXERCISE BREAKDOWN\n";
+    csv += "Exercise,Sessions Completed,Total Reps,Total Duration\n";
+    Object.entries(sum.exercise_breakdown).forEach(([exercise, data]) => {
+      const name = exercise.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      csv += `"${name}",${data.sessions},${data.total_reps},"${formatDuration(data.total_duration)}"\n`;
+    });
+    csv += "\n";
+
+    csv += "SESSION LOG DETAILS\n";
+    csv += "Date & Time,Exercise,Reps Completed,Duration (seconds),Postural Warnings,Accuracy Score (%)\n";
+    
+    filtered
+      .slice()
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .forEach(s => {
+        const dateStr = new Date(s.timestamp).toLocaleString();
+        const exName = s.exercise.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const detail = s.session_data?.[0] || {};
+        const warnings = detail.injury_flags ?? 0;
+        const accuracy = detail.accuracy_score !== undefined ? `${detail.accuracy_score}%` : 'N/A';
+        
+        csv += `"${dateStr}","${exName}",${s.total_reps},${Math.round(s.duration)},${warnings},"${accuracy}"\n`;
+      });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Physio_Progress_Report_${currentUser?.uid || 'patient'}_${selectedPeriod}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const { filteredSessions, summary, dailyReps, exerciseBreakdown, progressData } = getChartData();
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
@@ -215,18 +269,41 @@ const Dashboard: React.FC = () => {
         <Typography variant="h4" component="h1">
           Your Progress Dashboard
         </Typography>
-        <FormControl sx={{ minWidth: 120 }}>
-          <InputLabel>Period</InputLabel>
-          <Select
-            value={selectedPeriod}
-            label="Period"
-            onChange={(event) => setSelectedPeriod(event.target.value as 'week' | 'month' | 'all')}
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <Button
+            variant="contained"
+            startIcon={<DownloadIcon />}
+            onClick={handleDownloadReport}
+            sx={{
+              bgcolor: '#cc785c',
+              color: 'white',
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 600,
+              fontFamily: '"Inter", sans-serif',
+              boxShadow: 'none',
+              height: 40,
+              '&:hover': {
+                bgcolor: '#a9583e'
+              }
+            }}
           >
-            <MenuItem value="week">Last Week</MenuItem>
-            <MenuItem value="month">Last Month</MenuItem>
-            <MenuItem value="all">All Time</MenuItem>
-          </Select>
-        </FormControl>
+            Download Report
+          </Button>
+          <FormControl sx={{ minWidth: 120 }}>
+            <InputLabel>Period</InputLabel>
+            <Select
+              value={selectedPeriod}
+              label="Period"
+              onChange={(event) => setSelectedPeriod(event.target.value as 'week' | 'month' | 'all')}
+              sx={{ height: 40 }}
+            >
+              <MenuItem value="week">Last Week</MenuItem>
+              <MenuItem value="month">Last Month</MenuItem>
+              <MenuItem value="all">All Time</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
       </Box>
 
       {error && (

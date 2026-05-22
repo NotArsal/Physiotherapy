@@ -17,6 +17,7 @@ import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import SuggestiveSearch from './ui/suggestive-search';
+import { EXERCISE_DEMOS } from './ExerciseDemoOverlay';
 
 const EXERCISE_SUGGESTIONS = [
   'Search exercises, muscle groups, or categories...',
@@ -37,7 +38,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [prescribedExercise, setPrescribedExercise] = useState<any>(null);
+  const [prescribedExercises, setPrescribedExercises] = useState<any[]>([]);
 
   useEffect(() => {
     if (currentUser) {
@@ -47,10 +48,23 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
           const patientsList = JSON.parse(saved);
           const patientId = currentUser.uid || currentUser.email?.toLowerCase() || 'current_user';
           const patient = patientsList.find((p: any) => p.id === patientId);
-          if (patient && patient.assignedExercise) {
-            setPrescribedExercise(patient);
+          if (patient) {
+            if (patient.prescriptions && Array.isArray(patient.prescriptions) && patient.prescriptions.length > 0) {
+              setPrescribedExercises(patient.prescriptions);
+            } else if (patient.assignedExercise) {
+              // Legacy fallback
+              setPrescribedExercises([{
+                exercise: patient.assignedExercise,
+                targetReps: patient.targetReps || 10,
+                safeSpineAngle: patient.safeSpineAngle,
+                safeKneeAngle: patient.safeKneeAngle,
+                safetySensitivity: patient.safetySensitivity || '50'
+              }]);
+            } else {
+              setPrescribedExercises([]);
+            }
           } else {
-            setPrescribedExercise(null);
+            setPrescribedExercises([]);
           }
         } catch (e) {
           console.error("Failed to parse patients in ExerciseSelector", e);
@@ -382,128 +396,209 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
         </Alert>
       )}
 
-      {/* ── PRESCRIBED PROGRAM CARD (Glowing, Dark Navy + Coral Theme) ── */}
-      {prescribedExercise && (
-        <Card
-          sx={{
-            mb: 5,
-            background: '#181715',
-            border: '2px solid #cc785c',
-            borderRadius: '16px',
-            color: '#faf9f5',
-            boxShadow: '0 8px 30px rgba(204, 120, 92, 0.25)', // Glowing warm coral shadow
-            overflow: 'hidden',
-          }}
-        >
-          <CardContent sx={{ p: 4 }}>
-            <Grid container spacing={3} alignItems="center">
-              <Grid item xs={12} md={8}>
-                <Chip 
-                  label="Therapist Prescribed Program" 
-                  sx={{ 
-                    bgcolor: '#cc785c', 
-                    color: '#faf9f5', 
-                    fontWeight: 600, 
-                    mb: 2, 
-                    fontFamily: '"Inter", sans-serif',
-                    fontSize: '0.75rem'
-                  }} 
-                  size="small"
-                />
-                <Typography 
-                  variant="h4" 
-                  component="h2" 
-                  sx={{ 
-                    color: '#faf9f5', 
-                    mb: 1.5,
-                    fontFamily: '"Cormorant Garamond", serif',
-                    fontWeight: 500,
-                    letterSpacing: '-0.01em'
-                  }}
-                >
-                  Active Prescribed Protocol: {exerciseInfo[prescribedExercise.assignedExercise]?.name || formatExerciseName(prescribedExercise.assignedExercise)}
-                </Typography>
-                <Typography variant="body1" sx={{ color: '#efe9de', mb: 3, fontFamily: '"Inter", sans-serif', fontSize: '0.95rem' }}>
-                  {exerciseInfo[prescribedExercise.assignedExercise]?.description || 'Custom tailored therapy session designed for your recovery.'}
-                </Typography>
-                
-                <Grid container spacing={2}>
-                  <Grid item xs={6} sm={3}>
-                    <Box sx={{ borderLeft: '2px solid #cc785c', pl: 1.5 }}>
-                      <Typography variant="caption" sx={{ color: '#a9a69e', display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.7rem' }}>
-                        Target Reps
-                      </Typography>
-                      <Typography variant="h6" sx={{ color: '#faf9f5', fontWeight: 600, fontFamily: '"Inter", sans-serif', mt: 0.5 }}>
-                        {prescribedExercise.targetReps || 10}
-                      </Typography>
+      {/* ── PRESCRIBED PROGRAMS GRID (Subtle outlines, Cream/Charcoal Theme) ── */}
+      {prescribedExercises.length > 0 && (
+        <Box sx={{ mb: 6 }}>
+          <Typography
+            variant="h4"
+            component="h2"
+            sx={{
+              mb: 3,
+              fontFamily: '"Cormorant Garamond", serif',
+              fontWeight: 500,
+              pb: 1,
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+              color: 'text.primary'
+            }}
+          >
+            Your Prescribed Protocols
+          </Typography>
+          <Grid container spacing={3}>
+            {prescribedExercises.map((presc, index) => {
+              const exKey = presc.exercise;
+              const info = exerciseInfo[exKey] || {
+                name: formatExerciseName(exKey),
+                description: 'Custom tailored therapy session designed for your recovery.',
+                category: 'Physiotherapy',
+                muscleGroups: ['General'],
+                benefits: ['Recovery', 'Strength'],
+                difficulty: 'Beginner'
+              };
+              const demo = EXERCISE_DEMOS[exKey];
+              const imageUrl = demo && demo.images && demo.images[0] 
+                ? demo.images[0] 
+                : 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Push-Up/0.jpg';
+
+              return (
+                <Grid item xs={12} sm={6} md={4} key={`${exKey}-${index}`}>
+                  <Card
+                    sx={{
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      backgroundColor: 'background.paper',
+                      border: '1.5px solid',
+                      borderColor: 'primary.main', // Warm coral accent for prescribed protocol
+                      borderRadius: '12px',
+                      boxShadow: 'none',
+                      overflow: 'hidden',
+                      position: 'relative',
+                      transition: 'all 0.2s ease-in-out',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        boxShadow: '0 4px 12px rgba(20, 20, 19, 0.05)'
+                      }
+                    }}
+                  >
+                    <Box sx={{ position: 'relative', height: 160, overflow: 'hidden', bgcolor: '#000000' }}>
+                      <Box
+                        component="img"
+                        src={imageUrl}
+                        alt={info.name}
+                        sx={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          opacity: 0.85,
+                          transition: 'transform 0.3s ease',
+                          '&:hover': {
+                            transform: 'scale(1.05)'
+                          }
+                        }}
+                      />
+                      <Chip 
+                        label="Prescribed" 
+                        sx={{ 
+                          position: 'absolute',
+                          top: 10,
+                          left: 10,
+                          bgcolor: 'primary.main', 
+                          color: '#ffffff', 
+                          fontWeight: 600, 
+                          fontFamily: '"Inter", sans-serif',
+                          fontSize: '0.7rem'
+                        }} 
+                        size="small"
+                      />
                     </Box>
-                  </Grid>
-                  {prescribedExercise.safeSpineAngle !== undefined && (
-                    <Grid item xs={6} sm={3}>
-                      <Box sx={{ borderLeft: '2px solid #cc785c', pl: 1.5 }}>
-                        <Typography variant="caption" sx={{ color: '#a9a69e', display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.7rem' }}>
-                          Safe Spine
+
+                    <CardContent sx={{ flexGrow: 1, p: 2 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                        <Typography 
+                          variant="h6" 
+                          component="h3" 
+                          sx={{ 
+                            fontFamily: '"Cormorant Garamond", serif',
+                            fontWeight: 600,
+                            lineHeight: 1.2
+                          }}
+                        >
+                          {info.name}
                         </Typography>
-                        <Typography variant="h6" sx={{ color: '#faf9f5', fontWeight: 600, fontFamily: '"Inter", sans-serif', mt: 0.5 }}>
-                          ≤ {prescribedExercise.safeSpineAngle}°
-                        </Typography>
+                        <Chip
+                          label={info.difficulty}
+                          color={getDifficultyColor(info.difficulty) as 'success' | 'warning' | 'error' | 'default'}
+                          size="small"
+                          sx={{ fontFamily: '"Inter", sans-serif', fontWeight: 500, fontSize: '0.65rem' }}
+                        />
                       </Box>
-                    </Grid>
-                  )}
-                  {prescribedExercise.safeKneeAngle !== undefined && (
-                    <Grid item xs={6} sm={3}>
-                      <Box sx={{ borderLeft: '2px solid #cc785c', pl: 1.5 }}>
-                        <Typography variant="caption" sx={{ color: '#a9a69e', display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.7rem' }}>
-                          Safe Knee Depth
-                        </Typography>
-                        <Typography variant="h6" sx={{ color: '#faf9f5', fontWeight: 600, fontFamily: '"Inter", sans-serif', mt: 0.5 }}>
-                          ≥ {prescribedExercise.safeKneeAngle}°
-                        </Typography>
-                      </Box>
-                    </Grid>
-                  )}
-                  {prescribedExercise.safetySensitivity !== undefined && (
-                    <Grid item xs={6} sm={3}>
-                      <Box sx={{ borderLeft: '2px solid #cc785c', pl: 1.5 }}>
-                        <Typography variant="caption" sx={{ color: '#a9a69e', display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.7rem' }}>
-                          Sensitivity
-                        </Typography>
-                        <Typography variant="h6" sx={{ color: '#faf9f5', fontWeight: 600, fontFamily: '"Inter", sans-serif', mt: 0.5 }}>
-                          {prescribedExercise.safetySensitivity}%
-                        </Typography>
-                      </Box>
-                    </Grid>
-                  )}
+                      
+                      <Typography 
+                        variant="body2" 
+                        color="text.secondary" 
+                        sx={{ 
+                          fontFamily: '"Inter", sans-serif', 
+                          fontSize: '0.8rem', 
+                          mb: 2, 
+                          height: 38, 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical'
+                        }}
+                      >
+                        {info.description}
+                      </Typography>
+
+                      <Grid container spacing={1} sx={{ mt: 1, borderTop: '1px solid', borderColor: 'divider', pt: 1.5 }}>
+                        <Grid item xs={6}>
+                          <Box sx={{ borderLeft: '2px solid', borderColor: 'primary.main', pl: 1 }}>
+                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', textTransform: 'uppercase', fontSize: '0.6rem', letterSpacing: '0.02em' }}>
+                              Target Reps
+                            </Typography>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 600, fontFamily: '"Inter", sans-serif' }}>
+                              {presc.targetReps || 10}
+                            </Typography>
+                          </Box>
+                        </Grid>
+                        {presc.safeSpineAngle !== undefined && (
+                          <Grid item xs={6}>
+                            <Box sx={{ borderLeft: '2px solid', borderColor: 'primary.main', pl: 1 }}>
+                              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', textTransform: 'uppercase', fontSize: '0.6rem', letterSpacing: '0.02em' }}>
+                                Safe Spine
+                              </Typography>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600, fontFamily: '"Inter", sans-serif' }}>
+                                ≤ {presc.safeSpineAngle}°
+                              </Typography>
+                            </Box>
+                          </Grid>
+                        )}
+                        {presc.safeKneeAngle !== undefined && (
+                          <Grid item xs={6}>
+                            <Box sx={{ borderLeft: '2px solid', borderColor: 'primary.main', pl: 1 }}>
+                              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', textTransform: 'uppercase', fontSize: '0.6rem', letterSpacing: '0.02em' }}>
+                                Safe Knee
+                              </Typography>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600, fontFamily: '"Inter", sans-serif' }}>
+                                ≥ {presc.safeKneeAngle}°
+                              </Typography>
+                            </Box>
+                          </Grid>
+                        )}
+                        {presc.safetySensitivity !== undefined && (
+                          <Grid item xs={6}>
+                            <Box sx={{ borderLeft: '2px solid', borderColor: 'primary.main', pl: 1 }}>
+                              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', textTransform: 'uppercase', fontSize: '0.6rem', letterSpacing: '0.02em' }}>
+                                Sensitivity
+                              </Typography>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600, fontFamily: '"Inter", sans-serif' }}>
+                                {presc.safetySensitivity}%
+                              </Typography>
+                            </Box>
+                          </Grid>
+                        )}
+                      </Grid>
+                    </CardContent>
+
+                    <CardActions sx={{ p: 2, pt: 0 }}>
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        startIcon={<PlayArrowIcon />}
+                        onClick={() => onExerciseSelect(exKey)}
+                        sx={{
+                          bgcolor: 'primary.main',
+                          color: '#ffffff',
+                          fontWeight: 600,
+                          py: 1,
+                          fontSize: '0.85rem',
+                          fontFamily: '"Inter", sans-serif',
+                          '&:hover': {
+                            bgcolor: 'primary.dark',
+                          }
+                        }}
+                      >
+                        Start Session
+                      </Button>
+                    </CardActions>
+                  </Card>
                 </Grid>
-              </Grid>
-              <Grid item xs={12} md={4} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
-                <Button
-                  variant="contained"
-                  size="large"
-                  startIcon={<PlayArrowIcon />}
-                  onClick={() => onExerciseSelect(prescribedExercise.assignedExercise)}
-                  sx={{
-                    bgcolor: '#cc785c',
-                    color: '#ffffff',
-                    fontWeight: 600,
-                    px: 4,
-                    py: 2,
-                    fontSize: '1rem',
-                    fontFamily: '"Inter", sans-serif',
-                    borderRadius: '8px',
-                    '&:hover': {
-                      bgcolor: '#a9583e',
-                    },
-                    boxShadow: '0 4px 14px rgba(204, 120, 92, 0.4)',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  Start Prescribed Session
-                </Button>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
+              );
+            })}
+          </Grid>
+        </Box>
       )}
 
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center' }}>
@@ -526,6 +621,10 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
             category: 'General',
             muscleGroups: ['Multiple']
           };
+          const demo = EXERCISE_DEMOS[exercise];
+          const imageUrl = demo && demo.images && demo.images[0] 
+            ? demo.images[0] 
+            : 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Push-Up/0.jpg';
 
           return (
             <Grid item xs={12} sm={6} md={4} key={exercise}>
@@ -535,42 +634,71 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
                   display: 'flex',
                   flexDirection: 'column',
                   transition: 'all 0.2s ease-in-out',
-                  backgroundColor: '#efe9de',
-                  border: '1px solid #e6dfd8',
+                  backgroundColor: 'background.paper',
+                  border: '1px solid',
+                  borderColor: 'divider',
                   borderRadius: '12px',
                   boxShadow: 'none',
+                  overflow: 'hidden',
                   '&:hover': {
                     transform: 'translateY(-4px)',
-                    border: '1px solid #cc785c',
+                    borderColor: 'primary.main',
                     boxShadow: '0 4px 12px rgba(20, 20, 19, 0.05)'
                   }
                 }}
               >
-                <CardContent sx={{ flexGrow: 1 }}>
+                <Box sx={{ position: 'relative', height: 160, overflow: 'hidden', bgcolor: '#000000' }}>
+                  <Box
+                    component="img"
+                    src={imageUrl}
+                    alt={info.name}
+                    sx={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      opacity: 0.85,
+                      transition: 'transform 0.3s ease',
+                      '&:hover': {
+                        transform: 'scale(1.05)'
+                      }
+                    }}
+                  />
+                  <Chip 
+                    label={info.category} 
+                    size="small" 
+                    sx={{ 
+                      position: 'absolute',
+                      top: 10,
+                      left: 10,
+                      bgcolor: 'background.paper', 
+                      color: 'primary.main', 
+                      fontWeight: 600, 
+                      fontFamily: '"Inter", sans-serif',
+                      fontSize: '0.75rem',
+                      border: '1px solid',
+                      borderColor: 'primary.main'
+                    }} 
+                  />
+                </Box>
+
+                <CardContent sx={{ flexGrow: 1, p: 2 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                    <Typography variant="h6" component="h2" sx={{ fontFamily: '"Cormorant Garamond", serif', fontWeight: 600 }}>
+                    <Typography variant="h6" component="h2" sx={{ fontFamily: '"Cormorant Garamond", serif', fontWeight: 600, lineHeight: 1.2 }}>
                       {info.name}
                     </Typography>
                     <Chip
                       label={info.difficulty}
                       color={getDifficultyColor(info.difficulty) as 'success' | 'warning' | 'error' | 'default'}
                       size="small"
-                      sx={{ fontFamily: '"Inter", sans-serif', fontWeight: 500, fontSize: '0.7rem' }}
+                      sx={{ fontFamily: '"Inter", sans-serif', fontWeight: 500, fontSize: '0.65rem' }}
                     />
                   </Box>
 
-                  <Chip 
-                    label={info.category} 
-                    variant="outlined" 
-                    size="small" 
-                    sx={{ mb: 2, fontFamily: '"Inter", sans-serif', fontSize: '0.75rem', borderColor: '#cc785c', color: '#cc785c' }} 
-                  />
-
-                  <Typography variant="body2" color="text.secondary" paragraph sx={{ fontFamily: '"Inter", sans-serif', fontSize: '0.85rem' }}>
+                  <Typography variant="body2" color="text.secondary" paragraph sx={{ fontFamily: '"Inter", sans-serif', fontSize: '0.8rem', mb: 2, height: 38, overflow: 'hidden' }}>
                     {info.description}
                   </Typography>
 
-                  <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600, fontFamily: '"Inter", sans-serif', fontSize: '0.8rem', color: '#141413' }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600, fontFamily: '"Inter", sans-serif', fontSize: '0.75rem', color: 'text.primary' }}>
                     Target Muscles:
                   </Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2 }}>
@@ -580,12 +708,12 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
                         label={muscle}
                         variant="outlined"
                         size="small"
-                        sx={{ fontSize: '0.7rem', fontFamily: '"Inter", sans-serif', borderColor: '#e6dfd8' }}
+                        sx={{ fontSize: '0.65rem', fontFamily: '"Inter", sans-serif', borderColor: 'divider' }}
                       />
                     ))}
                   </Box>
 
-                  <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600, fontFamily: '"Inter", sans-serif', fontSize: '0.8rem', color: '#141413' }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600, fontFamily: '"Inter", sans-serif', fontSize: '0.75rem', color: 'text.primary' }}>
                     Benefits:
                   </Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -595,7 +723,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
                         label={benefit}
                         variant="filled"
                         size="small"
-                        sx={{ fontSize: '0.7rem', fontFamily: '"Inter", sans-serif', bgcolor: 'rgba(204, 120, 92, 0.1)', color: '#cc785c', border: '1px solid rgba(204, 120, 92, 0.2)' }}
+                        sx={{ fontSize: '0.65rem', fontFamily: '"Inter", sans-serif', bgcolor: 'rgba(204, 120, 92, 0.1)', color: 'primary.main', border: '1px solid rgba(204, 120, 92, 0.15)' }}
                       />
                     ))}
                   </Box>
@@ -610,13 +738,13 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
                     size="large"
                     sx={{ 
                       fontWeight: 600, 
-                      py: 1.2, 
+                      py: 1, 
                       fontFamily: '"Inter", sans-serif', 
-                      fontSize: '0.9rem',
-                      bgcolor: '#cc785c',
+                      fontSize: '0.85rem',
+                      bgcolor: 'primary.main',
                       color: '#ffffff',
                       '&:hover': {
-                        bgcolor: '#a9583e'
+                        bgcolor: 'primary.dark'
                       }
                     }}
                   >
