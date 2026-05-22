@@ -540,9 +540,20 @@ export function detectInjuryRisk(
   const leftAnkle = landmarks[27];
   const rightAnkle = landmarks[28];
 
-  const isUpperBody = ["lat_pulldown", "pull_up", "shoulder_press", "wall_slide", "biceps_curl", "barbell_biceps_curl", "hammer_curl", "lateral_raise"].includes(exerciseKey);
-  const isLowerBody = ["squat", "deadlift", "romanian_deadlift", "hip_thrust", "glute_bridge", "straight_leg_raise", "leg_raises", "clamshell"].includes(exerciseKey);
-  const isFullBody = ["push_up", "plank", "bird_dog", "russian_twist"].includes(exerciseKey);
+  const isUpperBody = [
+    "lat_pulldown", "pull_up", "shoulder_press", "wall_slide", 
+    "biceps_curl", "barbell_biceps_curl", "hammer_curl", "lateral_raise",
+    "bench_press", "incline_bench_press", "decline_bench_press", 
+    "chest_fly_machine", "tricep_dips", "tricep_pushdown"
+  ].includes(exerciseKey);
+  const isLowerBody = [
+    "squat", "deadlift", "romanian_deadlift", "hip_thrust", 
+    "glute_bridge", "straight_leg_raise", "leg_raises", "clamshell",
+    "leg_extension"
+  ].includes(exerciseKey);
+  const isFullBody = [
+    "push_up", "plank", "bird_dog", "russian_twist", "t_bar_row"
+  ].includes(exerciseKey);
 
   if (isUpperBody) {
     const wristsMissing = (!leftWrist || leftWrist.visibility < visibilityThreshold) || (!rightWrist || rightWrist.visibility < visibilityThreshold);

@@ -10,14 +10,21 @@ import {
   Box,
   Alert,
   CircularProgress,
-  Chip,
-  TextField,
-  InputAdornment
+  Chip
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
-import SearchIcon from '@mui/icons-material/Search';
 import { apiService } from '../services/api';
+import SuggestiveSearch from './ui/suggestive-search';
+
+const EXERCISE_SUGGESTIONS = [
+  'Search exercises, muscle groups, or categories...',
+  'Try "Squat" or "Plank"',
+  'Try "Biceps" or "Chest"',
+  'Try "Physiotherapy"',
+  'Find "Lat Pulldown" cues',
+  'Search "Deadlift" technique',
+];
 
 interface ExerciseSelectorProps {
   onExerciseSelect: (exercise: string) => void;
@@ -368,19 +375,12 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
       )}
 
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center' }}>
-        <TextField
-          variant="outlined"
-          placeholder="Search exercises, muscle groups, or categories..."
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          sx={{ width: '100%', maxWidth: 500 }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            )
-          }}
+        <SuggestiveSearch
+          suggestions={EXERCISE_SUGGESTIONS}
+          effect="typewriter"
+          onChange={(val) => setSearchTerm(val)}
+          variant="light"
+          className="w-full max-w-lg"
         />
       </Box>
 

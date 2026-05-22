@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 
 export interface NavItem {
@@ -16,87 +16,47 @@ interface NavHeaderProps {
 }
 
 function NavHeader({ items, activeValue, onItemClick }: NavHeaderProps) {
-  const [position, setPosition] = useState({ left: 0, width: 0, opacity: 0 });
+  const [hoveredValue, setHoveredValue] = useState<string | null>(null);
 
   return (
     <ul
-      className="relative flex w-fit rounded-full p-1"
+      className="relative flex w-fit rounded-full p-1 select-none"
       style={{
         background: "rgba(255,255,255,0.12)",
-        border: "1.5px solid rgba(255,255,255,0.30)",
+        border: "1.5px solid rgba(255,255,255,0.25)",
         backdropFilter: "blur(6px)",
       }}
-      onMouseLeave={() => setPosition((pv) => ({ ...pv, opacity: 0 }))}
+      onMouseLeave={() => setHoveredValue(null)}
     >
-      {items.map((item) => (
-        <NavTab
-          key={item.value}
-          item={item}
-          isActive={activeValue === item.value}
-          setPosition={setPosition}
-          onClick={() => onItemClick?.(item.value)}
-        />
-      ))}
-      <NavCursor position={position} />
+      {items.map((item) => {
+        const isHovered = hoveredValue === item.value;
+        const isActive = activeValue === item.value;
+        // Show pill if hovered, or if not hovering anything and this is active
+        const showPill = hoveredValue !== null ? isHovered : isActive;
+        const textColor = showPill ? "#1565c0" : "rgba(255,255,255,0.92)";
+
+        return (
+          <li
+            key={item.value}
+            onClick={() => onItemClick?.(item.value)}
+            onMouseEnter={() => setHoveredValue(item.value)}
+            className="relative z-10 flex cursor-pointer items-center gap-1.5 px-4 py-2 text-xs font-semibold uppercase tracking-wide select-none transition-colors duration-200"
+            style={{ color: textColor }}
+          >
+            {showPill && (
+              <motion.div
+                layoutId="nav-active-pill"
+                className="absolute inset-0.5 rounded-full bg-white -z-10 shadow-sm"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
+            {item.icon && <span className="text-[0.8rem] flex items-center justify-center">{item.icon}</span>}
+            <span>{item.label}</span>
+          </li>
+        );
+      })}
     </ul>
   );
 }
-
-const NavTab = ({
-  item,
-  isActive,
-  setPosition,
-  onClick,
-}: {
-  item: NavItem;
-  isActive: boolean;
-  setPosition: React.Dispatch<
-    React.SetStateAction<{ left: number; width: number; opacity: number }>
-  >;
-  onClick: () => void;
-}) => {
-  const ref = useRef<HTMLLIElement>(null);
-
-  return (
-    <li
-      ref={ref}
-      onClick={onClick}
-      onMouseEnter={() => {
-        if (!ref.current) return;
-        const { width } = ref.current.getBoundingClientRect();
-        setPosition({ width, opacity: 1, left: ref.current.offsetLeft });
-      }}
-      className="relative z-10 flex cursor-pointer items-center gap-1.5 px-4 py-2 text-xs font-semibold uppercase tracking-wide select-none"
-      style={{
-        /* active item gets an opaque white pill; inactive items: white text */
-        color: isActive ? "#1976d2" : "rgba(255,255,255,0.92)",
-        transition: "color 0.2s",
-      }}
-    >
-      {item.icon && <span className="text-[0.8rem]">{item.icon}</span>}
-      {item.label}
-      {/* active underline dot */}
-      {isActive && (
-        <span
-          className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 h-0.5 w-4 rounded-full"
-          style={{ background: "#1976d2" }}
-        />
-      )}
-    </li>
-  );
-};
-
-const NavCursor = ({
-  position,
-}: {
-  position: { left: number; width: number; opacity: number };
-}) => (
-  <motion.li
-    animate={position}
-    transition={{ type: "spring", stiffness: 400, damping: 32 }}
-    className="absolute z-0 top-1 bottom-1 rounded-full"
-    style={{ background: "rgba(255,255,255,0.95)", pointerEvents: "none" }}
-  />
-);
 
 export default NavHeader;

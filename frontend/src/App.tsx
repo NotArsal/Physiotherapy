@@ -25,7 +25,6 @@ import MediaPipeDebug from './components/MediaPipeDebug';
 import { TherapistPortal } from './components/TherapistPortal';
 import NavHeader, { NavItem } from './components/ui/nav-header';
 import { PremiumToggle } from './components/ui/bouncy-toggle';
-import SuggestiveSearch from './components/ui/suggestive-search';
 
 // ── MUI theme (used for all page components beneath the navbar) ───────────────
 const theme = createTheme({
@@ -52,15 +51,6 @@ const THERAPIST_NAV: NavItem[] = [
   { label: 'Therapist Portal', value: 'therapist', icon: <SupervisorAccountIcon style={{ fontSize: 14 }} /> },
 ];
 
-const EXERCISE_SUGGESTIONS = [
-  'Search exercises...',
-  'Bench Press form tips',
-  'Squat correction guide',
-  'Deadlift technique',
-  'Shoulder press tips',
-  'Biceps curl cues',
-  'Plank alignment',
-];
 
 // ── Main App Content ──────────────────────────────────────────────────────────
 const AppContent: React.FC = () => {
@@ -133,17 +123,8 @@ const AppContent: React.FC = () => {
             />
           </div>
 
-          {/* SuggestiveSearch ─────────────────────────────────────────────── */}
-          <div className="flex-1 flex justify-center px-2 min-w-0">
-            <SuggestiveSearch
-              suggestions={EXERCISE_SUGGESTIONS}
-              effect="typewriter"
-              typeDurationMs={450}
-              deleteDurationMs={280}
-              pauseAfterTypeMs={1800}
-              className="w-full max-w-xs"
-            />
-          </div>
+          {/* Spacer to push controls to the right ────────────────────────── */}
+          <div className="flex-grow" />
 
           {/* Role toggle ───────────────────────────────────────────────────── */}
           <div

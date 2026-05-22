@@ -20,6 +20,8 @@ export interface EffectRendererProps {
   prefersReducedMotion?: boolean;
   onDeleteComplete?: () => void;
   containerRef?: RefObject<HTMLElement | null>;
+  textColor?: string;
+  cursorColor?: string;
 }
 
 export type BuiltinEffect = "typewriter" | "slide" | "fade" | "none";
@@ -28,7 +30,7 @@ export interface SuggestiveSearchProps {
   onChange?: (val: string) => void;
   suggestions?: string[];
   className?: string;
-  Leading?: () => JSX.Element;
+  Leading?: (props: { color?: string }) => JSX.Element;
   showLeading?: boolean;
   Trailing?: () => JSX.Element;
   showTrailing?: boolean;
@@ -38,6 +40,7 @@ export interface SuggestiveSearchProps {
   deleteDurationMs?: number;
   pauseAfterTypeMs?: number;
   animateMode?: "infinite" | "once";
+  variant?: "dark" | "light";
 }
 
 /* ── TypewriterEffect ─────────────────────────────────────────────────────── */
@@ -51,6 +54,8 @@ export const TypewriterEffect: React.FC<EffectRendererProps> = ({
   prefersReducedMotion,
   onDeleteComplete,
   containerRef,
+  textColor = "rgba(0,0,0,0.5)",
+  cursorColor = "rgba(0,0,0,0.5)",
 }) => {
   const [phase, setPhase] = useState<"typing" | "paused" | "deleting">("typing");
   const timers = useRef<number[]>([]);
@@ -72,10 +77,10 @@ export const TypewriterEffect: React.FC<EffectRendererProps> = ({
 
   useEffect(() => {
     if (!isActive || !prefersReducedMotion || !allowDelete) return;
-    const t = window.setTimeout(() => onDeleteComplete?.(), Math.max(200, pauseAfterTypeMs));
+    const t = window.setTimeout(() => onDeleteComplete?.(), Math.max(200, phase === "typing" ? typeDurationMs : pauseAfterTypeMs));
     timers.current.push(t);
     return () => timers.current.forEach(clearTimeout);
-  }, [isActive, prefersReducedMotion, allowDelete, pauseAfterTypeMs, onDeleteComplete]);
+  }, [isActive, prefersReducedMotion, allowDelete, phase, pauseAfterTypeMs, typeDurationMs, onDeleteComplete]);
 
   if (!isActive) return null;
 
@@ -85,7 +90,7 @@ export const TypewriterEffect: React.FC<EffectRendererProps> = ({
       style={{ display: "inline-block", overflow: "hidden", whiteSpace: "nowrap", alignItems: "center" }}
     >
       {prefersReducedMotion ? (
-        <span className="text-sm select-none" style={{ color: "rgba(255,255,255,0.65)" }}>{text}</span>
+        <span className="text-sm select-none" style={{ color: textColor }}>{text}</span>
       ) : (
         <motion.div
           key={text}
@@ -109,10 +114,10 @@ export const TypewriterEffect: React.FC<EffectRendererProps> = ({
           }}
           style={{ display: "inline-flex", alignItems: "center", overflow: "hidden", whiteSpace: "nowrap" }}
         >
-          <span className="text-sm select-none" style={{ color: "rgba(255,255,255,0.65)" }}>{text}</span>
+          <span className="text-sm select-none" style={{ color: textColor }}>{text}</span>
           <motion.span
             aria-hidden
-            style={{ display: "inline-block", width: 1, marginLeft: 4, height: "1.1em", verticalAlign: "middle", background: "rgba(255,255,255,0.65)" }}
+            style={{ display: "inline-block", width: 1, marginLeft: 4, height: "1.1em", verticalAlign: "middle", background: cursorColor }}
             animate={phase === "typing" || phase === "paused" ? { opacity: [0, 1, 0] } : { opacity: 0 }}
             transition={phase === "typing" || phase === "paused" ? { repeat: Infinity, duration: 0.9, ease: "linear" } : { duration: 0.1 }}
           />
@@ -126,6 +131,7 @@ export const TypewriterEffect: React.FC<EffectRendererProps> = ({
 export const SlideEffect: React.FC<EffectRendererProps> = ({
   text, isActive, allowDelete = true, typeDurationMs, deleteDurationMs,
   pauseAfterTypeMs, prefersReducedMotion, onDeleteComplete, containerRef,
+  textColor = "rgba(0,0,0,0.5)",
 }) => {
   const [phase, setPhase] = useState<"enter" | "pause" | "exit">("enter");
   const timers = useRef<number[]>([]);
@@ -161,7 +167,7 @@ export const SlideEffect: React.FC<EffectRendererProps> = ({
         }}
         style={{ display: "inline-block" }}
       >
-        <span className="text-sm select-none" style={{ color: "rgba(255,255,255,0.65)" }}>{text}</span>
+        <span className="text-sm select-none" style={{ color: textColor }}>{text}</span>
       </motion.div>
     </div>
   );
@@ -171,6 +177,7 @@ export const SlideEffect: React.FC<EffectRendererProps> = ({
 export const FadeEffect: React.FC<EffectRendererProps> = ({
   text, isActive, allowDelete = true, typeDurationMs, deleteDurationMs,
   pauseAfterTypeMs, prefersReducedMotion, onDeleteComplete, containerRef,
+  textColor = "rgba(0,0,0,0.5)",
 }) => {
   const [phase, setPhase] = useState<"fadeIn" | "hold" | "fadeOut">("fadeIn");
   const timers = useRef<number[]>([]);
@@ -206,7 +213,7 @@ export const FadeEffect: React.FC<EffectRendererProps> = ({
         }}
         style={{ display: "inline-block" }}
       >
-        <span className="text-sm select-none" style={{ color: "rgba(255,255,255,0.65)" }}>{text}</span>
+        <span className="text-sm select-none" style={{ color: textColor }}>{text}</span>
       </motion.div>
     </div>
   );
@@ -217,7 +224,7 @@ export const SuggestiveSearch: React.FC<SuggestiveSearchProps> = ({
   onChange,
   suggestions = ["Search exercises...", "Try Bench Press", "Find workouts"],
   className,
-  Leading = () => <Search className="size-4" style={{ color: "rgba(255,255,255,0.7)" }} />,
+  Leading = (props) => <Search className="size-4" style={{ color: props.color ?? "rgba(0,0,0,0.4)" }} />,
   showLeading = true,
   Trailing,
   showTrailing = false,
@@ -227,6 +234,7 @@ export const SuggestiveSearch: React.FC<SuggestiveSearchProps> = ({
   deleteDurationMs = 300,
   pauseAfterTypeMs = 1500,
   animateMode = "infinite",
+  variant = "light",
 }) => {
   const [search, setSearch] = useState<string>("");
   const [isFocused, setIsFocused] = useState(false);
@@ -304,22 +312,31 @@ export const SuggestiveSearch: React.FC<SuggestiveSearchProps> = ({
   const isLast = index === suggestions.length - 1;
   const allowDelete = animateMode === "infinite" ? true : !isLast;
 
+  // Determine styling colors based on variant
+  const isDark = variant === "dark";
+  const bgColor = isDark ? "rgba(255, 255, 255, 0.15)" : "rgba(255, 255, 255, 0.95)";
+  const borderColor = isDark ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.15)";
+  const textColor = isDark ? "white" : "#2d3748";
+  const placeholderColor = isDark ? "rgba(255, 255, 255, 0.6)" : "rgba(0, 0, 0, 0.45)";
+  const shadowStyle = isDark ? "none" : "0 2px 10px rgba(0, 0, 0, 0.06)";
+
   return (
     <div
       ref={wrapperRef}
       className={cn(
-        "relative flex items-center gap-x-2 py-1.5 px-3 rounded-full",
+        "relative flex items-center gap-x-2 py-2.5 px-4 rounded-full transition-all duration-300",
         className
       )}
       style={{
         maxWidth: "100%",
-        background: "rgba(255,255,255,0.15)",
-        border: "1px solid rgba(255,255,255,0.3)",
-        backdropFilter: "blur(4px)",
+        background: bgColor,
+        border: `1px solid ${borderColor}`,
+        boxShadow: shadowStyle,
+        backdropFilter: "blur(6px)",
       }}
     >
-      <div ref={leadingRef} className="flex-shrink-0">
-        {showLeading && <Leading />}
+      <div ref={leadingRef} className="flex-shrink-0 flex items-center justify-center">
+        {showLeading && <Leading color={placeholderColor} />}
       </div>
 
       <input
@@ -329,12 +346,12 @@ export const SuggestiveSearch: React.FC<SuggestiveSearchProps> = ({
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
         onChange={(e) => { setSearch(e.target.value); onChange?.(e.target.value); }}
-        className="bg-transparent outline-none text-sm w-full"
+        className="bg-transparent outline-none text-sm w-full font-medium"
         placeholder=""
         aria-label="search exercises"
         style={{
           minWidth: minWidthPx != null ? `${minWidthPx}px` : undefined,
-          color: "white",
+          color: textColor,
         }}
       />
 
@@ -365,6 +382,8 @@ export const SuggestiveSearch: React.FC<SuggestiveSearchProps> = ({
             prefersReducedMotion={prefersReduced}
             onDeleteComplete={() => setIndex((i) => (i + 1) % suggestions.length)}
             containerRef={overlayRef}
+            textColor={placeholderColor}
+            cursorColor={placeholderColor}
           />
         </div>
       )}
