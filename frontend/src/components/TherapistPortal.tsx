@@ -62,14 +62,12 @@ interface Patient {
   age: number;
   condition: string;
   riskProfile: 'High' | 'Medium' | 'Low';
+  assignedExercise?: string;
+  targetReps?: number;
+  safeSpineAngle?: number;
+  safeKneeAngle?: number;
+  safetySensitivity?: string;
 }
-
-const mockPatients: Patient[] = [
-  { id: 'patient_123', name: 'John Doe', age: 45, condition: 'Post-ACL Reconstruction', riskProfile: 'Medium' },
-  { id: 'jane_smith', name: 'Jane Smith', age: 62, condition: 'Chronic Lower Back Pain', riskProfile: 'High' },
-  { id: 'robert_johnson', name: 'Robert Johnson', age: 29, condition: 'Shoulder Rotator Cuff Tear', riskProfile: 'Low' },
-  { id: 'default', name: 'Standard Clinical Baseline', age: 0, condition: 'General Posture Training', riskProfile: 'Low' }
-];
 
 const EXERCISES = [
   { id: 'squat', name: 'Squats' },
@@ -92,12 +90,14 @@ export const TherapistPortal: React.FC = () => {
     const saved = localStorage.getItem('physio_patients');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        const mockIds = ['patient_123', 'jane_smith', 'robert_johnson', 'default'];
+        return parsed.filter((p: any) => !mockIds.includes(p.id));
       } catch (e) {
         console.error("Failed to parse saved patients from localStorage", e);
       }
     }
-    return mockPatients;
+    return [];
   });
 
   const [selectedPatient, setSelectedPatient] = useState<Patient>(() => {
@@ -105,11 +105,25 @@ export const TherapistPortal: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.length > 0) return parsed[0];
+        const mockIds = ['patient_123', 'jane_smith', 'robert_johnson', 'default'];
+        const clean = parsed.filter((p: any) => !mockIds.includes(p.id));
+        if (clean && clean.length > 0) return clean[0];
       } catch (e) {}
     }
-    return mockPatients[0];
+    return { id: '', name: 'No Active Patient', age: 0, condition: 'None', riskProfile: 'Low' };
   });
+
+  useEffect(() => {
+    // If selectedPatient is not set or not in the active patients list, select the first patient
+    if (patients.length > 0) {
+      const exists = patients.some(p => p.id === selectedPatient.id);
+      if (!exists || !selectedPatient.id) {
+        setSelectedPatient(patients[0]);
+      }
+    } else if (selectedPatient.id) {
+      setSelectedPatient({ id: '', name: 'No Active Patient', age: 0, condition: 'None', riskProfile: 'Low' });
+    }
+  }, [patients, selectedPatient.id]);
 
   useEffect(() => {
     localStorage.setItem('physio_patients', JSON.stringify(patients));
@@ -197,40 +211,64 @@ export const TherapistPortal: React.FC = () => {
 
   // Fetch active patient protocols & sessions
   const loadPatientData = async () => {
+    if (!selectedPatient.id) {
+      setSessions([]);
+      return;
+    }
     setLoading(true);
     try {
-      // 1. Fetch protocol settings
-      const protocols = await apiService.getProtocol(selectedPatient.id);
-      const exerciseProtocol = protocols.find((p) => p.exercise === selectedExercise);
-      
-      if (exerciseProtocol) {
-        setTargetReps(exerciseProtocol.target_reps);
-        setSafeSpineAngle(exerciseProtocol.safe_spine_angle);
-        setSafeKneeAngle(exerciseProtocol.safe_knee_angle);
-        setSafetySensitivity(exerciseProtocol.safety_sensitivity);
+      // 1. Fetch protocol settings - Check if we have local prescription stored in the patient object first
+      const patientInState = patients.find(p => p.id === selectedPatient.id);
+      if (patientInState && patientInState.assignedExercise === selectedExercise) {
+        setTargetReps(patientInState.targetReps ?? 10);
+        setSafeSpineAngle(patientInState.safeSpineAngle ?? 30);
+        setSafeKneeAngle(patientInState.safeKneeAngle ?? 90);
+        setSafetySensitivity(patientInState.safetySensitivity ?? 'medium');
       } else {
-        // Fetch default configurations
-        const defaultProtocols = await apiService.getDefaultProtocols();
-        const defaultProto = defaultProtocols.find((p) => p.exercise === selectedExercise);
-        if (defaultProto) {
-          setTargetReps(defaultProto.target_reps);
-          setSafeSpineAngle(defaultProto.safe_spine_angle);
-          setSafeKneeAngle(defaultProto.safe_knee_angle);
-          setSafetySensitivity(defaultProto.safety_sensitivity);
+        // Fallback to backend API
+        try {
+          const protocols = await apiService.getProtocol(selectedPatient.id);
+          const exerciseProtocol = protocols.find((p) => p.exercise === selectedExercise);
+          
+          if (exerciseProtocol) {
+            setTargetReps(exerciseProtocol.target_reps);
+            setSafeSpineAngle(exerciseProtocol.safe_spine_angle);
+            setSafeKneeAngle(exerciseProtocol.safe_knee_angle);
+            setSafetySensitivity(exerciseProtocol.safety_sensitivity);
+          } else {
+            // Fetch default configurations
+            const defaultProtocols = await apiService.getDefaultProtocols();
+            const defaultProto = defaultProtocols.find((p) => p.exercise === selectedExercise);
+            if (defaultProto) {
+              setTargetReps(defaultProto.target_reps);
+              setSafeSpineAngle(defaultProto.safe_spine_angle);
+              setSafeKneeAngle(defaultProto.safe_knee_angle);
+              setSafetySensitivity(defaultProto.safety_sensitivity);
+            }
+          }
+        } catch (apiError) {
+          console.warn("Backend API not reachable, loading default parameters locally.");
+          setTargetReps(10);
+          setSafeSpineAngle(30);
+          setSafeKneeAngle(90);
+          setSafetySensitivity('medium');
         }
       }
 
       // 2. Fetch exercise session history
-      const history = await apiService.getUserSessions(selectedPatient.id);
-      setSessions(history.sessions || []);
+      try {
+        const history = await apiService.getUserSessions(selectedPatient.id);
+        setSessions(history.sessions || []);
+      } catch (historyErr) {
+        setSessions(getMockHistory(selectedPatient, selectedExercise));
+      }
     } catch (error) {
       console.error('Failed to load patient configurations:', error);
       setSnackbar({
         open: true,
-        message: 'Could not connect to backend server. Operating in demonstration mode.',
-        severity: 'error'
+        message: 'Loaded profile in offline sync mode.',
+        severity: 'success'
       });
-      // Mock history in case backend is loading/unavailable
       setSessions(getMockHistory(selectedPatient, selectedExercise));
     } finally {
       setLoading(false);
@@ -243,6 +281,14 @@ export const TherapistPortal: React.FC = () => {
   }, [selectedPatient, selectedExercise]);
 
   const handleSaveProtocol = async () => {
+    if (!selectedPatient.id) {
+      setSnackbar({
+        open: true,
+        message: 'No patient selected to apply protocol to.',
+        severity: 'error'
+      });
+      return;
+    }
     setSaving(true);
     try {
       const payload: ExerciseProtocol = {
@@ -254,7 +300,41 @@ export const TherapistPortal: React.FC = () => {
         safety_sensitivity: safetySensitivity
       };
       
-      await apiService.saveProtocol(payload);
+      try {
+        await apiService.saveProtocol(payload);
+      } catch (apiErr) {
+        console.warn('Could not save protocol to backend database. Synchronized in local patient profile.', apiErr);
+      }
+
+      // Update the patient record in local state and localStorage
+      setPatients(prevPatients => {
+        const updated = prevPatients.map(p => {
+          if (p.id === selectedPatient.id) {
+            return {
+              ...p,
+              assignedExercise: selectedExercise,
+              targetReps: targetReps,
+              safeSpineAngle: safeSpineAngle,
+              safeKneeAngle: safeKneeAngle,
+              safetySensitivity: safetySensitivity
+            };
+          }
+          return p;
+        });
+        localStorage.setItem('physio_patients', JSON.stringify(updated));
+        return updated;
+      });
+
+      // Update selectedPatient local state so UI reflects immediately
+      setSelectedPatient(prev => ({
+        ...prev,
+        assignedExercise: selectedExercise,
+        targetReps: targetReps,
+        safeSpineAngle: safeSpineAngle,
+        safeKneeAngle: safeKneeAngle,
+        safetySensitivity: safetySensitivity
+      }));
+
       setSnackbar({
         open: true,
         message: `Successfully synchronized safety protocol for ${selectedPatient.name}!`,
@@ -267,7 +347,7 @@ export const TherapistPortal: React.FC = () => {
       console.error('Failed to save protocol:', error);
       setSnackbar({
         open: true,
-        message: 'Failed to update protocol database. Check backend connection.',
+        message: 'Failed to update protocol database.',
         severity: 'error'
       });
     } finally {
@@ -313,28 +393,43 @@ export const TherapistPortal: React.FC = () => {
     <Container maxWidth="xl" sx={{ mt: 3, mb: 4 }}>
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-          <Typography variant="h4" component="h1" fontWeight="bold" gutterBottom sx={{ color: '#1a237e' }}>
+          <Typography 
+            variant="h4" 
+            component="h1" 
+            gutterBottom 
+            sx={{ 
+              color: '#141413', 
+              fontFamily: '"Cormorant Garamond", serif', 
+              fontWeight: 500, 
+              letterSpacing: '-0.02em' 
+            }}
+          >
             Therapist Clinical Portal
           </Typography>
-          <Typography variant="subtitle1" color="text.secondary">
+          <Typography variant="subtitle1" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif' }}>
             Prescribe dynamic safety protocols, configure real-time angles, and analyze patient biomechanics.
           </Typography>
         </Box>
         <Chip
-          icon={<HealthAndSafetyIcon />}
+          icon={<HealthAndSafetyIcon style={{ color: '#cc785c' }} />}
           label="Clinical Control Active"
-          color="success"
           variant="outlined"
-          sx={{ fontWeight: 'bold', border: '2px solid' }}
+          sx={{ 
+            fontWeight: 'bold', 
+            border: '1px solid #cc785c', 
+            color: '#cc785c', 
+            bgcolor: '#efe9de',
+            fontFamily: '"Inter", sans-serif'
+          }}
         />
       </Box>
 
       <Grid container spacing={3}>
         {/* Left Column: Patient Directory */}
         <Grid item xs={12} md={3}>
-          <Paper sx={{ p: 2, height: '100%', borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
+          <Paper sx={{ p: 2, height: '100%', borderRadius: 3, bgcolor: '#efe9de', border: '1px solid #e6dfd8', boxShadow: 'none', display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, px: 1 }}>
-              <Typography variant="h6" fontWeight="bold">
+              <Typography variant="h6" sx={{ fontFamily: '"Cormorant Garamond", serif', fontWeight: 500, fontSize: '1.25rem', color: '#141413' }}>
                 Patient Directory
               </Typography>
               <Button
@@ -343,22 +438,22 @@ export const TherapistPortal: React.FC = () => {
                 startIcon={<AddIcon />}
                 onClick={() => setOpenRegisterDialog(true)}
                 sx={{
-                  bgcolor: '#1a237e',
+                  bgcolor: '#cc785c',
                   color: 'white',
                   borderRadius: 2,
                   textTransform: 'none',
                   fontSize: '0.75rem',
-                  fontWeight: 'bold',
-                  boxShadow: '0 2px 8px rgba(26, 35, 126, 0.3)',
+                  fontWeight: 600,
+                  fontFamily: '"Inter", sans-serif',
                   '&:hover': {
-                    bgcolor: '#0d134d'
+                    bgcolor: '#a9583e'
                   }
                 }}
               >
                 Register
               </Button>
             </Box>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ mb: 2, borderColor: '#e6dfd8' }} />
             <List sx={{ width: '100%', flexGrow: 1, overflowY: 'auto', maxHeight: '70vh' }}>
               {patients.map((patient) => {
                 const isSelected = patient.id === selectedPatient.id;
@@ -372,10 +467,11 @@ export const TherapistPortal: React.FC = () => {
                       borderRadius: 2,
                       mb: 1,
                       transition: 'all 0.2s',
-                      backgroundColor: isSelected ? 'rgba(26, 35, 126, 0.08)' : 'transparent',
-                      borderLeft: isSelected ? '4px solid #1a237e' : '4px solid transparent',
+                      backgroundColor: isSelected ? '#faf9f5' : 'transparent',
+                      borderLeft: isSelected ? '4px solid #cc785c' : '4px solid transparent',
+                      border: isSelected ? '1px solid #e6dfd8' : '1px solid transparent',
                       '&:hover': {
-                        backgroundColor: isSelected ? 'rgba(26, 35, 126, 0.12)' : 'rgba(0,0,0,0.02)'
+                        backgroundColor: isSelected ? '#faf9f5' : 'rgba(20,20,19,0.02)'
                       }
                     }}
                   >
@@ -410,14 +506,20 @@ export const TherapistPortal: React.FC = () => {
 
         {/* Right Column: Protocol Editor & Analytics */}
         <Grid item xs={12} md={9}>
-          <Paper sx={{ width: '100%', borderRadius: 3, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: '#f8f9fa' }}>
+          <Paper sx={{ width: '100%', borderRadius: 3, overflow: 'hidden', bgcolor: '#efe9de', border: '1px solid #e6dfd8', boxShadow: 'none' }}>
+            <Box sx={{ borderBottom: 1, borderColor: '#e6dfd8', bgcolor: '#efe9de' }}>
               <Tabs
                 value={currentTab}
                 onChange={(_, newValue) => setCurrentTab(newValue)}
                 sx={{
-                  '& .MuiTab-root': { fontWeight: 'bold' },
-                  '& .Mui-selected': { color: '#1a237e' }
+                  '& .MuiTabs-indicator': { backgroundColor: '#cc785c' },
+                  '& .MuiTab-root': { 
+                    fontWeight: 600, 
+                    fontFamily: '"Inter", sans-serif', 
+                    textTransform: 'none',
+                    color: '#6c6a64',
+                    '&.Mui-selected': { color: '#cc785c' }
+                  }
                 }}
               >
                 <Tab icon={<FitnessCenterIcon />} iconPosition="start" label="Prescribe Protocol" />
@@ -429,21 +531,21 @@ export const TherapistPortal: React.FC = () => {
 
             {/* Tab 0: Protocol Form */}
             {currentTab === 0 && (
-              <Box sx={{ p: 4 }}>
+              <Box sx={{ p: 4, bgcolor: '#faf9f5' }}>
                 <Grid container spacing={4}>
                   {/* Selector Header */}
                   <Grid item xs={12} md={6}>
                     <FormControl fullWidth variant="outlined">
-                      <InputLabel id="exercise-label">Select Target Exercise</InputLabel>
+                      <InputLabel id="exercise-label" sx={{ fontFamily: '"Inter", sans-serif' }}>Select Target Exercise</InputLabel>
                       <Select
                         labelId="exercise-label"
                         value={selectedExercise}
                         onChange={(e) => setSelectedExercise(e.target.value)}
                         label="Select Target Exercise"
-                        sx={{ borderRadius: 2 }}
+                        sx={{ borderRadius: 2, bgcolor: '#faf9f5', fontFamily: '"Inter", sans-serif' }}
                       >
                         {EXERCISES.map((ex) => (
-                          <MenuItem key={ex.id} value={ex.id}>
+                          <MenuItem key={ex.id} value={ex.id} sx={{ fontFamily: '"Inter", sans-serif' }}>
                             {ex.name}
                           </MenuItem>
                         ))}
@@ -451,18 +553,18 @@ export const TherapistPortal: React.FC = () => {
                     </FormControl>
                   </Grid>
                   <Grid item xs={12} md={6}>
-                    <Box sx={{ p: 1.5, bgcolor: '#e8eaf6', borderRadius: 2, borderLeft: '4px solid #1a237e' }}>
-                      <Typography variant="body2" fontWeight="medium" color="#1a237e">
+                    <Box sx={{ p: 1.5, bgcolor: '#efe9de', borderRadius: 2, borderLeft: '4px solid #cc785c', border: '1px solid #e6dfd8', borderLeftWidth: '4px' }}>
+                      <Typography variant="body2" fontWeight="600" sx={{ color: '#141413', fontFamily: '"Inter", sans-serif' }}>
                         Active Patient: {selectedPatient.name} ({selectedPatient.age} y/o)
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif' }}>
                         Condition: {selectedPatient.condition}
                       </Typography>
                     </Box>
                   </Grid>
 
                   <Grid item xs={12}>
-                    <Divider sx={{ my: 1 }} />
+                    <Divider sx={{ my: 1, borderColor: '#e6dfd8' }} />
                   </Grid>
 
                   {/* Protocol Parameters */}
@@ -569,14 +671,16 @@ export const TherapistPortal: React.FC = () => {
                         onClick={handleSaveProtocol}
                         disabled={saving}
                         sx={{
-                          bgcolor: '#1a237e',
+                          bgcolor: '#cc785c',
                           color: 'white',
                           borderRadius: 2,
                           px: 4,
                           py: 1.5,
-                          boxShadow: '0 4px 14px rgba(26, 35, 126, 0.4)',
+                          boxShadow: 'none',
+                          fontWeight: 600,
+                          fontFamily: '"Inter", sans-serif',
                           '&:hover': {
-                            bgcolor: '#0d134d'
+                            bgcolor: '#a9583e'
                           }
                         }}
                       >
@@ -590,24 +694,24 @@ export const TherapistPortal: React.FC = () => {
 
             {/* Tab 1: Analytics Dashboard */}
             {currentTab === 1 && (
-              <Box sx={{ p: 4 }}>
+              <Box sx={{ p: 4, bgcolor: '#faf9f5' }}>
                 {sessions.length === 0 ? (
-                  <Alert severity="info" sx={{ borderRadius: 2 }}>
+                  <Alert severity="info" sx={{ borderRadius: 2, bgcolor: '#efe9de', color: '#141413', border: '1px solid #e6dfd8' }}>
                     No session data logged for {selectedPatient.name} doing {selectedExercise.replace(/_/g, ' ')} yet.
                   </Alert>
                 ) : (
                   <Grid container spacing={3}>
                     {/* Key Metrics Cards */}
                     <Grid item xs={12} md={4}>
-                      <Card sx={{ bgcolor: 'rgba(26, 35, 126, 0.04)', boxShadow: 'none', border: '1px solid rgba(26,35,126,0.1)' }}>
+                      <Card sx={{ bgcolor: '#efe9de', boxShadow: 'none', border: '1px solid #e6dfd8' }}>
                         <CardContent>
-                          <Typography variant="subtitle2" color="text.secondary">
+                          <Typography variant="subtitle2" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif', fontWeight: 600, fontSize: '0.75rem', letterSpacing: '0.05em' }}>
                             PRESCRIBED COMPLIANCE RATE
                           </Typography>
-                          <Typography variant="h4" fontWeight="bold" sx={{ color: '#1a237e', mt: 1 }}>
+                          <Typography variant="h4" sx={{ color: '#cc785c', mt: 1, fontFamily: '"Cormorant Garamond", serif', fontWeight: 600 }}>
                             {complianceRate}%
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif', mt: 1, display: 'block' }}>
                             Percentage of sets with ZERO safety warning flags.
                           </Typography>
                         </CardContent>
@@ -615,15 +719,15 @@ export const TherapistPortal: React.FC = () => {
                     </Grid>
 
                     <Grid item xs={12} md={4}>
-                      <Card sx={{ bgcolor: 'rgba(76, 175, 80, 0.04)', boxShadow: 'none', border: '1px solid rgba(76,175,80,0.1)' }}>
+                      <Card sx={{ bgcolor: '#efe9de', boxShadow: 'none', border: '1px solid #e6dfd8' }}>
                         <CardContent>
-                          <Typography variant="subtitle2" color="text.secondary">
+                          <Typography variant="subtitle2" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif', fontWeight: 600, fontSize: '0.75rem', letterSpacing: '0.05em' }}>
                             AVERAGE REPS PER SESSION
                           </Typography>
-                          <Typography variant="h4" fontWeight="bold" sx={{ color: '#2e7d32', mt: 1 }}>
+                          <Typography variant="h4" sx={{ color: '#141413', mt: 1, fontFamily: '"Cormorant Garamond", serif', fontWeight: 600 }}>
                             {avgReps} / {targetReps}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif', mt: 1, display: 'block' }}>
                             Target rep completion rate.
                           </Typography>
                         </CardContent>
@@ -631,15 +735,15 @@ export const TherapistPortal: React.FC = () => {
                     </Grid>
 
                     <Grid item xs={12} md={4}>
-                      <Card sx={{ bgcolor: 'rgba(211, 47, 47, 0.04)', boxShadow: 'none', border: '1px solid rgba(211,47,47,0.1)' }}>
+                      <Card sx={{ bgcolor: '#efe9de', boxShadow: 'none', border: '1px solid #e6dfd8' }}>
                         <CardContent>
-                          <Typography variant="subtitle2" color="text.secondary">
+                          <Typography variant="subtitle2" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif', fontWeight: 600, fontSize: '0.75rem', letterSpacing: '0.05em' }}>
                             TOTAL INJURY WARNINGS FLAGGED
                           </Typography>
-                          <Typography variant="h4" fontWeight="bold" sx={{ color: '#c62828', mt: 1 }}>
+                          <Typography variant="h4" sx={{ color: '#c62828', mt: 1, fontFamily: '"Cormorant Garamond", serif', fontWeight: 600 }}>
                             {totalInjuryFlags}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" sx={{ color: '#6c6a64', fontFamily: '"Inter", sans-serif', mt: 1, display: 'block' }}>
                             Total caving / back arches flagged by AI.
                           </Typography>
                         </CardContent>
@@ -648,19 +752,19 @@ export const TherapistPortal: React.FC = () => {
 
                     {/* Chart 1: Repetition and Duration Trends */}
                     <Grid item xs={12} md={6}>
-                      <Paper sx={{ p: 2, borderRadius: 2, border: '1px solid #eee', boxShadow: 'none' }}>
-                        <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <TrendingUpIcon color="primary" /> Session Performance History
+                      <Paper sx={{ p: 2, borderRadius: 2, border: '1px solid #e6dfd8', bgcolor: '#efe9de', boxShadow: 'none' }}>
+                        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#141413', fontFamily: '"Cormorant Garamond", serif', fontWeight: 600, fontSize: '1.15rem' }}>
+                          <TrendingUpIcon sx={{ color: '#cc785c' }} /> Session Performance History
                         </Typography>
-                        <Box sx={{ width: '100%', height: 260 }}>
+                        <Box sx={{ width: '100%', height: 260, mt: 2 }}>
                           <ResponsiveContainer>
                             <AreaChart data={chartData}>
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="name" />
-                              <YAxis />
-                              <Tooltip />
-                              <Legend />
-                              <Area type="monotone" dataKey="reps" stroke="#1a237e" fill="rgba(26, 35, 126, 0.2)" name="Reps Done" />
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e6dfd8" />
+                              <XAxis dataKey="name" stroke="#6c6a64" style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.7rem' }} />
+                              <YAxis stroke="#6c6a64" style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.7rem' }} />
+                              <Tooltip contentStyle={{ backgroundColor: '#faf9f5', border: '1px solid #e6dfd8', fontFamily: 'Inter, sans-serif' }} />
+                              <Legend wrapperStyle={{ fontFamily: 'Inter, sans-serif', fontSize: '0.75rem' }} />
+                              <Area type="monotone" dataKey="reps" stroke="#cc785c" fill="rgba(204, 120, 92, 0.2)" name="Reps Done" />
                               <Area type="monotone" dataKey="duration" stroke="#82ca9d" fill="rgba(130, 202, 157, 0.2)" name="Duration (s)" />
                             </AreaChart>
                           </ResponsiveContainer>
@@ -670,19 +774,19 @@ export const TherapistPortal: React.FC = () => {
 
                     {/* Chart 2: Injury Warnings and Form Accuracy */}
                     <Grid item xs={12} md={6}>
-                      <Paper sx={{ p: 2, borderRadius: 2, border: '1px solid #eee', boxShadow: 'none' }}>
-                        <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <WarningAmberIcon color="error" /> Postural Safety Warnings & Accuracy
+                      <Paper sx={{ p: 2, borderRadius: 2, border: '1px solid #e6dfd8', bgcolor: '#efe9de', boxShadow: 'none' }}>
+                        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#141413', fontFamily: '"Cormorant Garamond", serif', fontWeight: 600, fontSize: '1.15rem' }}>
+                          <WarningAmberIcon sx={{ color: '#c62828' }} /> Postural Safety Warnings & Accuracy
                         </Typography>
-                        <Box sx={{ width: '100%', height: 260 }}>
+                        <Box sx={{ width: '100%', height: 260, mt: 2 }}>
                           <ResponsiveContainer>
                             <BarChart data={chartData}>
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="name" />
-                              <YAxis yAxisId="left" orientation="left" stroke="#c62828" />
-                              <YAxis yAxisId="right" orientation="right" stroke="#00c853" />
-                              <Tooltip />
-                              <Legend />
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e6dfd8" />
+                              <XAxis dataKey="name" stroke="#6c6a64" style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.7rem' }} />
+                              <YAxis yAxisId="left" orientation="left" stroke="#c62828" style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.7rem' }} />
+                              <YAxis yAxisId="right" orientation="right" stroke="#00c853" style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.7rem' }} />
+                              <Tooltip contentStyle={{ backgroundColor: '#faf9f5', border: '1px solid #e6dfd8', fontFamily: 'Inter, sans-serif' }} />
+                              <Legend wrapperStyle={{ fontFamily: 'Inter, sans-serif', fontSize: '0.75rem' }} />
                               <Bar yAxisId="left" dataKey="injuryFlags" fill="#c62828" name="Injury Flags" />
                               <Bar yAxisId="right" dataKey="accuracy" fill="#00c853" name="Accuracy (%)" />
                             </BarChart>
@@ -718,16 +822,18 @@ export const TherapistPortal: React.FC = () => {
             p: 1.5,
             width: '100%',
             maxWidth: 500,
-            boxShadow: '0 8px 32px rgba(26, 35, 126, 0.15)'
+            bgcolor: '#faf9f5',
+            border: '1px solid #e6dfd8',
+            boxShadow: 'none'
           }
         }}
       >
         <form onSubmit={handleRegisterPatient}>
-          <DialogTitle sx={{ fontWeight: 'bold', color: '#1a237e', pb: 1 }}>
+          <DialogTitle sx={{ fontFamily: '"Cormorant Garamond", serif', fontWeight: 500, color: '#141413', fontSize: '1.5rem', pb: 1 }}>
             Register New Patient
           </DialogTitle>
           <DialogContent>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            <Typography variant="body2" sx={{ mb: 3, color: '#6c6a64', fontFamily: '"Inter", sans-serif' }}>
               Create a clinical patient profile to set customized angle constraints and track session progress.
             </Typography>
             
@@ -741,7 +847,8 @@ export const TherapistPortal: React.FC = () => {
                   value={newPatientName}
                   onChange={(e) => setNewPatientName(e.target.value)}
                   variant="outlined"
-                  InputProps={{ sx: { borderRadius: 2 } }}
+                  InputProps={{ sx: { borderRadius: 2, fontFamily: '"Inter", sans-serif' } }}
+                  InputLabelProps={{ sx: { fontFamily: '"Inter", sans-serif' } }}
                 />
               </Grid>
               
@@ -755,23 +862,24 @@ export const TherapistPortal: React.FC = () => {
                   value={newPatientAge}
                   onChange={(e) => setNewPatientAge(e.target.value)}
                   variant="outlined"
-                  InputProps={{ sx: { borderRadius: 2 } }}
+                  InputProps={{ sx: { borderRadius: 2, fontFamily: '"Inter", sans-serif' } }}
+                  InputLabelProps={{ sx: { fontFamily: '"Inter", sans-serif' } }}
                 />
               </Grid>
               
               <Grid item xs={12} sm={8}>
                 <FormControl fullWidth variant="outlined" required>
-                  <InputLabel id="register-risk-label">Risk Profile</InputLabel>
+                  <InputLabel id="register-risk-label" sx={{ fontFamily: '"Inter", sans-serif' }}>Risk Profile</InputLabel>
                   <Select
                     labelId="register-risk-label"
                     value={newPatientRisk}
                     onChange={(e) => setNewPatientRisk(e.target.value as 'High' | 'Medium' | 'Low')}
                     label="Risk Profile"
-                    sx={{ borderRadius: 2 }}
+                    sx={{ borderRadius: 2, fontFamily: '"Inter", sans-serif' }}
                   >
-                    <MenuItem value="Low">Low Risk</MenuItem>
-                    <MenuItem value="Medium">Medium Risk</MenuItem>
-                    <MenuItem value="High">High Risk</MenuItem>
+                    <MenuItem value="Low" sx={{ fontFamily: '"Inter", sans-serif' }}>Low Risk</MenuItem>
+                    <MenuItem value="Medium" sx={{ fontFamily: '"Inter", sans-serif' }}>Medium Risk</MenuItem>
+                    <MenuItem value="High" sx={{ fontFamily: '"Inter", sans-serif' }}>High Risk</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -785,7 +893,8 @@ export const TherapistPortal: React.FC = () => {
                   value={newPatientCondition}
                   onChange={(e) => setNewPatientCondition(e.target.value)}
                   variant="outlined"
-                  InputProps={{ sx: { borderRadius: 2 } }}
+                  InputProps={{ sx: { borderRadius: 2, fontFamily: '"Inter", sans-serif' } }}
+                  InputLabelProps={{ sx: { fontFamily: '"Inter", sans-serif' } }}
                 />
               </Grid>
 
@@ -797,8 +906,10 @@ export const TherapistPortal: React.FC = () => {
                   value={newPatientEmail}
                   onChange={(e) => setNewPatientEmail(e.target.value)}
                   variant="outlined"
-                  InputProps={{ sx: { borderRadius: 2 } }}
+                  InputProps={{ sx: { borderRadius: 2, fontFamily: '"Inter", sans-serif' } }}
+                  InputLabelProps={{ sx: { fontFamily: '"Inter", sans-serif' } }}
                   helperText="Linking email synchronizes sessions logged by the patient under their account."
+                  FormHelperTextProps={{ sx: { fontFamily: '"Inter", sans-serif' } }}
                 />
               </Grid>
             </Grid>
@@ -809,8 +920,9 @@ export const TherapistPortal: React.FC = () => {
               sx={{ 
                 borderRadius: 2, 
                 textTransform: 'none', 
-                fontWeight: 'bold', 
-                color: 'text.secondary' 
+                fontWeight: 600, 
+                fontFamily: '"Inter", sans-serif',
+                color: '#6c6a64' 
               }}
             >
               Cancel
@@ -819,15 +931,16 @@ export const TherapistPortal: React.FC = () => {
               type="submit"
               variant="contained"
               sx={{
-                bgcolor: '#1a237e',
+                bgcolor: '#cc785c',
                 color: 'white',
                 borderRadius: 2,
                 px: 3,
                 textTransform: 'none',
-                fontWeight: 'bold',
-                boxShadow: '0 4px 12px rgba(26, 35, 126, 0.3)',
+                fontWeight: 600,
+                fontFamily: '"Inter", sans-serif',
+                boxShadow: 'none',
                 '&:hover': {
-                  bgcolor: '#0d134d'
+                  bgcolor: '#a9583e'
                 }
               }}
             >

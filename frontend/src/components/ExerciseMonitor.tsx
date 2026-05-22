@@ -735,11 +735,43 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         (p) => p.exercise.toLowerCase().trim().replace(/[-\s]+/g, '_') === normalizedSelected
       ) || null;
       
-      setActiveProtocol(matchingProtocol);
-      activeProtocolRef.current = matchingProtocol;
+      // Check local prescription override
+      let finalProtocol = matchingProtocol;
+      let localOverride: any = null;
+      if (currentUser) {
+        const saved = localStorage.getItem('physio_patients');
+        if (saved) {
+          try {
+            const patientsList = JSON.parse(saved);
+            const patientId = currentUser.uid || currentUser.email?.toLowerCase() || 'current_user';
+            const patient = patientsList.find((p: any) => p.id === patientId);
+            if (patient && patient.assignedExercise && 
+                patient.assignedExercise.toLowerCase().trim().replace(/[-\s]+/g, '_') === normalizedSelected) {
+              localOverride = patient;
+            }
+          } catch (e) {
+            console.error("Failed to parse local patient list inside ExerciseMonitor", e);
+          }
+        }
+      }
+
+      if (localOverride) {
+        finalProtocol = {
+          user_id: localOverride.id,
+          exercise: localOverride.assignedExercise,
+          target_reps: localOverride.targetReps || 10,
+          safe_spine_angle: localOverride.safeSpineAngle || 35,
+          safe_knee_angle: localOverride.safeKneeAngle || 90,
+          safety_sensitivity: localOverride.safetySensitivity || 50
+        };
+        addToConsoleLog('⚡ Loaded prescribed local safety thresholds from Therapist Portal!');
+      }
+
+      setActiveProtocol(finalProtocol);
+      activeProtocolRef.current = finalProtocol;
       
-      if (matchingProtocol) {
-        addToConsoleLog(`Loaded protocol: Target Reps = ${matchingProtocol.target_reps}, Safe Spine = ${matchingProtocol.safe_spine_angle}°, Safe Knee = ${matchingProtocol.safe_knee_angle}°, Sensitivity = ${matchingProtocol.safety_sensitivity}`);
+      if (finalProtocol) {
+        addToConsoleLog(`Loaded protocol: Target Reps = ${finalProtocol.target_reps}, Safe Spine = ${finalProtocol.safe_spine_angle}°, Safe Knee = ${finalProtocol.safe_knee_angle}°, Sensitivity = ${finalProtocol.safety_sensitivity}`);
       } else {
         addToConsoleLog('No custom protocol found. Using standard baseline thresholds.');
       }

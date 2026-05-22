@@ -610,6 +610,19 @@ export function detectInjuryRisk(
     }
   }
 
+  // 1c. Therapist Knee Flexion Depth Analysis
+  // For lower-body exercises, check if knee angle bends deeper (goes below) the safe_knee_angle limit.
+  const safeKneeAngle = protocol?.safe_knee_angle ?? 90.0;
+  let kneeFlexionRisk = 0;
+
+  if (isLowerBody && ["squat", "leg_extension"].includes(exerciseKey)) {
+    const kneeAngle = Math.min(jointAngles[6] || 180, jointAngles[7] || 180);
+    if (kneeAngle < safeKneeAngle) {
+      kneeFlexionRisk = Math.min(100, ((safeKneeAngle - kneeAngle) / 20) * 50 + 50);
+      report.warnings.push(`Knee Too Deep! Keep knee angle above ${safeKneeAngle}°.`);
+    }
+  }
+
   // 2. Knee Valgus Collapse Analysis (Knees caving inwards)
   let kneeValgusRisk = 0;
   if (leftHip && rightHip && leftKnee && rightKnee) {
@@ -786,6 +799,7 @@ export function detectInjuryRisk(
     velocityRisk, 
     asymmetryRisk, 
     legRaiseKneeRisk, 
+    kneeFlexionRisk,
     headPostureRisk,
     exerciseCorrectionRisk
   );

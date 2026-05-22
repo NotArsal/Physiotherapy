@@ -20,33 +20,31 @@ function NavHeader({ items, activeValue, onItemClick }: NavHeaderProps) {
 
   return (
     <ul
-      className="relative flex w-fit rounded-full p-1 select-none"
+      className="relative flex w-fit rounded-full p-1 select-none items-center"
       style={{
-        background: "rgba(255,255,255,0.12)",
-        border: "1.5px solid rgba(255,255,255,0.25)",
-        backdropFilter: "blur(6px)",
+        background: "#efe9de", // Surface Card background
+        border: "1px solid #e6dfd8", // Hairline border
       }}
       onMouseLeave={() => setHoveredValue(null)}
     >
       {items.map((item) => {
         const isHovered = hoveredValue === item.value;
         const isActive = activeValue === item.value;
-        // Show pill if hovered, or if not hovering anything and this is active
         const showPill = hoveredValue !== null ? isHovered : isActive;
-        const textColor = showPill ? "#1565c0" : "rgba(255,255,255,0.92)";
+        const textColor = showPill ? "#141413" : "#6c6a64"; // Ink active, Muted inactive
 
         return (
           <li
             key={item.value}
             onClick={() => onItemClick?.(item.value)}
             onMouseEnter={() => setHoveredValue(item.value)}
-            className="relative flex cursor-pointer items-center gap-1.5 px-4 py-2 text-xs font-semibold uppercase tracking-wide select-none transition-colors duration-200"
-            style={{ color: textColor }}
+            className="relative flex cursor-pointer items-center gap-1.5 px-4 py-2 text-xs font-medium uppercase tracking-wider select-none transition-colors duration-200"
+            style={{ color: textColor, zIndex: 10 }}
           >
             {showPill && (
               <motion.div
                 layoutId="nav-active-pill"
-                className="absolute inset-0.5 rounded-full bg-white z-0 shadow-sm"
+                className="absolute inset-0.5 rounded-full bg-[#faf9f5] z-0 shadow-sm border border-[#e6dfd8]"
                 transition={{ type: "spring", stiffness: 380, damping: 30 }}
               />
             )}
@@ -64,3 +62,4 @@ function NavHeader({ items, activeValue, onItemClick }: NavHeaderProps) {
 }
 
 export default NavHeader;
+
