@@ -2,16 +2,12 @@ import React, { useState } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import {
-  AppBar,
-  Toolbar,
   Typography,
   Button,
   Box,
   Avatar,
   Menu,
   MenuItem,
-  Tabs,
-  Tab
 } from '@mui/material';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -27,32 +23,46 @@ import ExerciseMonitor from './components/ExerciseMonitor';
 import Dashboard from './components/Dashboard';
 import MediaPipeDebug from './components/MediaPipeDebug';
 import { TherapistPortal } from './components/TherapistPortal';
-import NavHeader from './components/ui/nav-header';
+import NavHeader, { NavItem } from './components/ui/nav-header';
 import { PremiumToggle } from './components/ui/bouncy-toggle';
+import SuggestiveSearch from './components/ui/suggestive-search';
 
-
-// Create Material-UI theme
+// ── MUI theme (used for all page components beneath the navbar) ───────────────
 const theme = createTheme({
   palette: {
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
+    primary: { main: '#1976d2' },
+    secondary: { main: '#dc004e' },
   },
   typography: {
-    h4: {
-      fontWeight: 600,
-    },
-    h6: {
-      fontWeight: 600,
-    },
+    h4: { fontWeight: 600 },
+    h6: { fontWeight: 600 },
   },
 });
 
 type AppView = 'exercises' | 'monitor' | 'dashboard' | 'debug' | 'therapist';
 
+// ── Nav items per role ────────────────────────────────────────────────────────
+const PATIENT_NAV: NavItem[] = [
+  { label: 'Exercises', value: 'exercises', icon: <PlayArrowIcon style={{ fontSize: 14 }} /> },
+  { label: 'Dashboard', value: 'dashboard', icon: <DashboardIcon style={{ fontSize: 14 }} /> },
+  { label: 'Debug', value: 'debug', icon: <BugReportIcon style={{ fontSize: 14 }} /> },
+];
+
+const THERAPIST_NAV: NavItem[] = [
+  { label: 'Therapist Portal', value: 'therapist', icon: <SupervisorAccountIcon style={{ fontSize: 14 }} /> },
+];
+
+const EXERCISE_SUGGESTIONS = [
+  'Search exercises...',
+  'Bench Press form tips',
+  'Squat correction guide',
+  'Deadlift technique',
+  'Shoulder press tips',
+  'Biceps curl cues',
+  'Plank alignment',
+];
+
+// ── Main App Content ──────────────────────────────────────────────────────────
 const AppContent: React.FC = () => {
   const { currentUser, logout } = useAuth();
   const [currentView, setCurrentView] = useState<AppView>('therapist');
@@ -60,21 +70,12 @@ const AppContent: React.FC = () => {
   const [selectedExercise, setSelectedExercise] = useState<string>('');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
-  const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
+  const handleMenu = (event: React.MouseEvent<HTMLElement>) => setAnchorEl(event.currentTarget);
+  const handleClose = () => setAnchorEl(null);
 
   const handleLogout = async () => {
-    try {
-      await logout();
-      handleClose();
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
+    try { await logout(); handleClose(); }
+    catch (error) { console.error('Logout error:', error); }
   };
 
   const handleExerciseSelect = (exercise: string) => {
@@ -87,99 +88,86 @@ const AppContent: React.FC = () => {
     setSelectedExercise('');
   };
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: AppView) => {
-    setCurrentView(newValue);
+  const handleRoleToggle = (checked: boolean) => {
+    const nextRole = checked ? 'therapist' : 'patient';
+    setRole(nextRole);
+    setCurrentView(nextRole === 'therapist' ? 'therapist' : 'exercises');
   };
 
-  if (!currentUser) {
-    return <Login />;
-  }
+  const navItems = role === 'patient' ? PATIENT_NAV : THERAPIST_NAV;
+  const activeNavValue = currentView === 'monitor' ? 'exercises' : currentView;
+
+  if (!currentUser) return <Login />;
 
   return (
     <Box sx={{ flexGrow: 1 }}>
-      {/* App Bar */}
-      <AppBar position="static">
-        <Toolbar>
-          <FitnessCenterIcon sx={{ mr: 2 }} />
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            PhysioTracker - AI Exercise Monitor
-          </Typography>
-          
-          {/* Navigation Tabs (Conditional based on active Role Mode) */}
-          {role === 'patient' ? (
-            <Tabs 
-              value={currentView === 'monitor' ? 'exercises' : currentView} 
-              onChange={handleTabChange}
-              textColor="inherit"
-              indicatorColor="secondary"
-              sx={{ mr: 2 }}
+      {/* ── Custom Navbar ───────────────────────────────────────────────────── */}
+      <nav
+        style={{
+          background: 'linear-gradient(90deg, #1565c0 0%, #1976d2 60%, #1e88e5 100%)',
+          boxShadow: '0 2px 12px rgba(21,101,192,0.4)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 1100,
+        }}
+      >
+        <div className="flex items-center gap-3 px-4 py-2">
+          {/* Logo ──────────────────────────────────────────────────────────── */}
+          <div className="flex items-center gap-2 shrink-0 mr-2">
+            <FitnessCenterIcon style={{ color: 'white', fontSize: 26 }} />
+            <Typography
+              variant="subtitle1"
+              component="span"
+              sx={{ color: 'white', fontWeight: 700, letterSpacing: 0.3, whiteSpace: 'nowrap', display: { xs: 'none', md: 'block' } }}
             >
-              <Tab 
-                icon={<PlayArrowIcon />} 
-                label="Exercises" 
-                value="exercises"
-                sx={{ color: 'white' }}
-              />
-              <Tab 
-                icon={<DashboardIcon />} 
-                label="Dashboard" 
-                value="dashboard"
-                sx={{ color: 'white' }}
-              />
-              <Tab 
-                icon={<BugReportIcon />} 
-                label="Debug" 
-                value="debug"
-                sx={{ color: 'white' }}
-              />
-            </Tabs>
-          ) : (
-            <Tabs 
-              value="therapist"
-              textColor="inherit"
-              indicatorColor="secondary"
-              sx={{ mr: 2 }}
-            >
-              <Tab 
-                icon={<SupervisorAccountIcon />} 
-                label="Therapist Portal" 
-                value="therapist"
-                sx={{ color: 'white' }}
-              />
-            </Tabs>
-          )}
+              PhysioTracker
+            </Typography>
+          </div>
 
-          {/* Premium Role Toggler — PremiumToggle component */}
-          <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: 'rgba(255,255,255,0.15)', px: 2, py: 0.5, borderRadius: 3, mr: 3, gap: 1 }}>
-            <Typography variant="body2" sx={{ color: 'white', fontWeight: 'bold' }}>
+          {/* Sliding pill NavHeader ────────────────────────────────────────── */}
+          <div className="flex-shrink-0">
+            <NavHeader
+              items={navItems}
+              activeValue={activeNavValue}
+              onItemClick={(value) => setCurrentView(value as AppView)}
+            />
+          </div>
+
+          {/* SuggestiveSearch ─────────────────────────────────────────────── */}
+          <div className="flex-1 flex justify-center px-2 min-w-0">
+            <SuggestiveSearch
+              suggestions={EXERCISE_SUGGESTIONS}
+              effect="typewriter"
+              typeDurationMs={450}
+              deleteDurationMs={280}
+              pauseAfterTypeMs={1800}
+              className="w-full max-w-xs"
+            />
+          </div>
+
+          {/* Role toggle ───────────────────────────────────────────────────── */}
+          <div
+            className="flex items-center gap-2 rounded-full px-3 py-1 shrink-0"
+            style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)' }}
+          >
+            <Typography variant="caption" sx={{ color: 'white', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', fontSize: '0.65rem' }}>
               {role === 'therapist' ? 'Therapist' : 'Patient'}
             </Typography>
             <PremiumToggle
               defaultChecked={role === 'therapist'}
-              onChange={(checked) => {
-                const nextRole = checked ? 'therapist' : 'patient';
-                setRole(nextRole);
-                if (nextRole === 'therapist') {
-                  setCurrentView('therapist');
-                } else {
-                  setCurrentView('exercises');
-                }
-              }}
+              onChange={handleRoleToggle}
             />
-          </Box>
+          </div>
 
-          {/* User Menu */}
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Typography variant="body2" sx={{ mr: 2 }}>
+          {/* User menu ─────────────────────────────────────────────────────── */}
+          <div className="flex items-center gap-2 shrink-0">
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', display: { xs: 'none', lg: 'block' }, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {currentUser.displayName || currentUser.email}
             </Typography>
-            <Button
-              onClick={handleMenu}
-              sx={{ p: 0 }}
-            >
-              <Avatar 
+            <Button onClick={handleMenu} sx={{ p: 0, minWidth: 0 }}>
+              <Avatar
                 src={currentUser.photoURL || undefined}
-                sx={{ width: 32, height: 32 }}
+                sx={{ width: 34, height: 34, border: '2px solid rgba(255,255,255,0.6)', fontSize: '0.9rem' }}
               >
                 {currentUser.displayName?.[0] || currentUser.email?.[0]}
               </Avatar>
@@ -192,59 +180,40 @@ const AppContent: React.FC = () => {
               anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
             >
               <MenuItem onClick={handleLogout}>
-                <LogoutIcon sx={{ mr: 1 }} />
-                Logout
+                <LogoutIcon sx={{ mr: 1, fontSize: 18 }} /> Logout
               </MenuItem>
             </Menu>
-          </Box>
-        </Toolbar>
-      </AppBar>
-
-      {/* NavHeader — sliding pill navigation for patient view */}
-      {role === 'patient' && (
-        <div className="flex justify-center py-3 bg-gray-50 border-b border-gray-200 shadow-sm">
-          <NavHeader />
+          </div>
         </div>
-      )}
+      </nav>
 
-      {/* Main Content */}
+      {/* ── Page content ────────────────────────────────────────────────────── */}
       <Box component="main">
         {currentView === 'exercises' && (
           <ExerciseSelector onExerciseSelect={handleExerciseSelect} />
         )}
-        
         {currentView === 'monitor' && selectedExercise && (
-          <ExerciseMonitor 
-            selectedExercise={selectedExercise} 
+          <ExerciseMonitor
+            selectedExercise={selectedExercise}
             onBack={handleBackToExercises}
           />
         )}
-        
-        {currentView === 'dashboard' && (
-          <Dashboard />
-        )}
-        
-        {currentView === 'debug' && (
-          <MediaPipeDebug />
-        )}
-
-        {currentView === 'therapist' && (
-          <TherapistPortal />
-        )}
+        {currentView === 'dashboard' && <Dashboard />}
+        {currentView === 'debug' && <MediaPipeDebug />}
+        {currentView === 'therapist' && <TherapistPortal />}
       </Box>
     </Box>
   );
 };
 
-const App: React.FC = () => {
-  return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </ThemeProvider>
-  );
-};
+// ── App root ──────────────────────────────────────────────────────────────────
+const App: React.FC = () => (
+  <ThemeProvider theme={theme}>
+    <CssBaseline />
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  </ThemeProvider>
+);
 
 export default App;

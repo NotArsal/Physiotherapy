@@ -3,66 +3,100 @@
 import React, { useRef, useState } from "react";
 import { motion } from "framer-motion";
 
-function NavHeader() {
-  const [position, setPosition] = useState({
-    left: 0,
-    width: 0,
-    opacity: 0,
-  });
+export interface NavItem {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
+}
+
+interface NavHeaderProps {
+  items: NavItem[];
+  activeValue?: string;
+  onItemClick?: (value: string) => void;
+}
+
+function NavHeader({ items, activeValue, onItemClick }: NavHeaderProps) {
+  const [position, setPosition] = useState({ left: 0, width: 0, opacity: 0 });
 
   return (
     <ul
-      className="relative mx-auto flex w-fit rounded-full border-2 border-black bg-white p-1"
+      className="relative flex w-fit rounded-full p-1"
+      style={{
+        background: "rgba(255,255,255,0.12)",
+        border: "1.5px solid rgba(255,255,255,0.30)",
+        backdropFilter: "blur(6px)",
+      }}
       onMouseLeave={() => setPosition((pv) => ({ ...pv, opacity: 0 }))}
     >
-      <Tab setPosition={setPosition}>Home</Tab>
-      <Tab setPosition={setPosition}>Pricing</Tab>
-      <Tab setPosition={setPosition}>About</Tab>
-      <Tab setPosition={setPosition}>Services</Tab>
-      <Tab setPosition={setPosition}>Contact</Tab>
-
-      <Cursor position={position} />
+      {items.map((item) => (
+        <NavTab
+          key={item.value}
+          item={item}
+          isActive={activeValue === item.value}
+          setPosition={setPosition}
+          onClick={() => onItemClick?.(item.value)}
+        />
+      ))}
+      <NavCursor position={position} />
     </ul>
   );
 }
 
-const Tab = ({
-  children,
+const NavTab = ({
+  item,
+  isActive,
   setPosition,
+  onClick,
 }: {
-  children: React.ReactNode;
+  item: NavItem;
+  isActive: boolean;
   setPosition: React.Dispatch<
     React.SetStateAction<{ left: number; width: number; opacity: number }>
   >;
+  onClick: () => void;
 }) => {
   const ref = useRef<HTMLLIElement>(null);
+
   return (
     <li
       ref={ref}
+      onClick={onClick}
       onMouseEnter={() => {
         if (!ref.current) return;
-
         const { width } = ref.current.getBoundingClientRect();
-        setPosition({
-          width,
-          opacity: 1,
-          left: ref.current.offsetLeft,
-        });
+        setPosition({ width, opacity: 1, left: ref.current.offsetLeft });
       }}
-      className="relative z-10 block cursor-pointer px-3 py-1.5 text-xs uppercase text-white mix-blend-difference md:px-5 md:py-3 md:text-base"
+      className="relative z-10 flex cursor-pointer items-center gap-1.5 px-4 py-2 text-xs font-semibold uppercase tracking-wide select-none"
+      style={{
+        /* active item gets an opaque white pill; inactive items: white text */
+        color: isActive ? "#1976d2" : "rgba(255,255,255,0.92)",
+        transition: "color 0.2s",
+      }}
     >
-      {children}
+      {item.icon && <span className="text-[0.8rem]">{item.icon}</span>}
+      {item.label}
+      {/* active underline dot */}
+      {isActive && (
+        <span
+          className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 h-0.5 w-4 rounded-full"
+          style={{ background: "#1976d2" }}
+        />
+      )}
     </li>
   );
 };
 
-const Cursor = ({ position }: { position: { left: number; width: number; opacity: number } }) => {
-  return (
-    <motion.li
-      animate={position}
-      className="absolute z-0 h-7 rounded-full bg-black md:h-12"
-    />
-  );
-};
+const NavCursor = ({
+  position,
+}: {
+  position: { left: number; width: number; opacity: number };
+}) => (
+  <motion.li
+    animate={position}
+    transition={{ type: "spring", stiffness: 400, damping: 32 }}
+    className="absolute z-0 top-1 bottom-1 rounded-full"
+    style={{ background: "rgba(255,255,255,0.95)", pointerEvents: "none" }}
+  />
+);
 
 export default NavHeader;
