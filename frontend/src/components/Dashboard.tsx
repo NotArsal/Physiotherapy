@@ -253,12 +253,18 @@ const Dashboard: React.FC = () => {
   if (!sessionData) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          Dashboard
+        <Typography variant="h4" component="h1" gutterBottom sx={{ fontFamily: '"Cormorant Garamond", serif', fontWeight: 500 }}>
+          Your Progress Dashboard
         </Typography>
-        <Alert severity="info">
-          Start exercising to see your progress data here!
-        </Alert>
+        {error ? (
+          <Alert severity="error" sx={{ borderRadius: 2, mb: 2 }}>
+            {error}
+          </Alert>
+        ) : (
+          <Alert severity="info" sx={{ borderRadius: 2 }}>
+            Start exercising to see your progress data here!
+          </Alert>
+        )}
       </Container>
     );
   }

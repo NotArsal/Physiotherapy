@@ -49,9 +49,27 @@ interface AppContentProps {
 // ── Main App Content ──────────────────────────────────────────────────────────
 const AppContent: React.FC<AppContentProps> = ({ darkMode, toggleDarkMode }) => {
   const { currentUser, logout } = useAuth();
-  const [currentView, setCurrentView] = useState<AppView>('therapist');
-  const [role, setRole] = useState<'patient' | 'therapist'>('therapist');
-  const [selectedExercise, setSelectedExercise] = useState<string>('');
+  
+  const [role, setRole] = useState<'patient' | 'therapist'>(() => {
+    const saved = localStorage.getItem('physio_role');
+    return (saved === 'patient' || saved === 'therapist') ? saved : 'therapist';
+  });
+
+  const [currentView, setCurrentView] = useState<AppView>(() => {
+    const savedRole = localStorage.getItem('physio_role');
+    const savedView = localStorage.getItem('physio_current_view');
+    const initialRole = (savedRole === 'patient' || savedRole === 'therapist') ? savedRole : 'therapist';
+    if (savedView) {
+      if (initialRole === 'therapist' && savedView === 'therapist') return 'therapist';
+      if (initialRole === 'patient' && ['exercises', 'monitor', 'dashboard', 'debug'].includes(savedView)) return savedView as AppView;
+    }
+    return initialRole === 'therapist' ? 'therapist' : 'exercises';
+  });
+
+  const [selectedExercise, setSelectedExercise] = useState<string>(() => {
+    return localStorage.getItem('physio_selected_exercise') || '';
+  });
+
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   // ── Auto-enroll dynamic active patient and clear mock patients ──────────────
@@ -100,17 +118,24 @@ const AppContent: React.FC<AppContentProps> = ({ darkMode, toggleDarkMode }) => 
   const handleExerciseSelect = (exercise: string) => {
     setSelectedExercise(exercise);
     setCurrentView('monitor');
+    localStorage.setItem('physio_current_view', 'monitor');
+    localStorage.setItem('physio_selected_exercise', exercise);
   };
 
   const handleBackToExercises = () => {
     setCurrentView('exercises');
     setSelectedExercise('');
+    localStorage.setItem('physio_current_view', 'exercises');
+    localStorage.removeItem('physio_selected_exercise');
   };
 
   const handleRoleToggle = (checked: boolean) => {
     const nextRole = checked ? 'therapist' : 'patient';
     setRole(nextRole);
-    setCurrentView(nextRole === 'therapist' ? 'therapist' : 'exercises');
+    const nextView = nextRole === 'therapist' ? 'therapist' : 'exercises';
+    setCurrentView(nextView);
+    localStorage.setItem('physio_role', nextRole);
+    localStorage.setItem('physio_current_view', nextView);
   };
 
   const navItems = role === 'patient' ? PATIENT_NAV : THERAPIST_NAV;
@@ -157,7 +182,11 @@ const AppContent: React.FC<AppContentProps> = ({ darkMode, toggleDarkMode }) => 
             <NavHeader
               items={navItems}
               activeValue={activeNavValue}
-              onItemClick={(value) => setCurrentView(value as AppView)}
+              onItemClick={(value) => {
+                const nextView = value as AppView;
+                setCurrentView(nextView);
+                localStorage.setItem('physio_current_view', nextView);
+              }}
             />
           </div>
 

@@ -109,6 +109,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const voiceEnabledRef = useRef(true);
   const debugModeRef = useRef(false);
   const poseDetectedRef = useRef(false);
+  const exerciseMatchRef = useRef(true);
 
   // ── EMA smoothing ──────────────────────────────────────────────────────────
   const smoothedAnglesRef = useRef<number[]>(Array(9).fill(0));
@@ -262,7 +263,8 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
     ctx: CanvasRenderingContext2D,
     landmarks: any[],
     warningText: string,
-    isSafe: boolean
+    isSafe: boolean,
+    exerciseMatch: boolean
   ) => {
     if (!landmarks || landmarks.length < 33) return;
 
@@ -302,19 +304,27 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       for (let i = 0; i < 33; i++) dangerIndices.add(i);
     }
 
-    const safeColor = '#6e8570'; // Elegant sage green
-    const dangerColor = '#c62828'; // Rich deep crimson red
-    const safeBone = 'rgba(110, 133, 112, 0.75)'; // Transparent sage green
-    const dangerBone = 'rgba(198, 40, 40, 0.75)'; // Transparent deep red
+    const redColor = '#c62828'; // Crimson Red for not visible
+    const greenColor = '#2e7d32'; // Forest Green for performing correct
+    const blueColor = '#1565c0'; // Royal Blue for performing wrong or posture alert
+
+    const redBone = 'rgba(198, 40, 40, 0.75)'; // Transparent crimson red
+    const greenBone = 'rgba(46, 125, 50, 0.75)'; // Transparent forest green
+    const blueBone = 'rgba(21, 101, 192, 0.75)'; // Transparent royal blue
 
     // Draw bones (connections)
     POSE_CONNECTIONS.forEach(([a, b]) => {
       const lmA = landmarks[a];
       const lmB = landmarks[b];
       if (!lmA || !lmB) return;
-      if (lmA.visibility < 0.35 || lmB.visibility < 0.35) return;
-      const isDanger = dangerIndices.has(a) || dangerIndices.has(b);
-      const color = isDanger ? dangerBone : safeBone;
+      
+      let color = greenBone;
+      if (lmA.visibility < 0.35 || lmB.visibility < 0.35) {
+        color = redBone;
+      } else if (!isSafe || !exerciseMatch || dangerIndices.has(a) || dangerIndices.has(b)) {
+        color = blueBone;
+      }
+
       ctx.save();
       ctx.strokeStyle = color;
       ctx.lineWidth = 3;
@@ -327,15 +337,24 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
 
     // Draw joints
     landmarks.forEach((lm, i) => {
-      if (!lm || lm.visibility < 0.35) return;
+      if (!lm) return;
       const x = lm.x * W;
       const y = lm.y * H;
-      const isDanger = dangerIndices.has(i);
-      const color = isDanger ? dangerColor : safeColor;
+      
+      let color = greenColor;
+      let size = 4;
+      if (lm.visibility < 0.35) {
+        color = redColor;
+        size = 5;
+      } else if (!isSafe || !exerciseMatch || dangerIndices.has(i)) {
+        color = blueColor;
+        size = 6;
+      }
+
       ctx.save();
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(x, y, isDanger ? 6 : 4, 0, 2 * Math.PI);
+      ctx.arc(x, y, size, 0, 2 * Math.PI);
       ctx.fill();
       ctx.restore();
     });
@@ -398,7 +417,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         const latestInjury = (window as any).__latestInjuryReport__;
         const warnText = latestInjury?.warnings?.join(' ') ?? '';
         const isSafe = latestInjury?.isSafe ?? true;
-        drawGlowingSkeleton(ctx, results.poseLandmarks, warnText, isSafe);
+        drawGlowingSkeleton(ctx, results.poseLandmarks, warnText, isSafe, exerciseMatchRef.current);
 
         // Status label
         ctx.save();
@@ -579,6 +598,8 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
           (selectedNormalized === 'pull_up' && ['pull_up', 'lat_pulldown', 'incline_bench_press', 'bench_press', 'shoulder_press'].includes(predictedNormalized)) ||
           (selectedNormalized === 'shoulder_press' && ['shoulder_press', 'wall_slide', 'pull_up', 'lat_pulldown'].includes(predictedNormalized)) ||
           (selectedNormalized === 'wall_slide' && ['wall_slide', 'shoulder_press', 'pull_up', 'lat_pulldown'].includes(predictedNormalized));
+
+        exerciseMatchRef.current = isCorrectExercise;
 
         if (predictionResult.confidence >= 0.85 && isCorrectExercise) {
           setFormQuality('excellent');
@@ -884,6 +905,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       predictedExerciseRef.current = '';
       setExerciseFeedback('Ready to start!');
       setPrediction(null);
+      exerciseMatchRef.current = true;
       setAiModelDetails(null);
       setCurrentPhase('');
       currentPhaseRef.current = '';

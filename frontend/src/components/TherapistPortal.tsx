@@ -119,12 +119,19 @@ export const TherapistPortal: React.FC = () => {
 
   const [selectedPatient, setSelectedPatient] = useState<Patient>(() => {
     const saved = localStorage.getItem('physio_patients');
+    const savedSelectedId = localStorage.getItem('physio_selected_patient_id');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         const mockIds = ['patient_123', 'jane_smith', 'robert_johnson', 'default'];
         const clean = parsed.filter((p: any) => !mockIds.includes(p.id));
-        if (clean && clean.length > 0) return clean[0];
+        if (clean && clean.length > 0) {
+          if (savedSelectedId) {
+            const found = clean.find((p: any) => p.id === savedSelectedId);
+            if (found) return found;
+          }
+          return clean[0];
+        }
       } catch (e) {}
     }
     return { id: '', name: 'No Active Patient', age: 0, condition: 'None', riskProfile: 'Low' };
@@ -146,7 +153,22 @@ export const TherapistPortal: React.FC = () => {
     localStorage.setItem('physio_patients', JSON.stringify(patients));
   }, [patients]);
 
-  const [selectedExercise, setSelectedExercise] = useState<string>('squat');
+  useEffect(() => {
+    if (selectedPatient && selectedPatient.id) {
+      localStorage.setItem('physio_selected_patient_id', selectedPatient.id);
+    } else {
+      localStorage.removeItem('physio_selected_patient_id');
+    }
+  }, [selectedPatient]);
+
+  const [selectedExercise, setSelectedExercise] = useState<string>(() => {
+    return localStorage.getItem('physio_therapist_selected_exercise') || 'squat';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('physio_therapist_selected_exercise', selectedExercise);
+  }, [selectedExercise]);
+
   const [targetReps, setTargetReps] = useState<number>(10);
   const [safeSpineAngle, setSafeSpineAngle] = useState<number>(30);
   const [safeKneeAngle, setSafeKneeAngle] = useState<number>(90);
