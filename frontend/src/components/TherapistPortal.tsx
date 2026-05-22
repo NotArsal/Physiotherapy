@@ -27,7 +27,12 @@ import {
   Tabs,
   Tab,
   LinearProgress,
-  Snackbar
+  Snackbar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField
 } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
@@ -36,6 +41,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import AddIcon from '@mui/icons-material/Add';
 import {
   ResponsiveContainer,
   BarChart,
@@ -82,7 +88,33 @@ const EXERCISES = [
 ];
 
 export const TherapistPortal: React.FC = () => {
-  const [selectedPatient, setSelectedPatient] = useState<Patient>(mockPatients[0]);
+  const [patients, setPatients] = useState<Patient[]>(() => {
+    const saved = localStorage.getItem('physio_patients');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Failed to parse saved patients from localStorage", e);
+      }
+    }
+    return mockPatients;
+  });
+
+  const [selectedPatient, setSelectedPatient] = useState<Patient>(() => {
+    const saved = localStorage.getItem('physio_patients');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.length > 0) return parsed[0];
+      } catch (e) {}
+    }
+    return mockPatients[0];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('physio_patients', JSON.stringify(patients));
+  }, [patients]);
+
   const [selectedExercise, setSelectedExercise] = useState<string>('squat');
   const [targetReps, setTargetReps] = useState<number>(10);
   const [safeSpineAngle, setSafeSpineAngle] = useState<number>(30);
@@ -98,6 +130,70 @@ export const TherapistPortal: React.FC = () => {
     message: '',
     severity: 'success'
   });
+
+  const [openRegisterDialog, setOpenRegisterDialog] = useState<boolean>(false);
+  const [newPatientName, setNewPatientName] = useState<string>('');
+  const [newPatientAge, setNewPatientAge] = useState<string>('');
+  const [newPatientCondition, setNewPatientCondition] = useState<string>('');
+  const [newPatientRisk, setNewPatientRisk] = useState<'High' | 'Medium' | 'Low'>('Medium');
+  const [newPatientEmail, setNewPatientEmail] = useState<string>('');
+
+  const handleRegisterPatient = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPatientName.trim() || !newPatientAge || !newPatientCondition.trim()) {
+      setSnackbar({
+        open: true,
+        message: 'Please fill in all required fields.',
+        severity: 'error'
+      });
+      return;
+    }
+
+    const ageNum = parseInt(newPatientAge, 10);
+    if (isNaN(ageNum) || ageNum <= 0 || ageNum > 120) {
+      setSnackbar({
+        open: true,
+        message: 'Please enter a valid age.',
+        severity: 'error'
+      });
+      return;
+    }
+
+    const patientId = newPatientEmail.trim() ? newPatientEmail.trim().toLowerCase() : `patient_${Date.now()}`;
+
+    if (patients.some(p => p.id === patientId)) {
+      setSnackbar({
+        open: true,
+        message: 'A patient with this Email/ID already exists.',
+        severity: 'error'
+      });
+      return;
+    }
+
+    const newPatient: Patient = {
+      id: patientId,
+      name: newPatientName.trim(),
+      age: ageNum,
+      condition: newPatientCondition.trim(),
+      riskProfile: newPatientRisk
+    };
+
+    setPatients(prev => [newPatient, ...prev]);
+    setSelectedPatient(newPatient);
+    setOpenRegisterDialog(false);
+
+    setNewPatientName('');
+    setNewPatientAge('');
+    setNewPatientCondition('');
+    setNewPatientRisk('Medium');
+    setNewPatientEmail('');
+
+    setSnackbar({
+      open: true,
+      message: `Successfully registered patient: ${newPatient.name}!`,
+      severity: 'success'
+    });
+  };
 
   // Fetch active patient protocols & sessions
   const loadPatientData = async () => {
@@ -135,7 +231,7 @@ export const TherapistPortal: React.FC = () => {
         severity: 'error'
       });
       // Mock history in case backend is loading/unavailable
-      setSessions(getMockHistory(selectedPatient.id, selectedExercise));
+      setSessions(getMockHistory(selectedPatient, selectedExercise));
     } finally {
       setLoading(false);
     }
@@ -236,13 +332,35 @@ export const TherapistPortal: React.FC = () => {
       <Grid container spacing={3}>
         {/* Left Column: Patient Directory */}
         <Grid item xs={12} md={3}>
-          <Paper sx={{ p: 2, height: '100%', borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-            <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, px: 1 }}>
-              Patient Directory
-            </Typography>
+          <Paper sx={{ p: 2, height: '100%', borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, px: 1 }}>
+              <Typography variant="h6" fontWeight="bold">
+                Patient Directory
+              </Typography>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<AddIcon />}
+                onClick={() => setOpenRegisterDialog(true)}
+                sx={{
+                  bgcolor: '#1a237e',
+                  color: 'white',
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold',
+                  boxShadow: '0 2px 8px rgba(26, 35, 126, 0.3)',
+                  '&:hover': {
+                    bgcolor: '#0d134d'
+                  }
+                }}
+              >
+                Register
+              </Button>
+            </Box>
             <Divider sx={{ mb: 2 }} />
-            <List sx={{ width: '100%' }}>
-              {mockPatients.map((patient) => {
+            <List sx={{ width: '100%', flexGrow: 1, overflowY: 'auto', maxHeight: '70vh' }}>
+              {patients.map((patient) => {
                 const isSelected = patient.id === selectedPatient.id;
                 return (
                   <ListItem
@@ -589,12 +707,141 @@ export const TherapistPortal: React.FC = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* Dialog for Patient Registration */}
+      <Dialog 
+        open={openRegisterDialog} 
+        onClose={() => setOpenRegisterDialog(false)}
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            p: 1.5,
+            width: '100%',
+            maxWidth: 500,
+            boxShadow: '0 8px 32px rgba(26, 35, 126, 0.15)'
+          }
+        }}
+      >
+        <form onSubmit={handleRegisterPatient}>
+          <DialogTitle sx={{ fontWeight: 'bold', color: '#1a237e', pb: 1 }}>
+            Register New Patient
+          </DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Create a clinical patient profile to set customized angle constraints and track session progress.
+            </Typography>
+            
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  required
+                  label="Full Name"
+                  placeholder="e.g. Eleanor Vance"
+                  value={newPatientName}
+                  onChange={(e) => setNewPatientName(e.target.value)}
+                  variant="outlined"
+                  InputProps={{ sx: { borderRadius: 2 } }}
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  required
+                  type="number"
+                  label="Age"
+                  placeholder="e.g. 42"
+                  value={newPatientAge}
+                  onChange={(e) => setNewPatientAge(e.target.value)}
+                  variant="outlined"
+                  InputProps={{ sx: { borderRadius: 2 } }}
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={8}>
+                <FormControl fullWidth variant="outlined" required>
+                  <InputLabel id="register-risk-label">Risk Profile</InputLabel>
+                  <Select
+                    labelId="register-risk-label"
+                    value={newPatientRisk}
+                    onChange={(e) => setNewPatientRisk(e.target.value as 'High' | 'Medium' | 'Low')}
+                    label="Risk Profile"
+                    sx={{ borderRadius: 2 }}
+                  >
+                    <MenuItem value="Low">Low Risk</MenuItem>
+                    <MenuItem value="Medium">Medium Risk</MenuItem>
+                    <MenuItem value="High">High Risk</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  required
+                  label="Injury / Condition"
+                  placeholder="e.g. Post-ACL Reconstruction, Chronic Lower Back Pain"
+                  value={newPatientCondition}
+                  onChange={(e) => setNewPatientCondition(e.target.value)}
+                  variant="outlined"
+                  InputProps={{ sx: { borderRadius: 2 } }}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Optional Patient Email / Login UID"
+                  placeholder="e.g. patient@example.com (links session history)"
+                  value={newPatientEmail}
+                  onChange={(e) => setNewPatientEmail(e.target.value)}
+                  variant="outlined"
+                  InputProps={{ sx: { borderRadius: 2 } }}
+                  helperText="Linking email synchronizes sessions logged by the patient under their account."
+                />
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2, pt: 1, gap: 1.5 }}>
+            <Button 
+              onClick={() => setOpenRegisterDialog(false)}
+              sx={{ 
+                borderRadius: 2, 
+                textTransform: 'none', 
+                fontWeight: 'bold', 
+                color: 'text.secondary' 
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              sx={{
+                bgcolor: '#1a237e',
+                color: 'white',
+                borderRadius: 2,
+                px: 3,
+                textTransform: 'none',
+                fontWeight: 'bold',
+                boxShadow: '0 4px 12px rgba(26, 35, 126, 0.3)',
+                '&:hover': {
+                  bgcolor: '#0d134d'
+                }
+              }}
+            >
+              Register Profile
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
     </Container>
   );
 };
 
 // Helper: Generates beautiful mock session data in case backend db is starting up or empty
-function getMockHistory(patientId: string, exercise: string): UserSession[] {
+function getMockHistory(patient: Patient, exercise: string): UserSession[] {
   const baseTime = Date.now();
   const mockLogs: { [key: string]: UserSession[] } = {
     patient_123: [
@@ -650,9 +897,70 @@ function getMockHistory(patientId: string, exercise: string): UserSession[] {
         timestamp: new Date(baseTime - 86400000 * 1).toISOString(),
         session_data: [{ final_rep_count: 12, duration_seconds: 42, injury_flags: 0, accuracy_score: 98 }]
       }
-    ],
-    default: []
+    ]
   };
 
-  return mockLogs[patientId] || [];
+  if (mockLogs[patient.id]) {
+    return mockLogs[patient.id];
+  }
+
+  if (patient.id === 'default') {
+    return [];
+  }
+
+  // Generate high-fidelity session data tailored to the patient
+  const riskMultiplier = patient.riskProfile === 'High' ? 2 : patient.riskProfile === 'Medium' ? 1 : 0.5;
+  const isLowerBody = ['squat', 'deadlift', 'leg_raises', 'glute_bridge', 'clamshell', 'straight_leg_raise'].includes(exercise);
+  const conditionFactor = patient.condition.toLowerCase();
+  
+  let baseReps = 8;
+  if (conditionFactor.includes('acl') || conditionFactor.includes('knee')) {
+    baseReps = isLowerBody ? 5 : 10;
+  } else if (conditionFactor.includes('back') || conditionFactor.includes('spine')) {
+    baseReps = exercise === 'deadlift' || exercise === 'squat' ? 4 : 8;
+  } else if (conditionFactor.includes('shoulder') || conditionFactor.includes('rotator')) {
+    baseReps = ['shoulder_press', 'push_up'].includes(exercise) ? 5 : 10;
+  }
+
+  return [
+    {
+      user_id: patient.id,
+      exercise: exercise,
+      total_reps: baseReps,
+      duration: baseReps * 3.5,
+      timestamp: new Date(baseTime - 86400000 * 4).toISOString(),
+      session_data: [{
+        final_rep_count: baseReps,
+        duration_seconds: baseReps * 3.5,
+        injury_flags: Math.round(4 * riskMultiplier),
+        accuracy_score: Math.max(50, Math.round(70 - 10 * riskMultiplier))
+      }]
+    },
+    {
+      user_id: patient.id,
+      exercise: exercise,
+      total_reps: baseReps + 2,
+      duration: (baseReps + 2) * 3.4,
+      timestamp: new Date(baseTime - 86400000 * 2).toISOString(),
+      session_data: [{
+        final_rep_count: baseReps + 2,
+        duration_seconds: (baseReps + 2) * 3.4,
+        injury_flags: Math.round(2 * riskMultiplier),
+        accuracy_score: Math.max(65, Math.round(82 - 5 * riskMultiplier))
+      }]
+    },
+    {
+      user_id: patient.id,
+      exercise: exercise,
+      total_reps: baseReps + 4,
+      duration: (baseReps + 4) * 3.2,
+      timestamp: new Date(baseTime - 86400000 * 1).toISOString(),
+      session_data: [{
+        final_rep_count: baseReps + 4,
+        duration_seconds: (baseReps + 4) * 3.2,
+        injury_flags: Math.round(0.5 * riskMultiplier),
+        accuracy_score: Math.max(80, Math.round(92 - 2 * riskMultiplier))
+      }]
+    }
+  ];
 }

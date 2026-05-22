@@ -40,18 +40,22 @@ function NavHeader({ items, activeValue, onItemClick }: NavHeaderProps) {
             key={item.value}
             onClick={() => onItemClick?.(item.value)}
             onMouseEnter={() => setHoveredValue(item.value)}
-            className="relative z-10 flex cursor-pointer items-center gap-1.5 px-4 py-2 text-xs font-semibold uppercase tracking-wide select-none transition-colors duration-200"
+            className="relative flex cursor-pointer items-center gap-1.5 px-4 py-2 text-xs font-semibold uppercase tracking-wide select-none transition-colors duration-200"
             style={{ color: textColor }}
           >
             {showPill && (
               <motion.div
                 layoutId="nav-active-pill"
-                className="absolute inset-0.5 rounded-full bg-white -z-10 shadow-sm"
+                className="absolute inset-0.5 rounded-full bg-white z-0 shadow-sm"
                 transition={{ type: "spring", stiffness: 380, damping: 30 }}
               />
             )}
-            {item.icon && <span className="text-[0.8rem] flex items-center justify-center">{item.icon}</span>}
-            <span>{item.label}</span>
+            {item.icon && (
+              <span className="relative z-10 text-[0.8rem] flex items-center justify-center" style={{ color: 'inherit' }}>
+                {item.icon}
+              </span>
+            )}
+            <span className="relative z-10">{item.label}</span>
           </li>
         );
       })}

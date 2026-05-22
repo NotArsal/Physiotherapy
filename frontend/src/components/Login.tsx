@@ -29,14 +29,28 @@ const Login: React.FC = () => {
   const [name, setName] = useState('');
 
   const handleGoogleSignIn = async () => {
+    // Sync clear states synchronously
+    setError('');
+    setMessage('');
+    
     try {
-      setError('');
-      setMessage('');
+      // Trigger the auth popup synchronously in the same thread.
+      // Setting loading state immediately afterwards.
       setLoading(true);
       await signInWithGoogle();
-    } catch (error) {
-      setError('Failed to sign in with Google. Please try again.');
+    } catch (error: any) {
       console.error('Sign in error:', error);
+      if (error.code === 'auth/operation-not-allowed') {
+        setError('Google authentication is not enabled in your Firebase console. Please enable Google Sign-In in the Firebase Authentication providers list.');
+      } else if (error.code === 'auth/unauthorized-domain') {
+        setError('This hosting domain is not authorized for Google Sign-in. Please add localhost (or your current domain) to the OAuth Redirect Domains list in the Firebase console.');
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        setError('The Google Sign-In pop-up was closed before completion. Please try again.');
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        setError('Google login popup was opened twice or cancelled. Please reload and try again.');
+      } else {
+        setError(error.message || 'Failed to sign in with Google. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

@@ -33,8 +33,13 @@ const theme = createTheme({
     secondary: { main: '#dc004e' },
   },
   typography: {
-    h4: { fontWeight: 600 },
-    h6: { fontWeight: 600 },
+    fontFamily: '"Open Sauce Sans", "Open Sauce One", "Roboto", "Helvetica", "Arial", sans-serif',
+    h1: { fontFamily: '"Peace Sans", sans-serif' },
+    h2: { fontFamily: '"Peace Sans", sans-serif' },
+    h3: { fontFamily: '"Peace Sans", sans-serif' },
+    h4: { fontFamily: '"Peace Sans", sans-serif', fontWeight: 600 },
+    h5: { fontFamily: '"Peace Sans", sans-serif' },
+    h6: { fontFamily: '"Peace Sans", sans-serif', fontWeight: 600 },
   },
 });
 
@@ -101,21 +106,28 @@ const AppContent: React.FC = () => {
           zIndex: 1100,
         }}
       >
-        <div className="flex items-center gap-3 px-4 py-2">
-          {/* Logo ──────────────────────────────────────────────────────────── */}
-          <div className="flex items-center gap-2 shrink-0 mr-2">
+        <div className="flex items-center justify-between w-full px-4 py-2 gap-3">
+          {/* Left Column (Logo) ─────────────────────────────────────────────── */}
+          <div className="flex-1 md:w-1/3 md:flex-initial flex justify-start items-center gap-2 shrink-0">
             <FitnessCenterIcon style={{ color: 'white', fontSize: 26 }} />
             <Typography
               variant="subtitle1"
               component="span"
-              sx={{ color: 'white', fontWeight: 700, letterSpacing: 0.3, whiteSpace: 'nowrap', display: { xs: 'none', md: 'block' } }}
+              sx={{ 
+                color: 'white', 
+                fontWeight: 700, 
+                letterSpacing: 0.3, 
+                whiteSpace: 'nowrap', 
+                display: { xs: 'none', md: 'block' },
+                fontFamily: '"Peace Sans", sans-serif'
+              }}
             >
               PhysioTracker
             </Typography>
           </div>
 
-          {/* Sliding pill NavHeader ────────────────────────────────────────── */}
-          <div className="flex-shrink-0">
+          {/* Middle Column (Sliding pill NavHeader) ─────────────────────────── */}
+          <div className="flex-shrink-0 md:w-1/3 md:flex-initial flex justify-center">
             <NavHeader
               items={navItems}
               activeValue={activeNavValue}
@@ -123,47 +135,47 @@ const AppContent: React.FC = () => {
             />
           </div>
 
-          {/* Spacer to push controls to the right ────────────────────────── */}
-          <div className="flex-grow" />
-
-          {/* Role toggle ───────────────────────────────────────────────────── */}
-          <div
-            className="flex items-center gap-2 rounded-full px-3 py-1 shrink-0"
-            style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)' }}
-          >
-            <Typography variant="caption" sx={{ color: 'white', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', fontSize: '0.65rem' }}>
-              {role === 'therapist' ? 'Therapist' : 'Patient'}
-            </Typography>
-            <PremiumToggle
-              defaultChecked={role === 'therapist'}
-              onChange={handleRoleToggle}
-            />
-          </div>
-
-          {/* User menu ─────────────────────────────────────────────────────── */}
-          <div className="flex items-center gap-2 shrink-0">
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', display: { xs: 'none', lg: 'block' }, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {currentUser.displayName || currentUser.email}
-            </Typography>
-            <Button onClick={handleMenu} sx={{ p: 0, minWidth: 0 }}>
-              <Avatar
-                src={currentUser.photoURL || undefined}
-                sx={{ width: 34, height: 34, border: '2px solid rgba(255,255,255,0.6)', fontSize: '0.9rem' }}
-              >
-                {currentUser.displayName?.[0] || currentUser.email?.[0]}
-              </Avatar>
-            </Button>
-            <Menu
-              anchorEl={anchorEl}
-              open={Boolean(anchorEl)}
-              onClose={handleClose}
-              transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+          {/* Right Column (Controls) ────────────────────────────────────────── */}
+          <div className="flex-1 md:w-1/3 md:flex-initial flex justify-end gap-3 items-center">
+            {/* Role toggle ───────────────────────────────────────────────────── */}
+            <div
+              className="flex items-center gap-2 rounded-full px-3 py-1 shrink-0"
+              style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)' }}
             >
-              <MenuItem onClick={handleLogout}>
-                <LogoutIcon sx={{ mr: 1, fontSize: 18 }} /> Logout
-              </MenuItem>
-            </Menu>
+              <Typography variant="caption" sx={{ color: 'white', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', fontSize: '0.65rem' }}>
+                {role === 'therapist' ? 'Therapist' : 'Patient'}
+              </Typography>
+              <PremiumToggle
+                defaultChecked={role === 'therapist'}
+                onChange={handleRoleToggle}
+              />
+            </div>
+
+            {/* User menu ─────────────────────────────────────────────────────── */}
+            <div className="flex items-center gap-2 shrink-0">
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', display: { xs: 'none', lg: 'block' }, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {currentUser.displayName || currentUser.email}
+              </Typography>
+              <Button onClick={handleMenu} sx={{ p: 0, minWidth: 0 }}>
+                <Avatar
+                  src={currentUser.photoURL || undefined}
+                  sx={{ width: 34, height: 34, border: '2px solid rgba(255,255,255,0.6)', fontSize: '0.9rem' }}
+                >
+                  {currentUser.displayName?.[0] || currentUser.email?.[0]}
+                </Avatar>
+              </Button>
+              <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleClose}
+                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+              >
+                <MenuItem onClick={handleLogout}>
+                  <LogoutIcon sx={{ mr: 1, fontSize: 18 }} /> Logout
+                </MenuItem>
+              </Menu>
+            </div>
           </div>
         </div>
       </nav>

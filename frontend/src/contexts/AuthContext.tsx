@@ -8,7 +8,8 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
-  updateProfile
+  updateProfile,
+  getRedirectResult
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 
@@ -94,6 +95,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   useEffect(() => {
+    // Process redirect results if any
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          console.log('Redirect sign-in completed successfully for:', result.user.email);
+        }
+      })
+      .catch((error) => {
+        console.error('Error processing redirect sign-in:', error);
+      });
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setLoading(false);
