@@ -33,6 +33,7 @@ import {
   InjuryRiskReport
 } from '../utils/poseDetection';
 import { useAuth } from '../contexts/AuthContext';
+import ExerciseDemoOverlay from './ExerciseDemoOverlay';
 
 interface ExerciseMonitorProps {
   selectedExercise: string;
@@ -888,6 +889,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const backendStatus = error.toLowerCase().includes('backend') ? 'Error' : 'Connected';
   const expectedExercise = selectedExercise.replace(/_/g, ' ').toUpperCase();
   const detectedExercise = predictedExercise ? predictedExercise.replace(/_/g, ' ').toUpperCase() : 'NONE';
+  const exerciseDemoKey = normalizeExerciseName(selectedExercise);
 
   return (
     <Container maxWidth="xl" sx={{ mt: 2 }}>
@@ -945,6 +947,15 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                   pointerEvents: 'none'
                 }}
               />
+
+              {/* Exercise demo overlay — shown before session starts */}
+              {!isActive && (
+                <ExerciseDemoOverlay
+                  exerciseKey={exerciseDemoKey}
+                  onStart={handleStart}
+                  loading={loading}
+                />
+              )}
 
               {!poseDetected && isActive && (
                 <Box
