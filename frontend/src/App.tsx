@@ -27,6 +27,8 @@ import ExerciseMonitor from './components/ExerciseMonitor';
 import Dashboard from './components/Dashboard';
 import MediaPipeDebug from './components/MediaPipeDebug';
 import { TherapistPortal } from './components/TherapistPortal';
+import NavHeader from './components/ui/nav-header';
+import { PremiumToggle } from './components/ui/bouncy-toggle';
 
 
 // Create Material-UI theme
@@ -147,17 +149,15 @@ const AppContent: React.FC = () => {
             </Tabs>
           )}
 
-          {/* Premium Role Toggler Switch */}
-          <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: 'rgba(255,255,255,0.15)', px: 2, py: 0.5, borderRadius: 3, mr: 3 }}>
-            <Typography variant="body2" sx={{ mr: 1, color: 'white', fontWeight: 'bold' }}>
-              {role === 'therapist' ? 'Therapist Mode' : 'Patient Mode'}
+          {/* Premium Role Toggler — PremiumToggle component */}
+          <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: 'rgba(255,255,255,0.15)', px: 2, py: 0.5, borderRadius: 3, mr: 3, gap: 1 }}>
+            <Typography variant="body2" sx={{ color: 'white', fontWeight: 'bold' }}>
+              {role === 'therapist' ? 'Therapist' : 'Patient'}
             </Typography>
-            <Button
-              variant="contained"
-              size="small"
-              color={role === 'therapist' ? 'secondary' : 'inherit'}
-              onClick={() => {
-                const nextRole = role === 'patient' ? 'therapist' : 'patient';
+            <PremiumToggle
+              defaultChecked={role === 'therapist'}
+              onChange={(checked) => {
+                const nextRole = checked ? 'therapist' : 'patient';
                 setRole(nextRole);
                 if (nextRole === 'therapist') {
                   setCurrentView('therapist');
@@ -165,15 +165,7 @@ const AppContent: React.FC = () => {
                   setCurrentView('exercises');
                 }
               }}
-              sx={{
-                borderRadius: 2,
-                textTransform: 'none',
-                fontWeight: 'bold',
-                minWidth: '90px'
-              }}
-            >
-              Swap Role
-            </Button>
+            />
           </Box>
 
           {/* User Menu */}
@@ -207,6 +199,13 @@ const AppContent: React.FC = () => {
           </Box>
         </Toolbar>
       </AppBar>
+
+      {/* NavHeader — sliding pill navigation for patient view */}
+      {role === 'patient' && (
+        <div className="flex justify-center py-3 bg-gray-50 border-b border-gray-200 shadow-sm">
+          <NavHeader />
+        </div>
+      )}
 
       {/* Main Content */}
       <Box component="main">
