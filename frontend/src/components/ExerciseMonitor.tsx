@@ -52,7 +52,6 @@ const waitForVideoReady = async (video: HTMLVideoElement, timeoutMs = 10000) => 
   }
   return false;
 };
-
 const stopVideoStream = (video: HTMLVideoElement | null | undefined) => {
   if (!video) {
     return;
@@ -64,6 +63,33 @@ const stopVideoStream = (video: HTMLVideoElement | null | undefined) => {
     video.srcObject = null;
   }
 };
+
+const MemoizedWebcam = React.memo(
+  ({ webcamRef }: { webcamRef: React.RefObject<Webcam> }) => {
+    return (
+      <Webcam
+        ref={webcamRef}
+        audio={false}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          objectPosition: 'center',
+          borderRadius: '8px'
+        }}
+        videoConstraints={{
+          width: 640,
+          height: 480,
+          facingMode: 'user'
+        }}
+      />
+    );
+  },
+  () => true
+);
 
 const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onBack }) => {
   const { currentUser } = useAuth();
@@ -127,6 +153,8 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const activeProtocolRef = useRef<ExerciseProtocol | null>(null);
   const lastVoiceAlertAtRef = useRef(0);
   const historyBufferRef = useRef<any[]>([]);
+  const firstFrameReceivedRef = useRef(false);
+  const loadingWatchdogRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     injuryFlagsRef.current = injuryFlags;
@@ -139,11 +167,18 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const playSpeechCoaching = useCallback((text: string, force: boolean = false) => {
     if (!voiceEnabledRef.current) return;
     const now = Date.now();
-    if (force || now - lastVoiceAlertAtRef.current > 4000) {
+    // Enforce a strict minimum cooldown of 4.5 seconds between any spoken coaching advice.
+    // Even if forced (e.g. injury alert), enforce a 3-second cooldown to prevent speech synthesis queue crashes and stuttering.
+    const cooldown = force ? 3000 : 4500;
+    if (now - lastVoiceAlertAtRef.current > cooldown) {
       if ('speechSynthesis' in window) {
-        speechSynthesis.cancel();
-        speak(text);
-        lastVoiceAlertAtRef.current = now;
+        try {
+          speechSynthesis.cancel();
+          speak(text);
+          lastVoiceAlertAtRef.current = now;
+        } catch (err) {
+          console.error('Speech synthesis failed:', err);
+        }
       }
     }
   }, []);
@@ -210,6 +245,12 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       frameRequestRef.current = null;
     }
     poseProcessingRef.current = false;
+    
+    // Clear watchdog timer if active
+    if (loadingWatchdogRef.current) {
+      clearTimeout(loadingWatchdogRef.current);
+      loadingWatchdogRef.current = null;
+    }
   }, []);
 
   const stopCameraStream = useCallback(() => {
@@ -304,6 +345,16 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
 
   useEffect(() => {
     onPoseResultsRef.current = async (results: any) => {
+      // Clear loading watchdog on first frame processed by MediaPipe
+      if (!firstFrameReceivedRef.current) {
+        firstFrameReceivedRef.current = true;
+        if (loadingWatchdogRef.current) {
+          clearTimeout(loadingWatchdogRef.current);
+          loadingWatchdogRef.current = null;
+        }
+        addToConsoleLog('🚀 First frame processed by MediaPipe! Model assets loaded successfully.');
+      }
+
       if (!canvasRef.current || !isActiveRef.current || isPausedRef.current) {
         return;
       }
@@ -410,12 +461,13 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
           if (!riskReport.isSafe) {
             const lastFlagKey = 'last_injury_flag_at';
             const lastFlag = (window as any)[lastFlagKey] || 0;
-            if (now - lastFlag > 2000) {
+            // Cooldown for injury flagging and caution speech synthesis to prevent queue crashes and stuttering
+            if (now - lastFlag > 3500) {
               const newFlags = injuryFlagsRef.current + 1;
               setInjuryFlags(newFlags);
               (window as any)[lastFlagKey] = now;
+              playSpeechCoaching(`Caution: ${primaryWarning}`, true);
             }
-            playSpeechCoaching(`Caution: ${primaryWarning}`, true);
           } else {
             // General Posture / Exercise Correction voice feedback
             const lastCorrectionTime = (window as any)['last_correction_voiced_at'] || 0;
@@ -433,7 +485,12 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         }
 
         lastPredictionAtRef.current = now;
-        const predictionResult = await apiService.predictExercise(jointAngles, selectedExerciseRef.current, historyBufferRef.current);
+        
+        // Ensure raw landmark list is always passed and never empty/undefined
+        const landmarksToSend = historyBufferRef.current && historyBufferRef.current.length > 0
+          ? historyBufferRef.current
+          : [results.poseLandmarks];
+        const predictionResult = await apiService.predictExercise(jointAngles, selectedExerciseRef.current, landmarksToSend);
 
         setPrediction(predictionResult);
         setConfidence(predictionResult.confidence);
@@ -810,6 +867,19 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       lastFrameTimeRef.current = 0;
       setSessionDuration(0);
       setSessionStartTime(new Date());
+
+      // Start watchdog timer for MediaPipe asset downloading (15-second fallback threshold)
+      firstFrameReceivedRef.current = false;
+      if (loadingWatchdogRef.current) {
+        clearTimeout(loadingWatchdogRef.current);
+      }
+      loadingWatchdogRef.current = setTimeout(() => {
+        if (!firstFrameReceivedRef.current && isActiveRef.current) {
+          setError('MediaPipe assets are taking longer than expected to download from the CDN. Please check your internet connection or reload the page.');
+          addToConsoleLog('⚠️ WARNING: MediaPipe assets loading timed out (15s). CDN might be slow or blocked.');
+          setLoading(false);
+        }
+      }, 15000);
       setPredictedExercise('');
       predictedExerciseRef.current = '';
       setExerciseFeedback('Ready to start!');
@@ -965,25 +1035,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         <Grid item xs={12} md={8}>
           <Paper sx={{ p: 2, position: 'relative' }}>
             <Box sx={{ position: 'relative', width: '100%', aspectRatio: '4/3' }}>
-              <Webcam
-                ref={webcamRef}
-                audio={false}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  objectPosition: 'center',
-                  borderRadius: '8px'
-                }}
-                videoConstraints={{
-                  width: 640,
-                  height: 480,
-                  facingMode: 'user'
-                }}
-              />
+              <MemoizedWebcam webcamRef={webcamRef} />
               <canvas
                 ref={canvasRef}
                 width={640}

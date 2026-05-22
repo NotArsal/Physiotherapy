@@ -112,8 +112,14 @@ export function extractJointAngles(landmarks: any): number[] {
   }
 }
 
-// Initialize MediaPipe Pose with CDN-hosted assets.
-export function initializePoseDetection(onResults: (results: any) => void): { pose: Pose } {
+// Initialize MediaPipe Pose with CDN-hosted assets and asset loading watchdog support.
+export function initializePoseDetection(
+  onResults: (results: any) => void,
+  onTimeout?: () => void
+): { pose: Pose; startWatchdog: () => void; clearWatchdog: () => void } {
+  let hasReceivedResults = false;
+  let timerId: any = null;
+
   const pose = new Pose({
     locateFile: (file) => {
       return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
@@ -129,9 +135,33 @@ export function initializePoseDetection(onResults: (results: any) => void): { po
     minTrackingConfidence: 0.5
   });
   
-  pose.onResults(onResults);
+  pose.onResults((results) => {
+    hasReceivedResults = true;
+    if (timerId) {
+      clearTimeout(timerId);
+      timerId = null;
+    }
+    onResults(results);
+  });
 
-  return { pose };
+  const startWatchdog = () => {
+    hasReceivedResults = false;
+    if (timerId) clearTimeout(timerId);
+    timerId = setTimeout(() => {
+      if (!hasReceivedResults && onTimeout) {
+        onTimeout();
+      }
+    }, 15000); // 15-second download watchdog threshold
+  };
+
+  const clearWatchdog = () => {
+    if (timerId) {
+      clearTimeout(timerId);
+      timerId = null;
+    }
+  };
+
+  return { pose, startWatchdog, clearWatchdog };
 }
 
 // Voice feedback messages

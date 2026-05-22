@@ -37,9 +37,9 @@ allowed_origins = [
 ]
 frontend_env = os.getenv("FRONTEND_URL")
 if frontend_env:
-    # Ensure no trailing slash
-    frontend_env_clean = frontend_env.rstrip("/")
-    if frontend_env_clean not in allowed_origins:
+    # Ensure whitespace is trimmed and trailing slashes are stripped
+    frontend_env_clean = frontend_env.strip().rstrip("/")
+    if frontend_env_clean and frontend_env_clean not in allowed_origins:
         allowed_origins.append(frontend_env_clean)
 
 # Initialize standard Flask-CORS as primary handler for all resources
@@ -154,8 +154,8 @@ def init_db():
         except Exception as e:
             print(f"PostgreSQL init failed: {e}. Falling back to SQLite.")
 
-    # SQLite Fallback
-    conn = sqlite3.connect(DATABASE_PATH)
+    # SQLite Fallback with a high timeout to prevent locks in concurrent startups
+    conn = sqlite3.connect(DATABASE_PATH, timeout=30)
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sessions (
@@ -212,8 +212,8 @@ def get_db_connection():
         import psycopg2
         from psycopg2.extras import RealDictCursor
         return psycopg2.connect(DATABASE_URL)
-    # Add a timeout to SQLite to prevent "database is locked" errors in concurrent environments
-    return sqlite3.connect(DATABASE_PATH, timeout=10)
+    # Add an extended timeout to SQLite to prevent "database is locked" errors in concurrent environments
+    return sqlite3.connect(DATABASE_PATH, timeout=30)
 
 def load_models():
     """Load the trained model artifacts from the backend/model directory."""
@@ -850,9 +850,16 @@ def save_protocol():
         return jsonify({"error": f"Failed to save protocols: {exc}", "success": False}), 500
 
 
-# Initialize database and load models at module level for Gunicorn compatibility
-init_db()
-load_models()
+# Initialize database and load models at module level with safety wraps for multi-worker startups
+try:
+    init_db()
+except Exception as db_err:
+    print(f"Database initialization warning (likely concurrent SQLite access in multi-worker environment): {db_err}")
+
+try:
+    load_models()
+except Exception as model_err:
+    print(f"Model loading warning: {model_err}")
 
 if __name__ == "__main__":
     print("Starting Physiotherapy Exercise Monitoring Backend...")
