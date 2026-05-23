@@ -66,6 +66,10 @@ def handle_options_preflight():
         if origin:
             origin_lower = origin.lower()
             if origin in allowed_origins or "vercel.app" in origin_lower or "localhost" in origin_lower or "127.0.0.1" in origin_lower:
+                response.headers.pop("Access-Control-Allow-Origin", None)
+                response.headers.pop("Access-Control-Allow-Credentials", None)
+                response.headers.pop("Access-Control-Allow-Headers", None)
+                response.headers.pop("Access-Control-Allow-Methods", None)
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Credentials"] = "true"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
@@ -79,6 +83,10 @@ def inject_cors_headers(response):
     if origin:
         origin_lower = origin.lower()
         if origin in allowed_origins or "vercel.app" in origin_lower or "localhost" in origin_lower or "127.0.0.1" in origin_lower:
+            response.headers.pop("Access-Control-Allow-Origin", None)
+            response.headers.pop("Access-Control-Allow-Credentials", None)
+            response.headers.pop("Access-Control-Allow-Headers", None)
+            response.headers.pop("Access-Control-Allow-Methods", None)
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
             response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
@@ -156,6 +164,8 @@ def init_db():
 
     # SQLite Fallback with a high timeout to prevent locks in concurrent startups
     conn = sqlite3.connect(DATABASE_PATH, timeout=30)
+    conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('PRAGMA synchronous=NORMAL')
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sessions (
@@ -213,7 +223,10 @@ def get_db_connection():
         from psycopg2.extras import RealDictCursor
         return psycopg2.connect(DATABASE_URL)
     # Add an extended timeout to SQLite to prevent "database is locked" errors in concurrent environments
-    return sqlite3.connect(DATABASE_PATH, timeout=30)
+    conn = sqlite3.connect(DATABASE_PATH, timeout=30)
+    conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('PRAGMA synchronous=NORMAL')
+    return conn
 
 def load_models():
     """Load the trained model artifacts from the backend/model directory."""

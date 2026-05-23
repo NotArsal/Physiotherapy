@@ -476,19 +476,19 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
 
         if (riskReport.warnings.length > 0) {
           const primaryWarning = riskReport.warnings[0];
+          // Deactivate voice alerts for visibility warnings to prevent spam
+          const isVisibilityWarning = primaryWarning.toLowerCase().includes('not visible') || primaryWarning.toLowerCase().includes('occluded');
 
-          if (!riskReport.isSafe) {
+          if (!riskReport.isSafe && !isVisibilityWarning) {
             const lastFlagKey = 'last_injury_flag_at';
             const lastFlag = (window as any)[lastFlagKey] || 0;
-            // Cooldown for injury flagging and caution speech synthesis to prevent queue crashes and stuttering
             if (now - lastFlag > 3500) {
               const newFlags = injuryFlagsRef.current + 1;
               setInjuryFlags(newFlags);
               (window as any)[lastFlagKey] = now;
               playSpeechCoaching(`Caution: ${primaryWarning}`, true);
             }
-          } else {
-            // General Posture / Exercise Correction voice feedback
+          } else if (!isVisibilityWarning) {
             const lastCorrectionTime = (window as any)['last_correction_voiced_at'] || 0;
             const lastCorrectionText = (window as any)['last_correction_voiced_text'] || '';
             if (primaryWarning !== lastCorrectionText || now - lastCorrectionTime > 5000) {
@@ -499,22 +499,58 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
           }
         }
 
-        if (now - lastPredictionAtRef.current < 300) {
-          return;
+        if (now - lastPredictionAtRef.current >= 600) {
+          lastPredictionAtRef.current = now;
+          
+          const landmarksToSend = historyBufferRef.current && historyBufferRef.current.length > 0
+            ? historyBufferRef.current
+            : [results.poseLandmarks];
+            
+          apiService.predictExercise(jointAngles, selectedExerciseRef.current, landmarksToSend)
+            .then(predictionResult => {
+              setPrediction(predictionResult);
+              setConfidence(predictionResult.confidence);
+              setPredictedExercise(predictionResult.exercise || 'unknown');
+              setAiModelDetails(predictionResult);
+
+              const selectedNormalized = normalizeExerciseName(selectedExerciseRef.current);
+              const predictedNormalized = normalizeExerciseName(predictionResult.exercise || '');
+              const isCorrectExercise =
+                predictedNormalized === selectedNormalized ||
+                (selectedNormalized === 'glute_bridge' && predictedNormalized === 'hip_thrust') ||
+                (selectedNormalized === 'clamshell' && predictedNormalized === 'leg_raises') ||
+                (selectedNormalized === 'bird_dog' && predictedNormalized === 'plank') ||
+                (selectedNormalized === 'wall_slide' && predictedNormalized === 'shoulder_press') ||
+                (selectedNormalized === 'straight_leg_raise' && predictedNormalized === 'leg_raises') ||
+                (selectedNormalized === 'lat_pulldown' && ['lat_pulldown', 'incline_bench_press', 'bench_press', 'pull_up', 'shoulder_press'].includes(predictedNormalized)) ||
+                (selectedNormalized === 'pull_up' && ['pull_up', 'lat_pulldown', 'incline_bench_press', 'bench_press', 'shoulder_press'].includes(predictedNormalized)) ||
+                (selectedNormalized === 'shoulder_press' && ['shoulder_press', 'wall_slide', 'pull_up', 'lat_pulldown'].includes(predictedNormalized)) ||
+                (selectedNormalized === 'wall_slide' && ['wall_slide', 'shoulder_press', 'pull_up', 'lat_pulldown'].includes(predictedNormalized));
+
+              exerciseMatchRef.current = isCorrectExercise;
+
+              if (predictionResult.confidence >= 0.85 && isCorrectExercise) {
+                setFormQuality('excellent');
+                setExerciseFeedback('Perfect form! Keep it up!');
+              } else if (predictionResult.confidence >= 0.7 && isCorrectExercise) {
+                setFormQuality('good');
+                setExerciseFeedback('Good form! Stay focused on your movement.');
+              } else if (predictionResult.confidence >= 0.5) {
+                setFormQuality('needs_improvement');
+                setExerciseFeedback(
+                  isCorrectExercise
+                    ? 'Form needs improvement. Focus on proper technique.'
+                    : `AI detected ${predictionResult.exercise?.replace(/_/g, ' ')} instead of ${selectedExerciseRef.current.replace(/_/g, ' ')}`
+                );
+              } else {
+                setFormQuality('poor');
+                setExerciseFeedback('Low confidence detection. Check your positioning.');
+              }
+            })
+            .catch(err => {
+              addToConsoleLog(`Prediction failed: ${err.message}`);
+            });
         }
-
-        lastPredictionAtRef.current = now;
-        
-        // Ensure raw landmark list is always passed and never empty/undefined
-        const landmarksToSend = historyBufferRef.current && historyBufferRef.current.length > 0
-          ? historyBufferRef.current
-          : [results.poseLandmarks];
-        const predictionResult = await apiService.predictExercise(jointAngles, selectedExerciseRef.current, landmarksToSend);
-
-        setPrediction(predictionResult);
-        setConfidence(predictionResult.confidence);
-        setPredictedExercise(predictionResult.exercise || 'unknown');
-        setAiModelDetails(predictionResult);
 
         // Client-side phase detection and rep counting
         const previousPhase = currentPhaseRef.current || 'down';
@@ -582,41 +618,6 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
           setCurrentPhase(newPhase);
         } else if (newPhase === 'hold') {
           setCurrentPhase(newPhase);
-        }
-
-        const selectedNormalized = normalizeExerciseName(selectedExerciseRef.current);
-        const predictedNormalized = normalizeExerciseName(predictionResult.exercise || '');
-        const isCorrectExercise =
-          predictedNormalized === selectedNormalized ||
-          (selectedNormalized === 'glute_bridge' && predictedNormalized === 'hip_thrust') ||
-          (selectedNormalized === 'clamshell' && predictedNormalized === 'leg_raises') ||
-          (selectedNormalized === 'bird_dog' && predictedNormalized === 'plank') ||
-          (selectedNormalized === 'wall_slide' && predictedNormalized === 'shoulder_press') ||
-          (selectedNormalized === 'straight_leg_raise' && predictedNormalized === 'leg_raises') ||
-          // OCCLUSION ALIASES for close-up seated views
-          (selectedNormalized === 'lat_pulldown' && ['lat_pulldown', 'incline_bench_press', 'bench_press', 'pull_up', 'shoulder_press'].includes(predictedNormalized)) ||
-          (selectedNormalized === 'pull_up' && ['pull_up', 'lat_pulldown', 'incline_bench_press', 'bench_press', 'shoulder_press'].includes(predictedNormalized)) ||
-          (selectedNormalized === 'shoulder_press' && ['shoulder_press', 'wall_slide', 'pull_up', 'lat_pulldown'].includes(predictedNormalized)) ||
-          (selectedNormalized === 'wall_slide' && ['wall_slide', 'shoulder_press', 'pull_up', 'lat_pulldown'].includes(predictedNormalized));
-
-        exerciseMatchRef.current = isCorrectExercise;
-
-        if (predictionResult.confidence >= 0.85 && isCorrectExercise) {
-          setFormQuality('excellent');
-          setExerciseFeedback('Perfect form! Keep it up!');
-        } else if (predictionResult.confidence >= 0.7 && isCorrectExercise) {
-          setFormQuality('good');
-          setExerciseFeedback('Good form! Stay focused on your movement.');
-        } else if (predictionResult.confidence >= 0.5) {
-          setFormQuality('needs_improvement');
-          setExerciseFeedback(
-            isCorrectExercise
-              ? 'Form needs improvement. Focus on proper technique.'
-              : `AI detected ${predictionResult.exercise?.replace(/_/g, ' ')} instead of ${selectedExerciseRef.current.replace(/_/g, ' ')}`
-          );
-        } else {
-          setFormQuality('poor');
-          setExerciseFeedback('Low confidence detection. Check your positioning.');
         }
 
         // Voice feedback moved to the rep counting logic above
@@ -964,11 +965,12 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       historyBufferRef.current = []; // Clear history buffer on stop
 
       if (currentUser && sessionStartTime) {
-        await apiService.logSession({
+        const sessionPayload = {
           user_id: currentUser.uid,
           exercise: selectedExercise,
           total_reps: repCountRef.current,
           duration: sessionDuration,
+          timestamp: new Date().toISOString(),
           session_data: [
             {
               final_rep_count: repCountRef.current,
@@ -978,7 +980,17 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
               timestamp: new Date().toISOString()
             }
           ]
-        });
+        };
+        
+        try {
+          await apiService.logSession(sessionPayload);
+        } catch (logErr) {
+          addToConsoleLog(`Backend save failed, saving offline...`);
+          const offlineKey = `physio_offline_sessions_${currentUser.uid}`;
+          const existing = JSON.parse(localStorage.getItem(offlineKey) || '[]');
+          existing.push(sessionPayload);
+          localStorage.setItem(offlineKey, JSON.stringify(existing));
+        }
       }
 
       if (voiceEnabledRef.current) {
@@ -1104,65 +1116,6 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                 </Box>
               )}
 
-               {isActive && injuryReport && !injuryReport.isSafe && (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 16,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    backgroundColor: 'rgba(186, 26, 26, 0.95)', // Flat premium rich crimson
-                    color: '#faf9f5',
-                    px: 3,
-                    py: 1.5,
-                    borderRadius: 2,
-                    boxShadow: 'none', // Flat styling, no glow
-                    zIndex: 10,
-                    textAlign: 'center',
-                    border: '1px solid #8c1d18',
-                    animation: 'pulseFlat 1.5s infinite ease-in-out',
-                    '@keyframes pulseFlat': {
-                      '0%': { opacity: 0.9, transform: 'translateX(-50%) scale(1)' },
-                      '50%': { opacity: 1, transform: 'translateX(-50%) scale(1.02)' },
-                      '100%': { opacity: 0.9, transform: 'translateX(-50%) scale(1)' }
-                    }
-                  }}
-                >
-                  <Typography variant="subtitle1" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                    ⚠️ INJURY RISK DETECTED
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 0.5 }}>
-                    {injuryReport.warnings.join(' | ')}
-                  </Typography>
-                </Box>
-              )}
-
-              {isActive && injuryReport && injuryReport.isSafe && injuryReport.warnings.length > 0 && (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 16,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    backgroundColor: 'rgba(216, 67, 21, 0.95)', // Flat premium burnt orange
-                    color: 'white',
-                    px: 3,
-                    py: 1.5,
-                    borderRadius: 2,
-                    boxShadow: 'none', // Flat styling, no glow
-                    zIndex: 10,
-                    textAlign: 'center',
-                    border: '1px solid #d84315', // Flat premium burnt rust
-                  }}
-                >
-                  <Typography variant="subtitle2" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                    ⚠️ FORM CORRECTION
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 0.5 }}>
-                    {injuryReport.warnings.join(' | ')}
-                  </Typography>
-                </Box>
-              )}
             </Box>
 
             <Box sx={{ mt: 2, display: 'flex', gap: 2, justifyContent: 'center' }}>

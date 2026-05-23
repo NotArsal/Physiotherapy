@@ -58,6 +58,11 @@ const Dashboard: React.FC = () => {
     }
 
     try {
+      const offlineKey = `physio_offline_sessions_${currentUser.uid}`;
+      const offlineSessions = JSON.parse(localStorage.getItem(offlineKey) || '[]');
+      
+      let mergedData: UserSessionsResponse | null = null;
+
       // Try to load from cache first
       const cacheKey = `physio_sessions_${currentUser.uid}`;
       const cached = localStorage.getItem(cacheKey);
@@ -65,20 +70,48 @@ const Dashboard: React.FC = () => {
         try {
           const parsed = JSON.parse(cached);
           if (parsed && parsed.sessions) {
-            setSessionData(parsed);
-            setLoading(false);
+            mergedData = parsed;
           }
         } catch (e) {
           console.error('Failed to parse cached dashboard data');
         }
       }
 
-      const data = await apiService.getUserSessions(currentUser.uid);
-      setSessionData(data);
-      localStorage.setItem(cacheKey, JSON.stringify(data));
-    } catch (fetchError) {
-      setError('Failed to load dashboard data. Please make sure the backend is running.');
-      console.error('Error fetching user sessions:', fetchError);
+      try {
+        const data = await apiService.getUserSessions(currentUser.uid);
+        mergedData = data;
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+      } catch (fetchError) {
+        console.error('Error fetching user sessions:', fetchError);
+        // Fallback: don't error out if we have any data to show
+        if (!mergedData && offlineSessions.length === 0) {
+          setError('Failed to load dashboard data. Please make sure the backend is running.');
+        }
+      }
+
+      if (mergedData || offlineSessions.length > 0) {
+        let allSessions = [...(mergedData?.sessions || []), ...offlineSessions];
+        
+        // Deduplicate by timestamp
+        const unique = new Map<string, any>();
+        for (const s of allSessions) {
+          unique.set(new Date(s.timestamp).getTime().toString(), s);
+        }
+        allSessions = Array.from(unique.values());
+        
+        setSessionData({
+          user_id: currentUser.uid,
+          sessions: allSessions,
+          summary: {
+            total_sessions: 0,
+            total_reps: 0,
+            total_duration: 0,
+            exercise_breakdown: {}
+          }
+        });
+      }
+    } catch (e) {
+       console.error("Dashboard init error", e);
     } finally {
       setLoading(false);
     }
