@@ -1,6 +1,7 @@
 import os
 import pickle
 import sqlite3
+import re
 from datetime import datetime
 from pathlib import Path
 import json
@@ -33,6 +34,7 @@ allowed_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "https://physiotherapy-frontend.vercel.app",
+    "https://physiotherapy-frotend.vercel.app",
 ]
 frontend_env = os.getenv("FRONTEND_URL")
 if frontend_env:
@@ -45,7 +47,7 @@ if frontend_env:
 CORS(
     app,
     resources={r"/*": {
-        "origins": allowed_origins,
+        "origins": allowed_origins + [re.compile(r"^https://.*\.vercel\.app$")],
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
         "expose_headers": ["Access-Control-Allow-Origin"]
@@ -633,26 +635,27 @@ def log_session():
         session_data = json.dumps(data.get("session_data", []))
 
         conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        if DATABASE_URL:
-            # Postgres syntax
-            cursor.execute('''
-                INSERT INTO sessions (user_id, exercise, total_reps, duration, timestamp, session_data)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                RETURNING id
-            ''', (user_id, exercise, total_reps, duration, timestamp, session_data))
-            session_id = cursor.fetchone()[0]
-        else:
-            # SQLite syntax
-            cursor.execute('''
-                INSERT INTO sessions (user_id, exercise, total_reps, duration, timestamp, session_data)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (user_id, exercise, total_reps, duration, timestamp, session_data))
-            session_id = cursor.lastrowid
-            
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            if DATABASE_URL:
+                # Postgres syntax
+                cursor.execute('''
+                    INSERT INTO sessions (user_id, exercise, total_reps, duration, timestamp, session_data)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                ''', (user_id, exercise, total_reps, duration, timestamp, session_data))
+                session_id = cursor.fetchone()[0]
+            else:
+                # SQLite syntax
+                cursor.execute('''
+                    INSERT INTO sessions (user_id, exercise, total_reps, duration, timestamp, session_data)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (user_id, exercise, total_reps, duration, timestamp, session_data))
+                session_id = cursor.lastrowid
+                
+            conn.commit()
+        finally:
+            conn.close()
 
         return jsonify(
             {
@@ -667,6 +670,7 @@ def log_session():
 
 @app.route("/sessions/<user_id>", methods=["GET"])
 def get_user_sessions(user_id):
+    conn = None
     try:
         conn = get_db_connection()
         if not DATABASE_URL:
@@ -684,8 +688,11 @@ def get_user_sessions(user_id):
             cursor.execute('SELECT * FROM sessions WHERE user_id = ? ORDER BY timestamp DESC', (user_id,))
             
         rows = cursor.fetchall()
-        conn.close()
+    finally:
+        if conn:
+            conn.close()
 
+    try:
         user_sessions = []
         for row in rows:
             session = dict(row)
@@ -723,6 +730,7 @@ def get_user_sessions(user_id):
 
 @app.route("/sessions", methods=["GET"])
 def get_all_sessions():
+    conn = None
     try:
         conn = get_db_connection()
         if not DATABASE_URL:
@@ -740,8 +748,11 @@ def get_all_sessions():
             cursor.execute('SELECT * FROM sessions ORDER BY timestamp DESC')
             
         rows = cursor.fetchall()
-        conn.close()
+    finally:
+        if conn:
+            conn.close()
 
+    try:
         all_sessions = []
         for row in rows:
             session = dict(row)
@@ -755,6 +766,7 @@ def get_all_sessions():
 
 @app.route("/protocols/default", methods=["GET"])
 def get_default_protocols():
+    conn = None
     try:
         conn = get_db_connection()
         if not DATABASE_URL:
@@ -769,8 +781,11 @@ def get_default_protocols():
             cursor.execute("SELECT * FROM protocols WHERE user_id = 'default'")
             
         rows = cursor.fetchall()
-        conn.close()
+    finally:
+        if conn:
+            conn.close()
         
+    try:
         protocols = [dict(row) for row in rows]
         return jsonify({"protocols": protocols, "success": True})
     except Exception as exc:
@@ -779,6 +794,7 @@ def get_default_protocols():
 
 @app.route("/protocols/<user_id>", methods=["GET"])
 def get_user_protocols(user_id):
+    conn = None
     try:
         conn = get_db_connection()
         if not DATABASE_URL:
@@ -801,8 +817,11 @@ def get_user_protocols(user_id):
             else:
                 cursor.execute("SELECT * FROM protocols WHERE user_id = 'default'")
             rows = cursor.fetchall()
+    finally:
+        if conn:
+            conn.close()
             
-        conn.close()
+    try:
         protocols = [dict(row) for row in rows]
         return jsonify({"user_id": user_id, "protocols": protocols, "success": True})
     except Exception as exc:
@@ -822,40 +841,42 @@ def save_protocol():
         if not protocols_list:
             return jsonify({"error": "No data provided", "success": False}), 400
             
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
+        # Verify schema validity first, before opening connection
         for item in protocols_list:
             user_id = item.get("user_id")
             exercise = item.get("exercise")
-            
             if not user_id or not exercise:
-                conn.close()
                 return jsonify({"error": "Missing user_id or exercise in protocol data", "success": False}), 400
-                
-            target_reps = int(item.get("target_reps", 10))
-            safe_spine_angle = float(item.get("safe_spine_angle", 30.0))
-            safe_knee_angle = float(item.get("safe_knee_angle", 90.0))
-            safety_sensitivity = item.get("safety_sensitivity", "medium")
             
-            if DATABASE_URL:
-                cursor.execute('''
-                    INSERT INTO protocols (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (user_id, exercise) DO UPDATE SET
-                        target_reps = EXCLUDED.target_reps,
-                        safe_spine_angle = EXCLUDED.safe_spine_angle,
-                        safe_knee_angle = EXCLUDED.safe_knee_angle,
-                        safety_sensitivity = EXCLUDED.safety_sensitivity
-                ''', (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity))
-            else:
-                cursor.execute('''
-                    INSERT OR REPLACE INTO protocols (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity))
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor()
+            for item in protocols_list:
+                user_id = item.get("user_id")
+                exercise = item.get("exercise")
+                target_reps = int(item.get("target_reps", 10))
+                safe_spine_angle = float(item.get("safe_spine_angle", 30.0))
+                safe_knee_angle = float(item.get("safe_knee_angle", 90.0))
+                safety_sensitivity = item.get("safety_sensitivity", "medium")
                 
-        conn.commit()
-        conn.close()
+                if DATABASE_URL:
+                    cursor.execute('''
+                        INSERT INTO protocols (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (user_id, exercise) DO UPDATE SET
+                            target_reps = EXCLUDED.target_reps,
+                            safe_spine_angle = EXCLUDED.safe_spine_angle,
+                            safe_knee_angle = EXCLUDED.safe_knee_angle,
+                            safety_sensitivity = EXCLUDED.safety_sensitivity
+                    ''', (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity))
+                else:
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO protocols (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity))
+            conn.commit()
+        finally:
+            conn.close()
         
         return jsonify({"message": "Protocols saved successfully", "success": True})
     except Exception as exc:

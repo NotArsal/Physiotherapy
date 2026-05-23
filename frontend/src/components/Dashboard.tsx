@@ -59,12 +59,17 @@ const Dashboard: React.FC = () => {
 
     try {
       const offlineKey = `physio_offline_sessions_${currentUser.uid}`;
+      const backupKey = `physio_local_backup_sessions_${currentUser.uid}`;
+      const cacheKey = `physio_sessions_${currentUser.uid}`;
+
       const offlineSessions = JSON.parse(localStorage.getItem(offlineKey) || '[]');
+      const backupSessions = JSON.parse(localStorage.getItem(backupKey) || '[]');
       
       let mergedData: UserSessionsResponse | null = null;
+      let fetchedSuccessfully = false;
+      let liveResponseData: UserSessionsResponse | null = null;
 
       // Try to load from cache first
-      const cacheKey = `physio_sessions_${currentUser.uid}`;
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
         try {
@@ -73,42 +78,142 @@ const Dashboard: React.FC = () => {
             mergedData = parsed;
           }
         } catch (e) {
-          console.error('Failed to parse cached dashboard data');
+          console.error('Failed to parse cached dashboard data', e);
         }
       }
 
       try {
         const data = await apiService.getUserSessions(currentUser.uid);
+        liveResponseData = data;
         mergedData = data;
         localStorage.setItem(cacheKey, JSON.stringify(data));
+        fetchedSuccessfully = true;
       } catch (fetchError) {
         console.error('Error fetching user sessions:', fetchError);
         // Fallback: don't error out if we have any data to show
-        if (!mergedData && offlineSessions.length === 0) {
+        if (!mergedData && offlineSessions.length === 0 && backupSessions.length === 0) {
           setError('Failed to load dashboard data. Please make sure the backend is running.');
         }
       }
 
-      if (mergedData || offlineSessions.length > 0) {
-        let allSessions = [...(mergedData?.sessions || []), ...offlineSessions];
-        
-        // Deduplicate by timestamp
-        const unique = new Map<string, any>();
-        for (const s of allSessions) {
-          unique.set(new Date(s.timestamp).getTime().toString(), s);
-        }
-        allSessions = Array.from(unique.values());
-        
-        setSessionData({
-          user_id: currentUser.uid,
-          sessions: allSessions,
-          summary: {
-            total_sessions: 0,
-            total_reps: 0,
-            total_duration: 0,
-            exercise_breakdown: {}
+      // Merge backend/cache sessions, offline sessions, and permanent local backup sessions
+      let allSessions = [
+        ...(mergedData?.sessions || []),
+        ...offlineSessions,
+        ...backupSessions
+      ];
+      
+      // Deduplicate by timestamp to ensure no duplicates are rendered
+      const unique = new Map<string, any>();
+      for (const s of allSessions) {
+        if (s && s.timestamp) {
+          const timeKey = new Date(s.timestamp).getTime().toString();
+          if (timeKey !== "NaN") {
+            unique.set(timeKey, s);
           }
+        }
+      }
+      allSessions = Array.from(unique.values());
+      
+      setSessionData({
+        user_id: currentUser.uid,
+        sessions: allSessions,
+        summary: {
+          total_sessions: 0,
+          total_reps: 0,
+          total_duration: 0,
+          exercise_breakdown: {}
+        }
+      });
+
+      // Self-healing database reconciler/sync mechanism
+      // If the backend fetch succeeded, reconcile any missing sessions from permanent local backup or offline queue
+      if (fetchedSuccessfully && liveResponseData) {
+        const backendTimestamps = new Set(
+          (liveResponseData.sessions || []).map((s: any) => new Date(s.timestamp).getTime().toString())
+        );
+        
+        // Find backup sessions that do not exist in the backend
+        const missingFromBackend = backupSessions.filter((s: any) => {
+          const timeKey = new Date(s.timestamp).getTime().toString();
+          return timeKey !== "NaN" && !backendTimestamps.has(timeKey);
         });
+
+        // Combined list of sessions that need to be synchronized
+        const sessionsToSync = [...offlineSessions, ...missingFromBackend];
+        
+        // Deduplicate sync candidates
+        const uniqueToSyncMap = new Map<string, any>();
+        for (const s of sessionsToSync) {
+          const timeKey = new Date(s.timestamp).getTime().toString();
+          if (timeKey !== "NaN") {
+            uniqueToSyncMap.set(timeKey, s);
+          }
+        }
+        const deduplicatedToSync = Array.from(uniqueToSyncMap.values());
+
+        if (deduplicatedToSync.length > 0) {
+          console.log(`Self-healing sync: Reconciling ${deduplicatedToSync.length} missing sessions with backend...`);
+          
+          // Sync asynchronously in the background so it doesn't block the dashboard UI render
+          void (async () => {
+            let syncSuccessCount = 0;
+            for (const session of deduplicatedToSync) {
+              try {
+                const payload = {
+                  user_id: session.user_id,
+                  exercise: session.exercise,
+                  total_reps: session.total_reps,
+                  duration: session.duration,
+                  session_data: session.session_data || []
+                };
+                await apiService.logSession(payload);
+                syncSuccessCount++;
+              } catch (syncErr) {
+                console.warn('Failed to sync individual session to backend:', syncErr);
+              }
+            }
+            
+            if (syncSuccessCount > 0) {
+              console.log(`Self-healing sync successfully reconciled ${syncSuccessCount} sessions!`);
+              // Clear the offline queue
+              localStorage.setItem(offlineKey, JSON.stringify([]));
+              
+              // Refresh backend data silently to update dashboard and cache
+              try {
+                const refreshedData = await apiService.getUserSessions(currentUser.uid);
+                localStorage.setItem(cacheKey, JSON.stringify(refreshedData));
+                
+                // Merge and update dashboard state with refreshed backend sessions
+                let updatedSessions = [
+                  ...(refreshedData.sessions || []),
+                  ...backupSessions
+                ];
+                const updatedUnique = new Map<string, any>();
+                for (const s of updatedSessions) {
+                  if (s && s.timestamp) {
+                    const timeKey = new Date(s.timestamp).getTime().toString();
+                    if (timeKey !== "NaN") {
+                      updatedUnique.set(timeKey, s);
+                    }
+                  }
+                }
+                setSessionData({
+                  user_id: currentUser.uid,
+                  sessions: Array.from(updatedUnique.values()),
+                  summary: {
+                    total_sessions: 0,
+                    total_reps: 0,
+                    total_duration: 0,
+                    exercise_breakdown: {}
+                  }
+                });
+              } catch (refError) {
+                console.warn('Failed to refresh sessions after sync:', refError);
+              }
+            }
+          })();
+        }
       }
     } catch (e) {
        console.error("Dashboard init error", e);

@@ -981,6 +981,17 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
             }
           ]
         };
+
+        // Always save to permanent local backup to protect against backend SQLite wipes on Render sleep/restarts
+        try {
+          const backupKey = `physio_local_backup_sessions_${currentUser.uid}`;
+          const backupExisting = JSON.parse(localStorage.getItem(backupKey) || '[]');
+          backupExisting.push(sessionPayload);
+          localStorage.setItem(backupKey, JSON.stringify(backupExisting));
+          addToConsoleLog(`Session saved to permanent local backup`);
+        } catch (backupErr) {
+          console.error('Failed to save session to permanent local backup:', backupErr);
+        }
         
         try {
           await apiService.logSession(sessionPayload);
