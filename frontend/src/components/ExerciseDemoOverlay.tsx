@@ -43,7 +43,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera so your full arm path is visible',
   },
   push_up: {
-    images: [`${BASE}/Push-Up/0.jpg`, `${BASE}/Push-Up/1.jpg`],
+    images: ['/images/push up.jpg'],
     description: 'A bodyweight pushing exercise. Start in a plank, lower your chest to the floor, then push back up.',
     muscles: ['Chest', 'Triceps', 'Front Deltoids', 'Core'],
     tips: ['Keep body in a straight line', 'Lower chest to near the floor', 'Elbows at 45° to body', 'Engage core throughout'],
@@ -59,7 +59,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Front or 45° angle so the arm arc motion is visible',
   },
   squat: {
-    images: [`${BASE}/Barbell%20Full%20Squat/0.jpg`, `${BASE}/Barbell%20Full%20Squat/1.jpg`],
+    images: ['/images/squats.jpg'],
     description: 'Stand with feet shoulder-width apart, drive hips back and down until thighs are parallel, then stand back up.',
     muscles: ['Quadriceps', 'Glutes', 'Hamstrings', 'Core'],
     tips: ['Knees track over toes', 'Chest stays upright', 'Drive through heels', 'Go to at least parallel depth'],
@@ -83,7 +83,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera — full body visible from head to feet',
   },
   pull_up: {
-    images: [`${BASE}/Pull-up/0.jpg`, `${BASE}/Pull-up/1.jpg`],
+    images: ['/images/pull up.jpg'],
     description: 'Hang from a bar with overhand grip, pull your chest to the bar by driving elbows down, then lower with control.',
     muscles: ['Latissimus Dorsi', 'Biceps', 'Rhomboids', 'Core'],
     tips: ['Start from full dead hang', 'Drive elbows toward hips', 'Pull chest to bar', 'Lower slowly and controlled'],
@@ -91,7 +91,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Full body shot from the front or side — hands must be visible',
   },
   lat_pulldown: {
-    images: [`${BASE}/Lat%20Pulldown%20with%20Bands/0.jpg`, `${BASE}/Lat%20Pulldown%20with%20Bands/1.jpg`],
+    images: ['/images/lat-pulldown.png'],
     description: 'Grip the bar wider than shoulders, pull it down to your upper chest while squeezing your lats, then control it back up.',
     muscles: ['Latissimus Dorsi', 'Biceps', 'Rear Deltoids'],
     tips: ['Lean slightly back', 'Pull elbows down and back', 'Squeeze lats at bottom', 'Hands must be visible!'],
@@ -123,7 +123,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Front-facing camera — both arms must be visible at the same time',
   },
   biceps_curl: {
-    images: [`${BASE}/Barbell%20Curl/0.jpg`, `${BASE}/Barbell%20Curl/1.jpg`],
+    images: ['/images/barbell curl.webp'],
     description: 'Hold the bar with underhand grip at hip level, curl it up toward your shoulders by contracting biceps.',
     muscles: ['Biceps Brachii', 'Brachialis', 'Forearms'],
     tips: ['Keep elbows pinned to sides', 'Do not swing body', 'Full extension at bottom', 'Squeeze at the top'],
@@ -131,7 +131,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Front or side camera — wrists AND elbows must both be visible',
   },
   barbell_biceps_curl: {
-    images: [`${BASE}/Barbell%20Curl/0.jpg`, `${BASE}/Barbell%20Curl/1.jpg`],
+    images: ['/images/barbell curl.webp'],
     description: 'Hold the bar with underhand grip at hip level, curl it up toward your shoulders by contracting biceps.',
     muscles: ['Biceps Brachii', 'Brachialis', 'Forearms'],
     tips: ['Keep elbows pinned to sides', 'Do not swing body', 'Full extension at bottom', 'Squeeze at the top'],
@@ -269,13 +269,13 @@ const ExerciseDemoOverlay: React.FC<ExerciseDemoOverlayProps> = ({ exerciseKey, 
     setImgIndex(0);
 
     const timer = setInterval(() => {
-      setImgIndex(prev => (prev + 1) % 2);
+      setImgIndex(prev => (prev + 1) % demo.images.length);
     }, 1800);
     return () => clearInterval(timer);
-  }, [exerciseKey]);
+  }, [demo.images.length, exerciseKey]);
 
-  const handlePrev = () => setImgIndex(prev => (prev - 1 + 2) % 2);
-  const handleNext = () => setImgIndex(prev => (prev + 1) % 2);
+  const handlePrev = () => setImgIndex(prev => (prev - 1 + demo.images.length) % demo.images.length);
+  const handleNext = () => setImgIndex(prev => (prev + 1) % demo.images.length);
 
   return (
     <Box
