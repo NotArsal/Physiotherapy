@@ -49,6 +49,12 @@ This file records the system audit, fixes, cleanup, and follow-up recommendation
 - Structured clean session lifecycle handlers in the frontend to clear the temporal buffer upon starting and stopping exercise sessions.
 - Resolved TypeScript compiler warnings by removing the unused `earMidY` variable.
 - Verified backend end-to-end API suite (`test_api.py`) and compiled an optimized production build of the frontend with zero errors.
+- **Render Ephemeral Database Persistence (Self-Healing Hybrid Sync)**:
+  * Implemented permanent client-side session backups in `localStorage` under `physio_local_backup_sessions_${currentUser.uid}` to prevent data loss.
+  * Implemented a background database reconciler in `Dashboard.tsx` that automatically re-posts missing client-side sessions to the Flask backend database upon dashboard loads (correcting Render ephemeral server restarts).
+  * Hardened dashboard data merging to blend backend database history, offline workouts, and permanent backups with strict timestamp-based deduplication.
+- **Database Connection Leak Mitigation**: Wraps all database-interacting endpoints (`/log_session`, `/sessions`, `/protocols`, etc.) in strict `try...finally` structures to guarantee the DB connection closes safely under all conditions, preventing connection exhaustion.
+- **Universal Vercel CORS & Typo Domain Support**: Programmed regex pattern matching (`re.compile(r"^https://.*\.vercel\.app$")`) and explicit domain listings for `https://physiotherapy-frotend.vercel.app` into the backend `Flask-CORS` settings, ensuring zero preflight or CORS issues on Vercel.
 
 ## Removed Unnecessary Files
 
