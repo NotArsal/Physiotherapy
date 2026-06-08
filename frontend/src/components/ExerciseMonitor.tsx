@@ -22,6 +22,7 @@ import PauseIcon from '@mui/icons-material/Pause';
 import Webcam from 'react-webcam';
 import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose';
 import { apiService, PredictionResponse, ExerciseProtocol } from '../services/api';
+import { tfjsService } from '../services/tfjsService';
 import {
   extractJointAngles,
   speak,
@@ -115,6 +116,11 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const currentPhaseRef = useRef('');
   const predictedExerciseRef = useRef('');
   const selectedExerciseRef = useRef(selectedExercise);
+  
+  // Pre-load the Edge AI model when component mounts
+  useEffect(() => {
+    tfjsService.loadModel().catch(console.error);
+  }, []);
   const voiceEnabledRef = useRef(true);
   const debugModeRef = useRef(false);
   const poseDetectedRef = useRef(false);
@@ -569,7 +575,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
             ? historyBufferRef.current
             : [results.poseLandmarks];
             
-          apiService.predictExercise(jointAngles, selectedExerciseRef.current, landmarksToSend)
+          tfjsService.predictExercise(landmarksToSend, selectedExerciseRef.current)
             .then(predictionResult => {
               setPrediction(predictionResult);
               setConfidence(predictionResult.confidence);
