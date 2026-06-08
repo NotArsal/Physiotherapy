@@ -111,33 +111,6 @@ class ApiService {
     }
   }
 
-  // Predict exercise from joint angles and raw landmarks
-  async predictExercise(jointAngles: number[], selectedExercise?: string, landmarks?: any[]): Promise<PredictionResponse> {
-    try {
-      const response = await api.post('/predict', {
-        joint_angles: jointAngles,
-        landmarks: landmarks,
-        selected_exercise: selectedExercise
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Prediction failed:', error);
-      throw error;
-    }
-  }
-
-  // Reset exercise session
-  async resetSession() {
-    try {
-      // Increase timeout for session reset
-      const response = await api.post('/reset_session', {}, { timeout: 10000 });
-      return response.data;
-    } catch (error) {
-      console.error('Failed to reset session:', error);
-      throw error;
-    }
-  }
-
   // Log exercise session
   async logSession(sessionData: SessionData) {
     try {

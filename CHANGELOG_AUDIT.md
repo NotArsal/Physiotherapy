@@ -4,6 +4,9 @@ This file records the system audit, fixes, cleanup, and follow-up recommendation
 
 ## Completed Changes
 
+- **Edge AI Migration (TensorFlow.js)**: Ported the entire BiLSTM inference engine to the React frontend, enabling zero-latency predictions locally in the browser memory.
+- **Backend ML Pruning**: Completely removed `tensorflow-cpu`, `scikit-learn`, and the `.h5` model dependencies from the Flask backend. The backend is now a hyper-optimized, stateless MongoDB logger that uses minimal RAM.
+- **TypeScript Imputation Port**: Ported the Bi-acromial Lower-Body Landmark Imputation logic from Python to TypeScript to dynamically reconstruct occluded body parts on the edge before feeding them to the TF.js model.
 - Migrated data persistence from local SQLite (`physio_sessions.db`) to **MongoDB Atlas**.
 - Implemented **Ambient Fall Detection** using real-time $dy/dt$ nose velocity tracking and 33-point bounding box horizontal aspect ratio collapse (Y-Collapse).
 - Integrated an emergency **10-Second Therapist Alert Protocol** upon critical fall detection.

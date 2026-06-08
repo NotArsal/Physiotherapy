@@ -879,9 +879,6 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         return;
       }
 
-      addToConsoleLog('Setting up exercise...');
-      await apiService.resetSession();
-
       addToConsoleLog('Fetching exercise protocol...');
       let userProtocols: ExerciseProtocol[] = [];
       try {

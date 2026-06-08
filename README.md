@@ -9,9 +9,7 @@ Physiotherapy-project-main/
 |-- backend/
 |   |-- app.py
 |   |-- run.py
-|   |-- pose_utils.py
-|   |-- requirements.txt
-|   `-- model/
+|   `-- requirements.txt
 |-- frontend/
 |   |-- package.json
 |   |-- tsconfig.json
@@ -27,7 +25,7 @@ Physiotherapy-project-main/
 
 ### Backend
 
-Use Python 3.10. For deployment on Render, Python 3.10 is required for TensorFlow 2.13 compatibility.
+The backend now acts purely as a stateless MongoDB session logger.
 
 ```powershell
 cd backend
@@ -59,9 +57,10 @@ Before starting, ensure you have a `.env` file in the `frontend` directory with 
 
 ## Current Behavior & Advanced Features
 
+- **Zero-Latency Edge AI Inference**: Deep learning classification (BiLSTM) is executed entirely within the browser via **TensorFlow.js (WebGL)**, eliminating backend network latency and massive RAM usage.
 - **Ambient Fall Detection**: Optical, zero-wearable safety monitoring that calculates $dy/dt$ nose drop velocity combined with 33-point bounding box horizontal aspect ratio collapse to detect medical emergencies. Includes a 10-second therapist alert protocol.
 - **Adaptive Hysteresis-Based Form Tracking**: Incorporates a 10-second mandatory calibration phase to calculate personal ROM baselines. Uses an Exponential Moving Average (EMA) and dual-threshold state machine to guarantee true repetition counts.
-- **Virtual Lower-Body Landmark Imputation**: For close-up or seated views, the backend dynamically imputes neutral standing leg coordinates scaled to the shoulders via bi-acromial measurement, keeping BiLSTM classification accuracy exceptionally high (>80%).
+- **Virtual Lower-Body Landmark Imputation**: For close-up or seated views, the frontend dynamically imputes neutral standing leg coordinates scaled to the shoulders via bi-acromial measurement, keeping classification accuracy exceptionally high (>80%).
 - **Fatigue & Asymmetry Detection**: Automatically monitors repetition velocity degradation (>30% slowdown) and tracks left-right joint angular variance (e.g., uneven elbow angles) to ensure biomechanical symmetry.
 - **Persistence**: Session history and clinical protocols are persisted via **MongoDB Atlas** (replacing the legacy SQLite setup).
 - **Intelligent API Fallback**: The frontend automatically detects remote backend timeouts and seamlessly falls back to a healthy local backend (`http://localhost:5000`) if available.

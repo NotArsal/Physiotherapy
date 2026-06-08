@@ -11,9 +11,9 @@ For visual diagrams of the system infrastructure and client-server flow, please 
 The **PhysioTracker** system is built on a highly modular Client-Server architecture designed to optimize rendering performance, ensure local responsiveness, and utilize deep-learning models for precise exercise classification.
 
 - **Decoupled Real-Time Core**: Rep-counting, phase detection, joint angle calculations, fall detection, and skeletal rendering run completely client-side in React at a buttery-smooth **30 FPS**.
-- **Asynchronous Deep Learning**: Heavy inference using the 30-frame temporal BiLSTM classifier is performed asynchronously in the background at 600ms intervals, preventing UI freeze or input lag.
-- **Fail-Safe High Availability**: If the backend server goes offline or encounters a CORS block, the client seamlessly falls back to a healthy local backend.
-- **Database Scalability**: Session logging and clinical protocol storage have been fully migrated from local SQLite to **MongoDB Atlas**, enabling global cloud synchronization and flexible document-based schemas for therapy analytics.
+- **Zero-Latency Edge AI**: Heavy inference using the 30-frame temporal BiLSTM classifier is performed entirely in the browser using **TensorFlow.js (WebGL)**. This eliminates network round-trips and massive server RAM usage.
+- **Fail-Safe High Availability**: If the remote backend server goes offline, the frontend seamlessly caches sessions locally (`localStorage`) and syncs them automatically upon backend recovery.
+- **Database Scalability**: Session logging and clinical protocol storage have been fully migrated from local SQLite to **MongoDB Atlas**, enabling global cloud synchronization.
 
 ---
 
@@ -71,8 +71,8 @@ To solve this, PhysioTracker implements an **Adaptive Calibration Phase** follow
 
 ### E. Deep Learning Temporal Classification (BiLSTM)
 While client-side heuristics count repetitions safely, a backend deep-learning classifier evaluates movement classification.
-1. **Temporal Features**: The frontend captures a rolling window of **consecutive frames**. It sends the raw coordinates to the backend payload. For 33 landmarks, this yields an input size of $\text{frames} \times 99 \text{ features}$ ($33 \times [x, y, v]$).
-2. **Virtual Lower-Body Landmark Imputation**: If the webcam is positioned too close to the body (e.g. seated chest exercises), leg landmarks have low visibility ($v < 0.45$). To prevent TensorFlow errors and maintain upper-body classification accuracy, the backend dynamically scales and reconstructs neutral standing leg vectors using the horizontal bi-acromial distance (shoulder width).
+1. **Temporal Features**: The frontend captures a rolling window of **consecutive frames**. For 33 landmarks, this yields an input tensor of size $\text{frames} \times 99 \text{ features}$ ($33 \times [x, y, v]$).
+2. **Virtual Lower-Body Landmark Imputation**: If the webcam is positioned too close to the body (e.g. seated chest exercises), leg landmarks have low visibility ($v < 0.45$). To prevent TensorFlow errors and maintain upper-body classification accuracy, the frontend dynamically scales and reconstructs neutral standing leg vectors using the horizontal bi-acromial distance (shoulder width) *before* passing the tensor into the local model memory.
 3. **BiLSTM Neural Network Architecture**:
    - The inputs are passed to a **Bidirectional Long Short-Term Memory (BiLSTM)** layer with 64 units.
    - The Bidirectional structure processes the time-series both forward (past contexts) and backward (future predictions), creating a highly robust representation of dynamic curves.

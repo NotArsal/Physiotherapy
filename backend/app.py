@@ -7,27 +7,16 @@ from datetime import datetime
 from pathlib import Path
 import json
 
-import numpy as np
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from tensorflow.keras.models import load_model
-from tensorflow.keras.layers import LSTM as KerasLSTM
-import keras
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 
-@keras.saving.register_keras_serializable(package="app", name="LSTM")
-class LSTM(KerasLSTM):
-    def __init__(self, *args, **kwargs):
-        kwargs.pop('time_major', None)
-        super().__init__(*args, **kwargs)
+
 
 app = Flask(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
-MODEL_DIR = BASE_DIR / "model"
-MODEL_PATH = MODEL_DIR / "bilstm_exercise_classifier.h5"
-LABEL_ENCODER_PATH = MODEL_DIR / "label_encoder.pkl"
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/physio_db")
 
 try:
@@ -102,8 +91,7 @@ def inject_cors_headers(response):
             response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
     return response
 
-model = None
-label_encoder = None
+
 
 # Stateless backend - current_exercise_state removed to support multi-worker environments
 
@@ -135,222 +123,7 @@ def init_db():
     except Exception as e:
         print(f"Error initializing MongoDB: {e}")
 
-def load_models():
-    """Load the trained model artifacts from the backend/model directory."""
-    global model, label_encoder
 
-    try:
-        model = load_model(MODEL_PATH, custom_objects={'LSTM': LSTM})
-        with open(LABEL_ENCODER_PATH, "rb") as file:
-            label_encoder = pickle.load(file)
-        print("BiLSTM model loaded successfully")
-        print(f"Available exercises: {list(label_encoder.classes_)}")
-        return True
-    except Exception as exc:
-        print(f"Error loading models: {exc}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-# Global cache for latency optimization in real-time inference
-_TIME_SCALE_CACHE = np.linspace(0.98, 1.02, 30, dtype=np.float32).reshape(30, 1)
-
-def build_model_input(joint_angles, landmarks=None, selected_exercise=None):
-    """
-    Create deterministic time-series input for the BiLSTM model using raw landmarks.
-    The model expects 33 landmarks (x, y, visibility) totaling 99 features.
-    Supports either:
-    1. A single frame of landmarks (represented as a list of 33 landmarks) -> tiles to 30 timesteps.
-    2. A sequence of historical frames (represented as a list of lists of landmarks) -> uses true temporal motion.
-    If leg landmarks are out of frame (low visibility), dynamically imputes a neutral
-    standing posture under the shoulders to preserve upper-body exercise classification accuracy.
-    If arm landmarks are out of frame, dynamically projects expected arm postures based on selected_exercise.
-    """
-    import math
-    if not landmarks or len(landmarks) == 0:
-        raise ValueError("Raw MediaPipe landmarks are required for accurate inference")
-
-    # Helper to safely extract x, y, and visibility
-    def get_lm_data(lm):
-        if isinstance(lm, dict):
-            return float(lm.get('x', 0.0)), float(lm.get('y', 0.0)), float(lm.get('visibility', 0.0))
-        elif isinstance(lm, (list, tuple)) and len(lm) >= 3:
-            return float(lm[0]), float(lm[1]), float(lm[2])
-        return 0.0, 0.0, 0.0
-
-    def flatten_and_impute_frame(frame_landmarks):
-        if not frame_landmarks or len(frame_landmarks) < 33:
-            return np.zeros(99, dtype=np.float32)
-
-        # Create a mutable copy of landmarks
-        imputed_frame = list(frame_landmarks)
-
-        # Fetch shoulder positions to determine body scale and horizontal position
-        ls_x, ls_y, ls_v = get_lm_data(frame_landmarks[11]) # Left Shoulder
-        rs_x, rs_y, rs_v = get_lm_data(frame_landmarks[12]) # Right Shoulder
-
-        # Calculate shoulder width for scaling, or use sensible default if not fully visible
-        if ls_v > 0.5 and rs_v > 0.5:
-            shoulder_width = math.sqrt((rs_x - ls_x)**2 + (rs_y - ls_y)**2)
-        else:
-            shoulder_width = 0.20 # screen ratio default
-
-        # Check visibility of key lower-body joints: Hips (23, 24), Knees (25, 26), Ankles (27, 28)
-        lower_body_key_indices = [23, 24, 25, 26, 27, 28]
-        low_visibility_count = sum(1 for idx in lower_body_key_indices if get_lm_data(frame_landmarks[idx])[2] < 0.5)
-
-        # If lower body is mostly occluded (e.g. seated/close camera view), impute neutral standing alignment
-        if low_visibility_count >= 2:
-            # Hips directly below shoulders, knees and ankles directly below hips
-            hip_y = max(ls_y, rs_y) + 1.2 * shoulder_width
-            knee_y = hip_y + 1.5 * shoulder_width
-            ankle_y = knee_y + 1.5 * shoulder_width
-            heel_y = ankle_y + 0.1 * shoulder_width
-            toe_y = ankle_y + 0.2 * shoulder_width
-
-            imputations = {
-                23: (ls_x, hip_y, 1.0),       # Left Hip
-                24: (rs_x, hip_y, 1.0),       # Right Hip
-                25: (ls_x, knee_y, 1.0),      # Left Knee
-                26: (rs_x, knee_y, 1.0),      # Right Knee
-                27: (ls_x, ankle_y, 1.0),     # Left Ankle
-                28: (rs_x, ankle_y, 1.0),     # Right Ankle
-                29: (ls_x, heel_y, 1.0),      # Left Heel
-                30: (rs_x, heel_y, 1.0),      # Right Heel
-                31: (ls_x - 0.05, toe_y, 1.0),# Left Toe
-                32: (rs_x + 0.05, toe_y, 1.0),# Right Toe
-            }
-
-            for idx, (x, y, v) in imputations.items():
-                if idx < len(imputed_frame):
-                    if isinstance(imputed_frame[idx], dict):
-                        imputed_frame[idx] = {
-                            'x': x,
-                            'y': y,
-                            'z': imputed_frame[idx].get('z', 0.0),
-                            'visibility': v
-                        }
-                    else:
-                        imputed_frame[idx] = [x, y, 0.0, v]
-
-        # ----------------------------------------------------
-        # DYNAMIC UPPER-BODY IMPUTATION FOR CLOSE-UP OCCLUSION
-        # ----------------------------------------------------
-        exercise_key = normalize_exercise_name(selected_exercise)
-        
-        # Check upper-body landmarks visibility: Elbows (13, 14), Wrists (15, 16)
-        le_x, le_y, le_v = get_lm_data(frame_landmarks[13])
-        re_x, re_y, re_v = get_lm_data(frame_landmarks[14])
-        lw_x, lw_y, lw_v = get_lm_data(frame_landmarks[15])
-        rw_x, rw_y, rw_v = get_lm_data(frame_landmarks[16])
-
-        upper_body_imputations = {}
-
-        if exercise_key in ["lat_pulldown", "pull_up", "shoulder_press", "wall_slide"]:
-            # Overhead exercises - project hands/elbows overhead if occluded
-            if lw_v < 0.4:
-                upper_body_imputations[15] = (ls_x, ls_y - 1.5 * shoulder_width, 1.0)
-            if rw_v < 0.4:
-                upper_body_imputations[16] = (rs_x, rs_y - 1.5 * shoulder_width, 1.0)
-            if le_v < 0.4:
-                upper_body_imputations[13] = (ls_x - 0.2 * shoulder_width, ls_y - 0.7 * shoulder_width, 1.0)
-            if re_v < 0.4:
-                upper_body_imputations[14] = (rs_x + 0.2 * shoulder_width, rs_y - 0.7 * shoulder_width, 1.0)
-
-        elif exercise_key in ["barbell_biceps_curl", "hammer_curl", "biceps_curl"]:
-            # Biceps curls - project hands/elbows at chest/side level if occluded
-            if lw_v < 0.4:
-                upper_body_imputations[15] = (ls_x, ls_y + 0.3 * shoulder_width, 1.0)
-            if rw_v < 0.4:
-                upper_body_imputations[16] = (rs_x, rs_y + 0.3 * shoulder_width, 1.0)
-            if le_v < 0.4:
-                upper_body_imputations[13] = (ls_x, ls_y + 0.8 * shoulder_width, 1.0)
-            if re_v < 0.4:
-                upper_body_imputations[14] = (rs_x, rs_y + 0.8 * shoulder_width, 1.0)
-
-        elif exercise_key in ["bench_press", "incline_bench_press", "decline_bench_press", "push_up", "chest_fly_machine"]:
-            # Pressing exercises - project hands/elbows forward/outward if occluded
-            if lw_v < 0.4:
-                upper_body_imputations[15] = (ls_x - 0.5 * shoulder_width, ls_y + 0.5 * shoulder_width, 1.0)
-            if rw_v < 0.4:
-                upper_body_imputations[16] = (rs_x + 0.5 * shoulder_width, rs_y + 0.5 * shoulder_width, 1.0)
-            if le_v < 0.4:
-                upper_body_imputations[13] = (ls_x - 0.7 * shoulder_width, ls_y + 0.6 * shoulder_width, 1.0)
-            if re_v < 0.4:
-                upper_body_imputations[14] = (rs_x + 0.7 * shoulder_width, rs_y + 0.6 * shoulder_width, 1.0)
-
-        else:
-            # Default for other exercises - if any arm joint is occluded, project down posture
-            if lw_v < 0.4 or rw_v < 0.4 or le_v < 0.4 or re_v < 0.4:
-                if lw_v < 0.4:
-                    upper_body_imputations[15] = (ls_x, ls_y + 1.8 * shoulder_width, 1.0)
-                if rw_v < 0.4:
-                    upper_body_imputations[16] = (rs_x, rs_y + 1.8 * shoulder_width, 1.0)
-                if le_v < 0.4:
-                    upper_body_imputations[13] = (ls_x, ls_y + 1.0 * shoulder_width, 1.0)
-                if re_v < 0.4:
-                    upper_body_imputations[14] = (rs_x, rs_y + 1.0 * shoulder_width, 1.0)
-
-        for idx, (x, y, v) in upper_body_imputations.items():
-            if idx < len(imputed_frame):
-                if isinstance(imputed_frame[idx], dict):
-                    imputed_frame[idx] = {
-                        'x': x,
-                        'y': y,
-                        'z': imputed_frame[idx].get('z', 0.0),
-                        'visibility': v
-                    }
-                else:
-                    imputed_frame[idx] = [x, y, 0.0, v]
-
-        flat_landmarks = [
-            val 
-            for lm in imputed_frame[:33] 
-            for val in get_lm_data(lm)
-        ]
-        
-        feature_vector = np.array(flat_landmarks, dtype=np.float32)
-        return np.pad(feature_vector, (0, max(0, 99 - feature_vector.size)))[:99]
-
-    # Detect if we were sent a sequence of frames or a single frame
-    is_sequence = False
-    if isinstance(landmarks, list) and len(landmarks) > 0:
-        first_el = landmarks[0]
-        # Check if first element is a container representing landmarks (like a list/dict of 33 points)
-        if isinstance(first_el, list) and len(first_el) >= 33:
-            is_sequence = True
-        elif isinstance(first_el, list) and len(first_el) > 0 and isinstance(first_el[0], (dict, list, tuple)):
-            is_sequence = True
-
-    processed_frames = []
-    if is_sequence:
-        for frame in landmarks:
-            processed_frames.append(flatten_and_impute_frame(frame))
-        
-        # Ensure we have exactly 30 frames for the BiLSTM
-        if len(processed_frames) < 30:
-            # Pad by repeating the latest frame
-            padding = [processed_frames[-1]] * (30 - len(processed_frames))
-            processed_frames.extend(padding)
-        elif len(processed_frames) > 30:
-            # Take only the last 30 frames
-            processed_frames = processed_frames[-30:]
-        
-        time_series = np.stack(processed_frames, axis=0)
-    else:
-        # Single frame mode - flatten and tile 30 times
-        flat = flatten_and_impute_frame(landmarks)
-        time_series = np.tile(flat, (30, 1))
-
-    return (time_series * _TIME_SCALE_CACHE).reshape(1, 30, 99)
-
-
-def normalize_exercise_name(exercise_name):
-    """Normalize exercise names so frontend and backend labels can be compared safely."""
-    if not exercise_name:
-        return ""
-    return str(exercise_name).strip().lower().replace("-", "_").replace(" ", "_")
 
 
 
@@ -386,8 +159,6 @@ def health_check():
     return jsonify(
         {
             "status": "healthy",
-            "model_loaded": model is not None,
-            "encoder_loaded": label_encoder is not None,
             "database": db is not None
         }
     )
@@ -395,132 +166,19 @@ def health_check():
 
 @app.route("/exercises", methods=["GET"])
 def get_exercises():
-    if label_encoder is None:
-        return jsonify({"error": "Label encoder not loaded"}), 500
-
-    # Get model-trained exercises
-    exercises = list(label_encoder.classes_)
-    
-    # Append the new clinical physiotherapy exercises (without duplicates)
-    physio_exercises = ['glute_bridge', 'clamshell', 'bird_dog', 'wall_slide', 'straight_leg_raise']
-    for ex in physio_exercises:
-        if ex not in exercises:
-            exercises.append(ex)
+    exercises = [
+        'barbell_biceps_curl', 'bench_press', 'chest_fly_machine', 'deadlift', 
+        'hammer_curl', 'hip_thrust', 'incline_bench_press', 'lat_pulldown', 
+        'leg_extension', 'leg_raises', 'plank', 'pull_up', 'push_up', 
+        'romanian_deadlift', 'russian_twist', 'shoulder_press', 'squat', 
+        't_bar_row', 'tricep_dips', 'glute_bridge', 'clamshell', 'bird_dog', 
+        'wall_slide', 'straight_leg_raise'
+    ]
 
     return jsonify({"exercises": exercises})
 
 
-@app.route("/predict", methods=["POST"])
-def predict():
-    try:
-        if model is None or label_encoder is None:
-            return jsonify({"error": "Model is not loaded"}), 503
 
-        data = request.get_json(silent=True) or {}
-        joint_angles = data.get("joint_angles", [])
-        landmarks = data.get("landmarks", []) # New: raw landmarks for feature alignment
-        selected_exercise = data.get("selected_exercise")
-
-        if not isinstance(joint_angles, list) or not joint_angles:
-            return jsonify({"error": "Invalid joint angles data"}), 400
-
-        try:
-            joint_angles = [float(angle) for angle in joint_angles]
-        except (TypeError, ValueError):
-            return jsonify({"error": "Joint angles must be numeric values"}), 400
-
-        # Basic pose visibility check
-        zero_count = sum(1 for angle in joint_angles[:9] if abs(angle) < 5.0)
-        
-        # Bypass strict visibility check if selected exercise is an upper-body or posture correction exercise
-        is_upper_body = False
-        if selected_exercise:
-            selected_ex_norm = normalize_exercise_name(selected_exercise)
-            upper_body_exercises = [
-                "shoulder_press", "barbell_biceps_curl", "hammer_curl", 
-                "lateral_raise", "wall_slide", "chest_fly_machine", 
-                "bench_press", "incline_bench_press", "decline_bench_press"
-            ]
-            is_upper_body = selected_ex_norm in upper_body_exercises
-
-        if zero_count > 6 and not is_upper_body:
-            return jsonify(
-                {
-                    "exercise": "unknown",
-                    "confidence": 0.0,
-                    "phase": "unknown",
-                    "rep_count": 0,
-                    "joint_angles": joint_angles[:9],
-                    "timestamp": datetime.now().isoformat(),
-                    "error": "Poor pose detection - please ensure you are fully visible in the camera",
-                    "exercise_match": False,
-                    "selected_exercise": selected_exercise,
-                }
-            )
-
-        if len(joint_angles) > 9:
-            joint_angles = joint_angles[:9]
-        elif len(joint_angles) < 9:
-            joint_angles.extend([0.0] * (9 - len(joint_angles)))
-
-        # Use raw landmarks if available to match training distribution
-        model_input = build_model_input(joint_angles, landmarks, selected_exercise)
-        prediction = model.predict(model_input, verbose=0)
-
-        predicted_class_idx = int(np.argmax(prediction[0]))
-        confidence = float(np.max(prediction[0]))
-        predicted_exercise = label_encoder.inverse_transform([predicted_class_idx])[0]
-        predicted_exercise_normalized = normalize_exercise_name(predicted_exercise)
-        selected_exercise_normalized = normalize_exercise_name(selected_exercise)
-
-        # Ensure exercise_match is always defined
-        exercise_match = False
-        if selected_exercise_normalized:
-            # Map clinical physiotherapy exercises to their closest biometric model equivalents
-            physio_mappings = {
-                'glute_bridge': 'hip_thrust',
-                'clamshell': 'leg_raises',
-                'bird_dog': 'plank',
-                'wall_slide': 'shoulder_press',
-                'straight_leg_raise': 'leg_raises'
-            }
-            mapped_selected = physio_mappings.get(selected_exercise_normalized, selected_exercise_normalized)
-            
-            # Check for direct equivalence
-            if predicted_exercise_normalized == mapped_selected:
-                exercise_match = True
-            # Check for occlusion-induced upper-body equivalence under close-up seated views
-            elif mapped_selected in ['lat_pulldown', 'pull_up'] and predicted_exercise_normalized in ['lat_pulldown', 'incline_bench_press', 'bench_press', 'pull_up', 'shoulder_press']:
-                exercise_match = True
-            elif mapped_selected in ['shoulder_press', 'wall_slide'] and predicted_exercise_normalized in ['shoulder_press', 'wall_slide', 'pull_up', 'lat_pulldown']:
-                exercise_match = True
-            else:
-                exercise_match = False
-        else:
-            exercise_match = (confidence >= 0.7)
-
-        response = {
-            "exercise": predicted_exercise,
-            "confidence": confidence,
-            "rep_count": 0, # Rep counting is now handled on the frontend
-            "joint_angles": joint_angles,
-            "timestamp": datetime.now().isoformat(),
-            "exercise_match": bool(exercise_match),
-            "selected_exercise": selected_exercise,
-            "success": True,
-        }
-        return jsonify(response)
-    except Exception as exc:
-        print(f"Prediction error: {exc}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": f"Prediction failed: {exc}", "success": False}), 500
-
-
-@app.route("/reset_session", methods=["POST"])
-def reset_session():
-    # Session reset is now handled on the frontend
-    return jsonify({"message": "Session reset successfully", "success": True})
 
 
 @app.route("/log_session", methods=["POST"])
