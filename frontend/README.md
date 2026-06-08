@@ -3,9 +3,9 @@
 This frontend is a React + TypeScript app for:
 
 - User authentication with Firebase
-- Exercise selection
-- Webcam-based pose monitoring using MediaPipe
-- Real-time rep and phase feedback
+- Browser-side Pose Monitoring using MediaPipe
+- Adaptive Calibration & Fall Detection
+- Real-time repetition and safety feedback via Web Speech API
 - Session dashboard and analytics
 
 ## Setup
@@ -20,10 +20,10 @@ The app runs on `http://localhost:3000`.
 
 ## Environment Variables
 
-The frontend relies on environment variables for API and Firebase configuration. Create a `.env` file in the root of the `frontend` directory:
+Create a `.env` file in the root of the `frontend` directory:
 
 ```env
-REACT_APP_API_BASE_URL=http://localhost:5000
+REACT_APP_API_BASE_URL=https://physiotherapy-backend-gw5s.onrender.com
 REACT_APP_FIREBASE_API_KEY=your_key
 REACT_APP_FIREBASE_AUTH_DOMAIN=your_domain
 REACT_APP_FIREBASE_PROJECT_ID=your_id
@@ -35,16 +35,15 @@ REACT_APP_FIREBASE_MEASUREMENT_ID=your_measurement_id
 
 ## Main Components
 
-- [src/components/ExerciseMonitor.tsx](src/components/ExerciseMonitor.tsx): Live monitoring with MediaPipe integration.
-- [src/components/Dashboard.tsx](src/components/Dashboard.tsx): View session history and progress.
+- [src/components/ExerciseMonitor.tsx](src/components/ExerciseMonitor.tsx): Core component housing MediaPipe integration, Fall Detection, Asymmetry Tracking, and audio throttling.
+- [src/utils/poseDetection.ts](src/utils/poseDetection.ts): Houses the advanced biomechanical mathematics, $dy/dt$ calculations, aspect ratio calculations, and hysteresis logic.
+- [src/components/Dashboard.tsx](src/components/Dashboard.tsx): View session history fetched from MongoDB.
 - [src/services/api.ts](src/services/api.ts): Communication with the Flask backend.
-- [src/firebase.ts](src/firebase.ts): Firebase initialization using environment variables.
 
 ## Technical Notes
 
-- **Pose Detection**: Uses MediaPipe Pose (Task API) loaded via CDN.
+- **Emergency Fall Detection**: Analyzes velocity and Y-collapse dynamically at 30fps. Automatically triggers a UI lock and 10-second emergency therapist notification timer.
+- **Performance Optimized**: `ExerciseMonitor.tsx` utilizes React `useRef` to bypass the 30fps state-update loop, rendering direct to the HTML5 canvas without causing DOM thrashing.
+- **Audio Coaching Throttling**: The Web Speech API triggers are governed by strict 3.0s and 4.5s cooldown loops, utilizing `speechSynthesis.cancel()` to prevent browser queue crashing.
 - **Intelligent API Fallback**: In `src/services/api.ts`, the frontend automatically attempts to connect to `http://localhost:5000` if the remote Render API times out due to cold starts.
-- **Clinical Exercises**: Includes a customized Therapist Portal and tailored UI for 5 new clinical physiotherapy exercises.
-- **Feature Alignment**: The monitor now sends raw landmarks to the backend for improved BiLSTM classification.
-- **Cleanup**: Implementation includes explicit webcam and MediaPipe context cleanup to prevent memory leaks during exercise transitions.
 - **Hosting**: Deployed on Vercel with automated CI/CD.

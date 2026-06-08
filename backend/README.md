@@ -2,18 +2,17 @@
 
 This backend is a Flask API for:
 
-- Loading the trained exercise classification model
-- Predicting exercises from raw landmarks and joint-angle input
-- Tracking reps and movement phase
-- Persisting user sessions in a SQLite database
+- Loading the trained exercise classification BiLSTM model
+- Predicting exercises from raw 33 landmarks
+- Tracking reps and movement phase via dynamic thresholds
+- Persisting user sessions in MongoDB Atlas
 
 ## Files
 
-- [app.py](app.py): main Flask application and API routes
+- [app.py](app.py): main Flask application, CORS setup, and API routes
 - [run.py](run.py): startup entrypoint
-- [pose_utils.py](pose_utils.py): helper functions for pose-angle processing
+- [pose_utils.py](pose_utils.py): helper functions for pose-angle processing and virtual imputation
 - [requirements.txt](requirements.txt): Python dependencies
-- [physio_sessions.db](physio_sessions.db): SQLite database for session storage
 
 ## Setup
 
@@ -27,23 +26,23 @@ pip install -r requirements.txt
 python run.py
 ```
 
-The service starts on `http://localhost:5000`.
+Set the `MONGO_URI` environment variable before running to connect to the cloud database.
 
 ## API Routes
 
 - `GET /`: API status and welcome message
-- `GET /health`: Health check with model and DB status
+- `GET /health`: Health check with model and MongoDB Atlas status
 - `GET /exercises`: List available exercises
 - `POST /predict`: Predict exercise from raw landmarks and angles
 - `POST /reset_session`: Reset the current rep counter
-- `POST /log_session`: Save a completed session to the database
+- `POST /log_session`: Save a completed session to MongoDB Atlas
 - `GET /sessions/<user_id>`: Retrieve session history for a specific user
 - `GET /sessions`: Retrieve all logged sessions
+- `GET /protocols`: Retrieve clinical exercise protocols
 
 ## Notes
 
-- **Feature Alignment**: The classifier now receives raw landmarks (33 points) to match the original training data, significantly improving prediction accuracy.
-- **Biometric Mapping**: Specialized clinical physiotherapy exercises (e.g., Glute Bridge, Clamshells) are dynamically mapped to their closest biomechanical equivalents to enable validation on the pre-trained neural network.
-- **Database**: Sessions and default clinical protocols are stored in `physio_sessions.db`. If the file doesn't exist, it is created automatically on startup.
-- **CORS**: Configured to allow requests from the Vercel frontend and localhost.
-- **Rep Counting**: Thresholds are defined in `detect_exercise_phase` and are tailored to specific joint angles per exercise.
+- **Feature Alignment**: The classifier receives raw landmarks (33 points) to match the original training data, significantly improving prediction accuracy.
+- **Database**: Sessions and default clinical protocols are stored securely in **MongoDB Atlas** using `pymongo`. 
+- **CORS**: Robustly configured to allow requests from the Vercel frontend, supporting dynamic URL resolution and wildcard regex mapping.
+- **Imputation Logic**: Located in `pose_utils.py`, it leverages Bi-acromial distance scaling to impute missing lower-body joints on camera crops.
