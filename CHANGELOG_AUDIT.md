@@ -4,6 +4,17 @@ This file records the system audit, fixes, cleanup, and follow-up recommendation
 
 ## Completed Changes
 
+- Migrated data persistence from local SQLite (`physio_sessions.db`) to **MongoDB Atlas**.
+- Implemented **Ambient Fall Detection** using real-time $dy/dt$ nose velocity tracking and 33-point bounding box horizontal aspect ratio collapse (Y-Collapse).
+- Integrated an emergency **10-Second Therapist Alert Protocol** upon critical fall detection.
+- Developed an **Adaptive Calibration Phase** (10 seconds) that calculates personal Range of Motion baselines prior to session tracking.
+- Replaced simple threshold rep counting with an **Adaptive Dual-Threshold Hysteresis State Machine** combined with Exponential Moving Average (EMA) smoothing for robust repetition tracking.
+- Added **Fatigue Detection** that identifies velocity degradation (>30% slowdown) compared to a dynamically calculated 3-rep baseline.
+- Implemented **Biomechanical Asymmetry Tracking** to alert patients when left/right joint extensions are unbalanced.
+- Optimized frontend React rendering by removing the 30 FPS state update loop, directly interacting with the Canvas and throttling the `setInjuryReport` state, preventing DOM thrashing.
+- Hardened Web Speech API audio alerts with strict **Audio Queue Throttling** (3.0s emergency, 4.5s coaching cooldowns) via `speechSynthesis.cancel()` to prevent browser stuttering.
+- Removed unused backend dependencies (`pandas`, `psycopg2-binary`) and legacy SQLite scripts to minimize deployment payload size.
+- Documented patentable features in `docs/patent_claims_blueprint.md` and created modern Mermaid architecture diagrams in `docs/system_architecture_diagrams.md`.
 - Audited backend and frontend structure, dependencies, and integration points.
 - Removed broken checked-in virtual environments and generated cache/build artifacts.
 - Cleaned backend dependencies in [backend/requirements.txt](C:/Users/shada/Desktop/Physiotherapy-project-main/backend/requirements.txt).
