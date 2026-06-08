@@ -527,6 +527,7 @@ export interface InjuryRiskReport {
     dropVelocity: number;
     shoulderTilt: number;
   };
+  fallDetected?: boolean;
 }
 
 export function detectInjuryRisk(
@@ -546,7 +547,8 @@ export function detectInjuryRisk(
       kneeValgusRatio: 1.0,
       dropVelocity: 0,
       shoulderTilt: 0
-    }
+    },
+    fallDetected: false
   };
 
   if (!landmarks || landmarks.length < 33) return report;
@@ -694,6 +696,29 @@ export function detectInjuryRisk(
       velocityRisk = Math.min(100, ((dropVelocity - maxSafeVelocity) / 1.0) * 50 + 50);
       report.warnings.push("Dropping Too Fast! Control your descent.");
     }
+
+    // 3b. Critical Fall Detection
+    const nose = landmarks[0];
+    const prevNose = previousLandmarks[0];
+    const noseDropVelocity = (nose.y - prevNose.y) / deltaTime;
+    
+    let minX = 1, maxX = 0, minY = 1, maxY = 0;
+    landmarks.forEach((lm: any) => {
+      if (lm.visibility > 0.5) {
+        if (lm.x < minX) minX = lm.x;
+        if (lm.x > maxX) maxX = lm.x;
+        if (lm.y < minY) minY = lm.y;
+        if (lm.y > maxY) maxY = lm.y;
+      }
+    });
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const aspectRatio = width > 0 ? height / width : 1;
+
+    // Fall detected if moving down rapidly OR Aspect Ratio becomes strictly horizontal near the floor
+    if ((noseDropVelocity > 2.5 || (aspectRatio < 0.8 && nose.y > 0.6)) && nose.y > 0.5) {
+      report.fallDetected = true;
+    }
   }
 
   // 4. Shoulder Asymmetry / Barbell Tilt Analysis
@@ -707,6 +732,30 @@ export function detectInjuryRisk(
       if (shoulderTilt > 0.15 && ["squat", "deadlift", "shoulder_press", "barbell_biceps_curl"].includes(exerciseKey)) {
         asymmetryRisk = Math.min(100, ((shoulderTilt - 0.15) / 0.1) * 50 + 50);
         report.warnings.push("Asymmetrical Shoulders! Keep shoulders level.");
+      }
+    }
+  }
+
+  // 4b. Limb Asymmetry Scoring (Elbows/Knees)
+  if (isLowerBody && ["squat", "deadlift", "hip_thrust", "glute_bridge"].includes(exerciseKey)) {
+    const leftKneeAngle = jointAngles[6];
+    const rightKneeAngle = jointAngles[7];
+    if (leftKneeAngle && rightKneeAngle) {
+      const kneeAsymmetry = Math.abs(leftKneeAngle - rightKneeAngle);
+      // Only warn during the deep phase of the movement
+      if (kneeAsymmetry > 15 && Math.min(leftKneeAngle, rightKneeAngle) < 140) {
+        report.warnings.push("Leg Asymmetry! Balance your weight evenly on both legs.");
+        report.riskScore = Math.max(report.riskScore, 60);
+      }
+    }
+  } else if (isUpperBody && ["bench_press", "incline_bench_press", "shoulder_press", "lat_pulldown", "pull_up", "barbell_biceps_curl"].includes(exerciseKey)) {
+    const leftElbowAngle = jointAngles[2];
+    const rightElbowAngle = jointAngles[3];
+    if (leftElbowAngle && rightElbowAngle) {
+      const elbowAsymmetry = Math.abs(leftElbowAngle - rightElbowAngle);
+      if (elbowAsymmetry > 15 && Math.min(leftElbowAngle, rightElbowAngle) < 140) {
+        report.warnings.push("Arm Asymmetry! Push/Pull evenly with both arms.");
+        report.riskScore = Math.max(report.riskScore, 60);
       }
     }
   }

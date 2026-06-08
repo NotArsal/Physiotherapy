@@ -99,6 +99,14 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const frameRequestRef = useRef<number | null>(null);
   const isActiveRef = useRef(false);
   const isPausedRef = useRef(false);
+  const isFallenRef = useRef(false);
+  const isCalibratingRef = useRef(false);
+  const fallDismissTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const calibrationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const minKneeAngleRef = useRef(180);
+  const minHipAngleRef = useRef(180);
+  const concentricDurationsRef = useRef<number[]>([]);
+  const eccentricDurationsRef = useRef<number[]>([]);
   const poseDisposedRef = useRef(false);
   const poseProcessingRef = useRef(false);
   const lastPredictionAtRef = useRef(0);
@@ -124,6 +132,10 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
 
   const [isActive, setIsActive] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [isFallen, setIsFallen] = useState(false);
+  const [fallDismissTimeLeft, setFallDismissTimeLeft] = useState(10);
+  const [isCalibrating, setIsCalibrating] = useState(false);
+  const [calibrationTimeLeft, setCalibrationTimeLeft] = useState(10);
   const [loading, setLoading] = useState(false);
   const [repCount, setRepCount] = useState(0);
   const [currentPhase, setCurrentPhase] = useState('');
@@ -197,6 +209,14 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   useEffect(() => {
     isPausedRef.current = isPaused;
   }, [isPaused]);
+
+  useEffect(() => {
+    isFallenRef.current = isFallen;
+  }, [isFallen]);
+
+  useEffect(() => {
+    isCalibratingRef.current = isCalibrating;
+  }, [isCalibrating]);
 
   useEffect(() => {
     repCountRef.current = repCount;
@@ -474,6 +494,41 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         setInjuryReport(riskReport);
         previousLandmarksRef.current = results.poseLandmarks;
 
+        if (riskReport.fallDetected && !isFallenRef.current) {
+          setIsFallen(true);
+          isFallenRef.current = true;
+          isPausedRef.current = true;
+          setIsPaused(true);
+          playSpeechCoaching("Critical Fall Detected. Pausing Session. Do you need help?", true);
+          addToConsoleLog("CRITICAL: Fall Detected! Initiating emergency protocol.");
+          
+          let timeLeft = 10;
+          setFallDismissTimeLeft(timeLeft);
+          if (fallDismissTimerRef.current) clearInterval(fallDismissTimerRef.current);
+          fallDismissTimerRef.current = setInterval(() => {
+            timeLeft -= 1;
+            setFallDismissTimeLeft(timeLeft);
+            if (timeLeft <= 0) {
+              if (fallDismissTimerRef.current) clearInterval(fallDismissTimerRef.current);
+              addToConsoleLog("EMERGENCY ALERT SENT TO THERAPIST!");
+              // Simulated API Call
+            }
+          }, 1000);
+        }
+
+        if (isFallenRef.current) {
+          return; // Skip remaining processing if fallen
+        }
+
+        if (isCalibratingRef.current) {
+          // Track min joint angles during calibration
+          const kneeAngle = Math.min(jointAngles[6], jointAngles[7]);
+          const hipAngle = Math.min(jointAngles[4], jointAngles[5]);
+          if (kneeAngle > 0 && kneeAngle < minKneeAngleRef.current) minKneeAngleRef.current = kneeAngle;
+          if (hipAngle > 0 && hipAngle < minHipAngleRef.current) minHipAngleRef.current = hipAngle;
+          return; // Skip normal exercise logic during calibration
+        }
+
         if (riskReport.warnings.length > 0) {
           const primaryWarning = riskReport.warnings[0];
           // Deactivate voice alerts for visibility warnings to prevent spam
@@ -590,6 +645,24 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
               }
             } else {
               setTempoStatus('good');
+            }
+
+            // Fatigue Detection Logic
+            if (isEccentric) {
+              eccentricDurationsRef.current.push(phaseDurationSec);
+            } else {
+              concentricDurationsRef.current.push(phaseDurationSec);
+              // Check fatigue against baseline of first 3 reps
+              if (concentricDurationsRef.current.length > 3) {
+                const baseline = concentricDurationsRef.current.slice(0, 3).reduce((a, b) => a + b, 0) / 3;
+                if (phaseDurationSec > baseline * 1.30) {
+                  // Velocity dropped by >30%
+                  if (now - lastTempoVoiceAtRef.current > 8000) {
+                    playSpeechCoaching("You're slowing down. Push through the fatigue!", false);
+                    lastTempoVoiceAtRef.current = now;
+                  }
+                }
+              }
             }
           }
 
@@ -920,6 +993,8 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       lastCompletedPhaseRef.current = '';
       lastCompletedDurationRef.current = 0;
       lastTempoVoiceAtRef.current = 0;
+      concentricDurationsRef.current = [];
+      eccentricDurationsRef.current = [];
       setTempoStatus('idle');
       setLastPhaseDuration(0);
       setCurrentPhaseDuration(0);
@@ -932,9 +1007,44 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         return;
       }
 
+      setIsCalibrating(true);
+      isCalibratingRef.current = true;
+      let calTime = 10;
+      setCalibrationTimeLeft(calTime);
+      minKneeAngleRef.current = 180;
+      minHipAngleRef.current = 180;
+      
       if (voiceEnabledRef.current) {
-        speak(`Starting ${selectedExercise.replace(/_/g, ' ')} exercise. Good luck!`);
+        speak(`Calibration started. Please perform one full repetition slowly in the next 10 seconds.`);
       }
+
+      if (calibrationTimerRef.current) clearInterval(calibrationTimerRef.current);
+      calibrationTimerRef.current = setInterval(() => {
+        calTime -= 1;
+        setCalibrationTimeLeft(calTime);
+        if (calTime <= 0) {
+          if (calibrationTimerRef.current) clearInterval(calibrationTimerRef.current);
+          setIsCalibrating(false);
+          isCalibratingRef.current = false;
+          
+          if (activeProtocolRef.current) {
+            const newProtocol = { ...activeProtocolRef.current };
+            if (minKneeAngleRef.current < 180) {
+              newProtocol.safe_knee_angle = Math.max(minKneeAngleRef.current - 15, 60);
+            }
+            if (minHipAngleRef.current < 180) {
+              // Can adjust other thresholds similarly if needed
+            }
+            setActiveProtocol(newProtocol);
+            activeProtocolRef.current = newProtocol;
+          }
+          
+          addToConsoleLog(`Calibration complete. New safe knee threshold: ${activeProtocolRef.current?.safe_knee_angle?.toFixed(1)}°`);
+          if (voiceEnabledRef.current) {
+            speak(`Calibration complete. Starting ${selectedExercise.replace(/_/g, ' ')} exercise. Good luck!`);
+          }
+        }
+      }, 1000);
     } catch (startError) {
       const message = startError instanceof Error ? startError.message : 'Unknown error';
       setError(`Failed to start exercise session: ${message}`);
@@ -960,6 +1070,12 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       isPausedRef.current = false;
       setIsActive(false);
       setIsPaused(false);
+      setIsFallen(false);
+      isFallenRef.current = false;
+      setIsCalibrating(false);
+      isCalibratingRef.current = false;
+      if (calibrationTimerRef.current) clearInterval(calibrationTimerRef.current);
+      if (fallDismissTimerRef.current) clearInterval(fallDismissTimerRef.current);
       stopFrameLoop();
       stopCameraStream();
       historyBufferRef.current = []; // Clear history buffer on stop
@@ -1150,6 +1266,69 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                 </>
               )}
             </Box>
+
+            {isCalibrating && (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  backgroundColor: 'rgba(21, 101, 192, 0.85)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  borderRadius: '8px',
+                  zIndex: 10
+                }}
+              >
+                <Typography variant="h3" gutterBottom>Calibration Phase</Typography>
+                <Typography variant="h6" gutterBottom>Perform one full repetition slowly to set your baseline.</Typography>
+                <Typography variant="h1" sx={{ fontWeight: 'bold', mt: 2 }}>{calibrationTimeLeft}s</Typography>
+              </Box>
+            )}
+
+            {isFallen && (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  backgroundColor: 'rgba(198, 40, 40, 0.95)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  borderRadius: '8px',
+                  zIndex: 20
+                }}
+              >
+                <Typography variant="h2" gutterBottom>CRITICAL FALL DETECTED</Typography>
+                <Typography variant="h6" gutterBottom>Session has been paused. Do you need assistance?</Typography>
+                <Typography variant="body1" sx={{ mb: 3 }}>
+                  Alerting therapist in {fallDismissTimeLeft} seconds...
+                </Typography>
+                <Button 
+                  variant="contained" 
+                  color="warning" 
+                  size="large"
+                  onClick={() => {
+                    if (fallDismissTimerRef.current) clearInterval(fallDismissTimerRef.current);
+                    setIsFallen(false);
+                    isFallenRef.current = false;
+                    addToConsoleLog("Fall alert dismissed by user.");
+                  }}
+                >
+                  I'm Okay (Dismiss)
+                </Button>
+              </Box>
+            )}
 
             {/* Loading Overlay */}
             <Backdrop
