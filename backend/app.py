@@ -1,6 +1,7 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
 import pickle
-import sqlite3
 import re
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +13,8 @@ from flask_cors import CORS
 from tensorflow.keras.models import load_model
 from tensorflow.keras.layers import LSTM as KerasLSTM
 import keras
+from pymongo import MongoClient
+from bson.objectid import ObjectId
 
 @keras.saving.register_keras_serializable(package="app", name="LSTM")
 class LSTM(KerasLSTM):
@@ -25,8 +28,13 @@ BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "model"
 MODEL_PATH = MODEL_DIR / "bilstm_exercise_classifier.h5"
 LABEL_ENCODER_PATH = MODEL_DIR / "label_encoder.pkl"
-DATABASE_PATH = BASE_DIR / "physio_sessions.db"
-DATABASE_URL = os.getenv("DATABASE_URL") # Support for managed Postgres (Render/Heroku)
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/physio_db")
+
+try:
+    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    db = client.get_default_database(default="physio_db")
+except Exception as e:
+    print(f"Failed to connect to MongoDB: {e}")
 
 allowed_origins = [
     "http://localhost:3000",
@@ -100,134 +108,32 @@ label_encoder = None
 # Stateless backend - current_exercise_state removed to support multi-worker environments
 
 def init_db():
-    if DATABASE_URL:
-        # PostgreSQL Logic
-        try:
-            import psycopg2
-            from psycopg2.extras import RealDictCursor
-            conn = psycopg2.connect(DATABASE_URL)
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS sessions (
-                    id SERIAL PRIMARY KEY,
-                    user_id TEXT NOT NULL,
-                    exercise TEXT NOT NULL,
-                    total_reps INTEGER NOT NULL,
-                    duration INTEGER NOT NULL,
-                    timestamp TEXT NOT NULL,
-                    session_data TEXT
-                )
-            ''')
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS protocols (
-                    user_id TEXT NOT NULL,
-                    exercise TEXT NOT NULL,
-                    target_reps INTEGER NOT NULL DEFAULT 10,
-                    safe_spine_angle REAL NOT NULL DEFAULT 30.0,
-                    safe_knee_angle REAL NOT NULL DEFAULT 90.0,
-                    safety_sensitivity TEXT NOT NULL DEFAULT 'medium',
-                    PRIMARY KEY (user_id, exercise)
-                )
-            ''')
-            # Seed default protocols
-            default_protocols = [
-                ('default', 'squat', 10, 30.0, 90.0, 'medium'),
-                ('default', 'deadlift', 10, 25.0, 110.0, 'medium'),
-                ('default', 'push_up', 10, 15.0, 90.0, 'medium'),
-                ('default', 'barbell_biceps_curl', 12, 15.0, 150.0, 'medium'),
-                ('default', 'shoulder_press', 10, 20.0, 140.0, 'medium'),
-                ('default', 'plank', 1, 10.0, 180.0, 'medium'),
-                ('default', 'leg_raises', 15, 15.0, 100.0, 'medium'),
-                ('default', 'russian_twist', 20, 30.0, 90.0, 'medium'),
-                ('default', 'glute_bridge', 10, 15.0, 90.0, 'medium'),
-                ('default', 'clamshell', 12, 10.0, 90.0, 'medium'),
-                ('default', 'bird_dog', 10, 15.0, 90.0, 'medium'),
-                ('default', 'wall_slide', 10, 15.0, 140.0, 'medium'),
-                ('default', 'straight_leg_raise', 12, 15.0, 160.0, 'medium'),
-            ]
-            for p in default_protocols:
-                try:
-                    cursor.execute('''
-                        INSERT INTO protocols (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (user_id, exercise) DO NOTHING
-                    ''', p)
-                except Exception as e:
-                    print(f"Error seeding PostgreSQL protocol: {e}")
-            conn.commit()
-            conn.close()
-            print("PostgreSQL database and protocols initialized")
-            return
-        except ImportError:
-            print("psycopg2 not found. Falling back to SQLite.")
-        except Exception as e:
-            print(f"PostgreSQL init failed: {e}. Falling back to SQLite.")
-
-    # SQLite Fallback with a high timeout to prevent locks in concurrent startups
-    conn = sqlite3.connect(DATABASE_PATH, timeout=30)
-    conn.execute('PRAGMA journal_mode=WAL')
-    conn.execute('PRAGMA synchronous=NORMAL')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT NOT NULL,
-            exercise TEXT NOT NULL,
-            total_reps INTEGER NOT NULL,
-            duration INTEGER NOT NULL,
-            timestamp TEXT NOT NULL,
-            session_data TEXT
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS protocols (
-            user_id TEXT NOT NULL,
-            exercise TEXT NOT NULL,
-            target_reps INTEGER NOT NULL DEFAULT 10,
-            safe_spine_angle REAL NOT NULL DEFAULT 30.0,
-            safe_knee_angle REAL NOT NULL DEFAULT 90.0,
-            safety_sensitivity TEXT NOT NULL DEFAULT 'medium',
-            PRIMARY KEY (user_id, exercise)
-        )
-    ''')
-    # Seed defaults in SQLite
-    default_protocols = [
-        ('default', 'squat', 10, 30.0, 90.0, 'medium'),
-        ('default', 'deadlift', 10, 25.0, 110.0, 'medium'),
-        ('default', 'push_up', 10, 15.0, 90.0, 'medium'),
-        ('default', 'barbell_biceps_curl', 12, 15.0, 150.0, 'medium'),
-        ('default', 'shoulder_press', 10, 20.0, 140.0, 'medium'),
-        ('default', 'plank', 1, 10.0, 180.0, 'medium'),
-        ('default', 'leg_raises', 15, 15.0, 100.0, 'medium'),
-        ('default', 'russian_twist', 20, 30.0, 90.0, 'medium'),
-        ('default', 'glute_bridge', 10, 15.0, 90.0, 'medium'),
-        ('default', 'clamshell', 12, 10.0, 90.0, 'medium'),
-        ('default', 'bird_dog', 10, 15.0, 90.0, 'medium'),
-        ('default', 'wall_slide', 10, 15.0, 140.0, 'medium'),
-        ('default', 'straight_leg_raise', 12, 15.0, 160.0, 'medium'),
-    ]
-    for p in default_protocols:
-        try:
-            cursor.execute('''
-                INSERT OR IGNORE INTO protocols (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', p)
-        except Exception as e:
-            print(f"Error seeding SQLite protocol: {e}")
-    conn.commit()
-    conn.close()
-    print(f"SQLite database and protocols initialized at {DATABASE_PATH}")
-
-def get_db_connection():
-    if DATABASE_URL:
-        import psycopg2
-        from psycopg2.extras import RealDictCursor
-        return psycopg2.connect(DATABASE_URL)
-    # Add an extended timeout to SQLite to prevent "database is locked" errors in concurrent environments
-    conn = sqlite3.connect(DATABASE_PATH, timeout=30)
-    conn.execute('PRAGMA journal_mode=WAL')
-    conn.execute('PRAGMA synchronous=NORMAL')
-    return conn
+    try:
+        db.protocols.create_index([("user_id", 1), ("exercise", 1)], unique=True)
+        default_protocols = [
+            {'user_id': 'default', 'exercise': 'squat', 'target_reps': 10, 'safe_spine_angle': 30.0, 'safe_knee_angle': 90.0, 'safety_sensitivity': 'medium'},
+            {'user_id': 'default', 'exercise': 'deadlift', 'target_reps': 10, 'safe_spine_angle': 25.0, 'safe_knee_angle': 110.0, 'safety_sensitivity': 'medium'},
+            {'user_id': 'default', 'exercise': 'push_up', 'target_reps': 10, 'safe_spine_angle': 15.0, 'safe_knee_angle': 90.0, 'safety_sensitivity': 'medium'},
+            {'user_id': 'default', 'exercise': 'barbell_biceps_curl', 'target_reps': 12, 'safe_spine_angle': 15.0, 'safe_knee_angle': 150.0, 'safety_sensitivity': 'medium'},
+            {'user_id': 'default', 'exercise': 'shoulder_press', 'target_reps': 10, 'safe_spine_angle': 20.0, 'safe_knee_angle': 140.0, 'safety_sensitivity': 'medium'},
+            {'user_id': 'default', 'exercise': 'plank', 'target_reps': 1, 'safe_spine_angle': 10.0, 'safe_knee_angle': 180.0, 'safety_sensitivity': 'medium'},
+            {'user_id': 'default', 'exercise': 'leg_raises', 'target_reps': 15, 'safe_spine_angle': 15.0, 'safe_knee_angle': 100.0, 'safety_sensitivity': 'medium'},
+            {'user_id': 'default', 'exercise': 'russian_twist', 'target_reps': 20, 'safe_spine_angle': 30.0, 'safe_knee_angle': 90.0, 'safety_sensitivity': 'medium'},
+            {'user_id': 'default', 'exercise': 'glute_bridge', 'target_reps': 10, 'safe_spine_angle': 15.0, 'safe_knee_angle': 90.0, 'safety_sensitivity': 'medium'},
+            {'user_id': 'default', 'exercise': 'clamshell', 'target_reps': 12, 'safe_spine_angle': 10.0, 'safe_knee_angle': 90.0, 'safety_sensitivity': 'medium'},
+            {'user_id': 'default', 'exercise': 'bird_dog', 'target_reps': 10, 'safe_spine_angle': 15.0, 'safe_knee_angle': 90.0, 'safety_sensitivity': 'medium'},
+            {'user_id': 'default', 'exercise': 'wall_slide', 'target_reps': 10, 'safe_spine_angle': 15.0, 'safe_knee_angle': 140.0, 'safety_sensitivity': 'medium'},
+            {'user_id': 'default', 'exercise': 'straight_leg_raise', 'target_reps': 12, 'safe_spine_angle': 15.0, 'safe_knee_angle': 160.0, 'safety_sensitivity': 'medium'},
+        ]
+        for p in default_protocols:
+            db.protocols.update_one(
+                {'user_id': p['user_id'], 'exercise': p['exercise']},
+                {'$set': p},
+                upsert=True
+            )
+        print("MongoDB initialized and defaults seeded")
+    except Exception as e:
+        print(f"Error initializing MongoDB: {e}")
 
 def load_models():
     """Load the trained model artifacts from the backend/model directory."""
@@ -482,7 +388,7 @@ def health_check():
             "status": "healthy",
             "model_loaded": model is not None,
             "encoder_loaded": label_encoder is not None,
-            "database": os.path.exists(DATABASE_PATH)
+            "database": db is not None
         }
     )
 
@@ -634,28 +540,18 @@ def log_session():
         timestamp = datetime.now().isoformat()
         session_data = json.dumps(data.get("session_data", []))
 
-        conn = get_db_connection()
         try:
-            cursor = conn.cursor()
-            if DATABASE_URL:
-                # Postgres syntax
-                cursor.execute('''
-                    INSERT INTO sessions (user_id, exercise, total_reps, duration, timestamp, session_data)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    RETURNING id
-                ''', (user_id, exercise, total_reps, duration, timestamp, session_data))
-                session_id = cursor.fetchone()[0]
-            else:
-                # SQLite syntax
-                cursor.execute('''
-                    INSERT INTO sessions (user_id, exercise, total_reps, duration, timestamp, session_data)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (user_id, exercise, total_reps, duration, timestamp, session_data))
-                session_id = cursor.lastrowid
-                
-            conn.commit()
-        finally:
-            conn.close()
+            result = db.sessions.insert_one({
+                "user_id": user_id,
+                "exercise": exercise,
+                "total_reps": total_reps,
+                "duration": duration,
+                "timestamp": timestamp,
+                "session_data": session_data
+            })
+            session_id = str(result.inserted_id)
+        except Exception as e:
+            return jsonify({"error": f"Database error: {e}"}), 500
 
         return jsonify(
             {
@@ -670,33 +566,20 @@ def log_session():
 
 @app.route("/sessions/<user_id>", methods=["GET"])
 def get_user_sessions(user_id):
-    conn = None
     try:
-        conn = get_db_connection()
-        if not DATABASE_URL:
-            conn.row_factory = sqlite3.Row
+        rows = list(db.sessions.find({"user_id": user_id}).sort("timestamp", -1))
         
-        cursor = conn.cursor()
-        
-        if DATABASE_URL:
-            # Postgres
-            from psycopg2.extras import RealDictCursor
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-            cursor.execute('SELECT * FROM sessions WHERE user_id = %s ORDER BY timestamp DESC', (user_id,))
-        else:
-            # SQLite
-            cursor.execute('SELECT * FROM sessions WHERE user_id = ? ORDER BY timestamp DESC', (user_id,))
-            
-        rows = cursor.fetchall()
-    finally:
-        if conn:
-            conn.close()
-
-    try:
         user_sessions = []
         for row in rows:
-            session = dict(row)
-            session["session_data"] = json.loads(session["session_data"]) if session["session_data"] else []
+            session = row
+            session["id"] = str(session.pop("_id"))
+            if isinstance(session.get("session_data"), str):
+                try:
+                    session["session_data"] = json.loads(session["session_data"])
+                except:
+                    session["session_data"] = []
+            elif not session.get("session_data"):
+                session["session_data"] = []
             user_sessions.append(session)
 
         total_sessions = len(user_sessions)
@@ -730,33 +613,20 @@ def get_user_sessions(user_id):
 
 @app.route("/sessions", methods=["GET"])
 def get_all_sessions():
-    conn = None
     try:
-        conn = get_db_connection()
-        if not DATABASE_URL:
-            conn.row_factory = sqlite3.Row
+        rows = list(db.sessions.find().sort("timestamp", -1))
         
-        cursor = conn.cursor()
-        
-        if DATABASE_URL:
-            # Postgres
-            from psycopg2.extras import RealDictCursor
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-            cursor.execute('SELECT * FROM sessions ORDER BY timestamp DESC')
-        else:
-            # SQLite
-            cursor.execute('SELECT * FROM sessions ORDER BY timestamp DESC')
-            
-        rows = cursor.fetchall()
-    finally:
-        if conn:
-            conn.close()
-
-    try:
         all_sessions = []
         for row in rows:
-            session = dict(row)
-            session["session_data"] = json.loads(session["session_data"]) if session["session_data"] else []
+            session = row
+            session["id"] = str(session.pop("_id"))
+            if isinstance(session.get("session_data"), str):
+                try:
+                    session["session_data"] = json.loads(session["session_data"])
+                except:
+                    session["session_data"] = []
+            elif not session.get("session_data"):
+                session["session_data"] = []
             all_sessions.append(session)
 
         return jsonify({"sessions": all_sessions})
@@ -766,27 +636,12 @@ def get_all_sessions():
 
 @app.route("/protocols/default", methods=["GET"])
 def get_default_protocols():
-    conn = None
     try:
-        conn = get_db_connection()
-        if not DATABASE_URL:
-            conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        if DATABASE_URL:
-            from psycopg2.extras import RealDictCursor
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-            cursor.execute("SELECT * FROM protocols WHERE user_id = 'default'")
-        else:
-            cursor.execute("SELECT * FROM protocols WHERE user_id = 'default'")
-            
-        rows = cursor.fetchall()
-    finally:
-        if conn:
-            conn.close()
-        
-    try:
-        protocols = [dict(row) for row in rows]
+        rows = list(db.protocols.find({"user_id": "default"}))
+        protocols = []
+        for row in rows:
+            row["id"] = str(row.pop("_id"))
+            protocols.append(row)
         return jsonify({"protocols": protocols, "success": True})
     except Exception as exc:
         return jsonify({"error": f"Failed to retrieve default protocols: {exc}", "success": False}), 500
@@ -794,35 +649,17 @@ def get_default_protocols():
 
 @app.route("/protocols/<user_id>", methods=["GET"])
 def get_user_protocols(user_id):
-    conn = None
     try:
-        conn = get_db_connection()
-        if not DATABASE_URL:
-            conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        if DATABASE_URL:
-            from psycopg2.extras import RealDictCursor
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-            cursor.execute("SELECT * FROM protocols WHERE user_id = %s", (user_id,))
-        else:
-            cursor.execute("SELECT * FROM protocols WHERE user_id = ?", (user_id,))
-            
-        rows = cursor.fetchall()
+        rows = list(db.protocols.find({"user_id": user_id}))
         
         # If user has no custom protocols, fall back to 'default'
         if not rows:
-            if DATABASE_URL:
-                cursor.execute("SELECT * FROM protocols WHERE user_id = 'default'")
-            else:
-                cursor.execute("SELECT * FROM protocols WHERE user_id = 'default'")
-            rows = cursor.fetchall()
-    finally:
-        if conn:
-            conn.close()
+            rows = list(db.protocols.find({"user_id": "default"}))
             
-    try:
-        protocols = [dict(row) for row in rows]
+        protocols = []
+        for row in rows:
+            row["id"] = str(row.pop("_id"))
+            protocols.append(row)
         return jsonify({"user_id": user_id, "protocols": protocols, "success": True})
     except Exception as exc:
         return jsonify({"error": f"Failed to retrieve protocols for {user_id}: {exc}", "success": False}), 500
@@ -848,35 +685,24 @@ def save_protocol():
             if not user_id or not exercise:
                 return jsonify({"error": "Missing user_id or exercise in protocol data", "success": False}), 400
             
-        conn = get_db_connection()
-        try:
-            cursor = conn.cursor()
-            for item in protocols_list:
-                user_id = item.get("user_id")
-                exercise = item.get("exercise")
-                target_reps = int(item.get("target_reps", 10))
-                safe_spine_angle = float(item.get("safe_spine_angle", 30.0))
-                safe_knee_angle = float(item.get("safe_knee_angle", 90.0))
-                safety_sensitivity = item.get("safety_sensitivity", "medium")
-                
-                if DATABASE_URL:
-                    cursor.execute('''
-                        INSERT INTO protocols (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (user_id, exercise) DO UPDATE SET
-                            target_reps = EXCLUDED.target_reps,
-                            safe_spine_angle = EXCLUDED.safe_spine_angle,
-                            safe_knee_angle = EXCLUDED.safe_knee_angle,
-                            safety_sensitivity = EXCLUDED.safety_sensitivity
-                    ''', (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity))
-                else:
-                    cursor.execute('''
-                        INSERT OR REPLACE INTO protocols (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (user_id, exercise, target_reps, safe_spine_angle, safe_knee_angle, safety_sensitivity))
-            conn.commit()
-        finally:
-            conn.close()
+        for item in protocols_list:
+            user_id = item.get("user_id")
+            exercise = item.get("exercise")
+            
+            doc = {
+                "user_id": user_id,
+                "exercise": exercise,
+                "target_reps": int(item.get("target_reps", 10)),
+                "safe_spine_angle": float(item.get("safe_spine_angle", 30.0)),
+                "safe_knee_angle": float(item.get("safe_knee_angle", 90.0)),
+                "safety_sensitivity": item.get("safety_sensitivity", "medium")
+            }
+            
+            db.protocols.update_one(
+                {"user_id": user_id, "exercise": exercise},
+                {"$set": doc},
+                upsert=True
+            )
         
         return jsonify({"message": "Protocols saved successfully", "success": True})
     except Exception as exc:
