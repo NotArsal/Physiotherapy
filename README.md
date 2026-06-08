@@ -8,7 +8,6 @@
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
 [![MIT License][license-shield]][license-url]
-[![LinkedIn][linkedin-shield]][linkedin-url]
 
 </div>
 
@@ -27,7 +26,7 @@
     <a href="https://github.com/NotArsal/Physiotherapy/tree/main/docs"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://physiotherapy-frontend.vercel.app">View Demo</a>
+    <a href="https://physiotherapy-frotend.vercel.app/">View Demo</a>
     ·
     <a href="https://github.com/NotArsal/Physiotherapy/issues">Report Bug</a>
     ·
@@ -57,14 +56,14 @@
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
-    <li><a href="#contact">Contact</a></li>
+    <li><a href="#acknowledgments">Acknowledgments</a></li>
   </ol>
 </details>
 
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-[![Product Name Screen Shot][product-screenshot]](https://physiotherapy-frontend.vercel.app)
+[![Product Name Screen Shot][product-screenshot]](https://physiotherapy-frotend.vercel.app/)
 
 PhysioTracker is a full-stack tele-rehabilitation system designed to provide objective, real-time biomechanical feedback to patients in their homes. It bridges the gap in remote physical therapy by converting standard monocular webcams into high-precision, AI-powered skeletal trackers. 
 
@@ -211,15 +210,6 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-<!-- CONTACT -->
-## Contact
-
-Arsalan Shaikh - [LinkedIn](https://linkedin.com/in/arsalan-shaikh) - shaik.arsalan@example.com
-
-Project Link: [https://github.com/NotArsal/Physiotherapy](https://github.com/NotArsal/Physiotherapy)
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
 
@@ -241,8 +231,6 @@ Project Link: [https://github.com/NotArsal/Physiotherapy](https://github.com/Not
 [issues-url]: https://github.com/NotArsal/Physiotherapy/issues
 [license-shield]: https://img.shields.io/github/license/NotArsal/Physiotherapy.svg?style=for-the-badge
 [license-url]: https://github.com/NotArsal/Physiotherapy/blob/master/LICENSE
-[linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
-[linkedin-url]: https://linkedin.com/in/arsalan-shaikh
 [product-screenshot]: https://via.placeholder.com/800x400?text=PhysioTracker+Dashboard
 [React.js]: https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB
 [React-url]: https://reactjs.org/
