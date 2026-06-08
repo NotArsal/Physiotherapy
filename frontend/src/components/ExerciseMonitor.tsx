@@ -107,6 +107,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const minHipAngleRef = useRef(180);
   const concentricDurationsRef = useRef<number[]>([]);
   const eccentricDurationsRef = useRef<number[]>([]);
+  const lastInjuryWarningsRef = useRef<string>('');
   const poseDisposedRef = useRef(false);
   const poseProcessingRef = useRef(false);
   const lastPredictionAtRef = useRef(0);
@@ -491,7 +492,14 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
 
         // Cache for skeleton renderer (runs on rAF loop, can't close over state)
         (window as any).__latestInjuryReport__ = riskReport;
-        setInjuryReport(riskReport);
+        
+        // Throttle React state updates to prevent 30fps DOM thrashing
+        const currentWarningsString = riskReport.warnings.join(',');
+        if (currentWarningsString !== lastInjuryWarningsRef.current || riskReport.fallDetected) {
+          setInjuryReport(riskReport);
+          lastInjuryWarningsRef.current = currentWarningsString;
+        }
+        
         previousLandmarksRef.current = results.poseLandmarks;
 
         if (riskReport.fallDetected && !isFallenRef.current) {
