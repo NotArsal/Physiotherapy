@@ -12,10 +12,11 @@ const EXERCISES = [
 class TFJSService {
   private model: tf.LayersModel | null = null;
   private isInitializing: boolean = false;
+  private loadFailed: boolean = false;
 
   async loadModel() {
     if (this.model) return;
-    if (this.isInitializing) return;
+    if (this.isInitializing || this.loadFailed) return;
     this.isInitializing = true;
     try {
       // The model.json will be located in the public/model folder
@@ -28,7 +29,8 @@ class TFJSService {
       dummyInput.dispose();
       
     } catch (err) {
-      console.error('Failed to load TensorFlow.js model:', err);
+      console.error('Failed to load TensorFlow.js model. Falling back to simple heuristic processing.', err);
+      this.loadFailed = true; // Prevent infinite retries and browser freezing
     } finally {
       this.isInitializing = false;
     }

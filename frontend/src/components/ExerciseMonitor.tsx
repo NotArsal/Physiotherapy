@@ -1323,7 +1323,9 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                 <Typography variant="h2" gutterBottom>CRITICAL FALL DETECTED</Typography>
                 <Typography variant="h6" gutterBottom>Session has been paused. Do you need assistance?</Typography>
                 <Typography variant="body1" sx={{ mb: 3 }}>
-                  Alerting therapist in {fallDismissTimeLeft} seconds...
+                  {fallDismissTimeLeft > 0 
+                    ? `Alerting therapist in ${fallDismissTimeLeft} seconds...` 
+                    : "Emergency alert sent to therapist!"}
                 </Typography>
                 <Button 
                   variant="contained" 
