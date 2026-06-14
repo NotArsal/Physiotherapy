@@ -409,6 +409,65 @@ export function getExerciseSpecificFeedback(exercise: string): string {
 }
 
 // Get milestone feedback based on rep count
+export function getRepQuality(currentCount: number, targetCount: number): string {
+  if (currentCount >= targetCount) return "Excellent! Set complete.";
+  if (currentCount >= targetCount * 0.8) return "Almost there, push through!";
+  if (currentCount >= targetCount * 0.5) return "Halfway done, keep it up!";
+  return "Good start, maintain your form.";
+}
+
+export function detectFallEmergency(
+  landmarks: any, 
+  previousLandmarks: any, 
+  deltaTime: number,
+  exerciseName: string,
+  isTracking: boolean // True only when the user has actively started the set
+): boolean {
+  // 1. Ignore if they haven't officially started the exercise yet
+  if (!isTracking || !landmarks || !previousLandmarks || deltaTime <= 0) return false;
+
+  const exerciseKey = normalizeExerciseName(exerciseName);
+  
+  // 2. Ignore floor-based exercises where the user is supposed to be on the ground
+  const floorExercises = [
+    "push_up", "plank", "glute_bridge", "clamshell", 
+    "bird_dog", "straight_leg_raise", "russian_twist"
+  ];
+  
+  if (floorExercises.includes(exerciseKey)) {
+    return false; 
+  }
+
+  const nose = landmarks[0];
+  const leftAnkle = landmarks[27];
+  const rightAnkle = landmarks[28];
+  const prevNose = previousLandmarks[0];
+
+  // 3. Calculate Head Drop Velocity
+  const dy = nose.y - prevNose.y; 
+  const headDropVelocity = dy / Math.max(deltaTime, 0.01); 
+
+  // 4. Floor Proximity Validation
+  let headNearFloor = false;
+  
+  // Ensure ankles are actually visible before comparing
+  if (leftAnkle && rightAnkle && leftAnkle.visibility > 0.5 && rightAnkle.visibility > 0.5) {
+    const avgAnkleY = (leftAnkle.y + rightAnkle.y) / 2;
+    // Y-Collapse: Is the nose extremely close to the ankle level?
+    if (Math.abs(nose.y - avgAnkleY) < 0.20) { 
+      headNearFloor = true;
+    }
+  }
+
+  // 5. Trigger only on violent drops that end near the floor
+  if (headDropVelocity > 3.0 && headNearFloor) {
+    return true; 
+  }
+
+  return false;
+}
+
+// Get milestone feedback based on rep count
 export function getMilestoneFeedback(repCount: number): string {
   if (repCount === 1) return "First rep complete!";
   if (repCount === 5) return "Halfway there!";
@@ -697,31 +756,7 @@ export function detectInjuryRisk(
       report.warnings.push("Dropping Too Fast! Control your descent.");
     }
 
-    // 3b. Critical Fall Detection
-    // Prevent divide-by-zero/micro-jitter spikes by requiring a minimum deltaTime (10ms)
-    const safeDeltaTime = Math.max(deltaTime, 0.01);
-    const nose = landmarks[0];
-    const prevNose = previousLandmarks[0];
-    const noseDropVelocity = (nose.y - prevNose.y) / safeDeltaTime;
-    
-    let minX = 1, maxX = 0, minY = 1, maxY = 0;
-    landmarks.forEach((lm: any) => {
-      if (lm.visibility > 0.5) {
-        if (lm.x < minX) minX = lm.x;
-        if (lm.x > maxX) maxX = lm.x;
-        if (lm.y < minY) minY = lm.y;
-        if (lm.y > maxY) maxY = lm.y;
-      }
-    });
-    const width = maxX - minX;
-    const height = maxY - minY;
-    const aspectRatio = width > 0 ? height / width : 1;
-
-    // Fall detected if moving down rapidly OR Aspect Ratio becomes strictly horizontal near the floor
-    // Adjusted thresholds: nose must be in bottom 30% of screen (> 0.7) for static aspect ratio trigger
-    if ((noseDropVelocity > 2.5 || (aspectRatio < 0.8 && nose.y > 0.7)) && nose.y > 0.6) {
-      report.fallDetected = true;
-    }
+    // 3b. Fall Detection has been extracted to a dedicated context-aware function.
   }
 
   // 4. Shoulder Asymmetry / Barbell Tilt Analysis

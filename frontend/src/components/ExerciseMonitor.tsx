@@ -31,6 +31,7 @@ import {
   getMilestoneFeedback,
   detectExercisePhase,
   detectInjuryRisk,
+  detectFallEmergency,
   InjuryRiskReport
 } from '../utils/poseDetection';
 import { useAuth } from '../contexts/AuthContext';
@@ -499,16 +500,26 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         // Cache for skeleton renderer (runs on rAF loop, can't close over state)
         (window as any).__latestInjuryReport__ = riskReport;
         
+        // Evaluate context-aware fall detection
+        const isTrackingActive = isActiveRef.current && !isPausedRef.current && !isCalibratingRef.current;
+        const isFallDetected = detectFallEmergency(
+          results.poseLandmarks,
+          previousLandmarksRef.current,
+          deltaTime,
+          selectedExerciseRef.current || 'unknown',
+          isTrackingActive
+        );
+        
         // Throttle React state updates to prevent 30fps DOM thrashing
         const currentWarningsString = riskReport.warnings.join(',');
-        if (currentWarningsString !== lastInjuryWarningsRef.current || riskReport.fallDetected) {
+        if (currentWarningsString !== lastInjuryWarningsRef.current || isFallDetected) {
           setInjuryReport(riskReport);
           lastInjuryWarningsRef.current = currentWarningsString;
         }
         
         previousLandmarksRef.current = results.poseLandmarks;
 
-        if (riskReport.fallDetected && !isFallenRef.current) {
+        if (isFallDetected && !isFallenRef.current) {
           setIsFallen(true);
           isFallenRef.current = true;
           isPausedRef.current = true;
