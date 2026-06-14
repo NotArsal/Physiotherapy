@@ -373,12 +373,7 @@ try:
 except Exception as db_err:
     print(f"Database initialization warning (likely concurrent SQLite access in multi-worker environment): {db_err}")
 
-try:
-    load_models()
-except Exception as model_err:
-    print(f"Model loading warning: {model_err}")
-
 if __name__ == "__main__":
-    print("Starting Physiotherapy Exercise Monitoring Backend...")
-    print("Models loaded successfully. Starting Flask server...")
+    print("Starting Physiotherapy API Backend...")
+    print("Database connection established. Starting Flask server...")
     app.run(debug=True, host="0.0.0.0", port=int(os.getenv("PORT", "5000")))
