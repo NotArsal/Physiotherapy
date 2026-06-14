@@ -4,6 +4,8 @@ This file records the system audit, fixes, cleanup, and follow-up recommendation
 
 ## Completed Changes
 
+- **Fall Detection False-Positive Fix**: Clamped the `deltaTime` division (`Math.max(deltaTime, 0.01)`) and adjusted the bounding box Aspect Ratio (`nose.y > 0.7`) to completely eliminate instant critical fall detection alerts when starting a session or performing seated exercises.
+- **Final Backend Pruning**: Removed obsolete `load_models()` try/catch invocation block from `backend/app.py` and passed a full `flake8` audit, ensuring zero Python syntax or variable reference errors remain.
 - **Edge AI Migration (TensorFlow.js)**: Ported the entire BiLSTM inference engine to the React frontend, enabling zero-latency predictions locally in the browser memory.
 - **Backend ML Pruning**: Completely removed `tensorflow-cpu`, `scikit-learn`, and the `.h5` model dependencies from the Flask backend. The backend is now a hyper-optimized, stateless MongoDB logger that uses minimal RAM.
 - **TypeScript Imputation Port**: Ported the Bi-acromial Lower-Body Landmark Imputation logic from Python to TypeScript to dynamically reconstruct occluded body parts on the edge before feeding them to the TF.js model.
