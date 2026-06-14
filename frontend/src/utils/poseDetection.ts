@@ -698,9 +698,11 @@ export function detectInjuryRisk(
     }
 
     // 3b. Critical Fall Detection
+    // Prevent divide-by-zero/micro-jitter spikes by requiring a minimum deltaTime (10ms)
+    const safeDeltaTime = Math.max(deltaTime, 0.01);
     const nose = landmarks[0];
     const prevNose = previousLandmarks[0];
-    const noseDropVelocity = (nose.y - prevNose.y) / deltaTime;
+    const noseDropVelocity = (nose.y - prevNose.y) / safeDeltaTime;
     
     let minX = 1, maxX = 0, minY = 1, maxY = 0;
     landmarks.forEach((lm: any) => {
@@ -716,7 +718,8 @@ export function detectInjuryRisk(
     const aspectRatio = width > 0 ? height / width : 1;
 
     // Fall detected if moving down rapidly OR Aspect Ratio becomes strictly horizontal near the floor
-    if ((noseDropVelocity > 2.5 || (aspectRatio < 0.8 && nose.y > 0.6)) && nose.y > 0.5) {
+    // Adjusted thresholds: nose must be in bottom 30% of screen (> 0.7) for static aspect ratio trigger
+    if ((noseDropVelocity > 2.5 || (aspectRatio < 0.8 && nose.y > 0.7)) && nose.y > 0.6) {
       report.fallDetected = true;
     }
   }
