@@ -107,6 +107,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const calibrationTimerRef = useRef<NodeJS.Timeout | null>(null);
   const minKneeAngleRef = useRef(180);
   const minHipAngleRef = useRef(180);
+  const maxSpineAngleRef = useRef(0);
   const concentricDurationsRef = useRef<number[]>([]);
   const eccentricDurationsRef = useRef<number[]>([]);
   const lastInjuryWarningsRef = useRef<string>('');
@@ -546,11 +547,14 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         }
 
         if (isCalibratingRef.current) {
-          // Track min joint angles during calibration
+          // Track min/max joint angles during calibration for personalized baseline
           const kneeAngle = Math.min(jointAngles[6], jointAngles[7]);
           const hipAngle = Math.min(jointAngles[4], jointAngles[5]);
+          const spineAngle = jointAngles[8] || 0;
+          
           if (kneeAngle > 0 && kneeAngle < minKneeAngleRef.current) minKneeAngleRef.current = kneeAngle;
           if (hipAngle > 0 && hipAngle < minHipAngleRef.current) minHipAngleRef.current = hipAngle;
+          if (spineAngle > maxSpineAngleRef.current) maxSpineAngleRef.current = spineAngle;
           return; // Skip normal exercise logic during calibration
         }
 
@@ -1035,6 +1039,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       setCalibrationTimeLeft(calTime);
       minKneeAngleRef.current = 180;
       minHipAngleRef.current = 180;
+      maxSpineAngleRef.current = 0;
       
       if (voiceEnabledRef.current) {
         speak(`Calibration started. Please perform one full repetition slowly in the next 10 seconds.`);
@@ -1057,13 +1062,17 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
             if (minHipAngleRef.current < 180) {
               // Can adjust other thresholds similarly if needed
             }
+            if (maxSpineAngleRef.current > 0) {
+              // Create dynamic personalized baseline
+              newProtocol.safe_spine_angle = Math.max(maxSpineAngleRef.current + 10, 25);
+            }
             setActiveProtocol(newProtocol);
             activeProtocolRef.current = newProtocol;
           }
           
-          addToConsoleLog(`Calibration complete. New safe knee threshold: ${activeProtocolRef.current?.safe_knee_angle?.toFixed(1)}°`);
+          addToConsoleLog(`Dynamic Personalized Biomechanical Calibration complete. New baselines -> Knee: ${activeProtocolRef.current?.safe_knee_angle?.toFixed(1)}°, Spine: ${activeProtocolRef.current?.safe_spine_angle?.toFixed(1)}°`);
           if (voiceEnabledRef.current) {
-            speak(`Calibration complete. Starting ${selectedExercise.replace(/_/g, ' ')} exercise. Good luck!`);
+            speak(`Calibration complete. Personalized baselines established. Starting ${selectedExercise.replace(/_/g, ' ')} exercise. Good luck!`);
           }
         }
       }, 1000);
@@ -1496,6 +1505,15 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
                     <Chip
                       label={injuryFlags}
                       color={injuryFlags > 0 ? 'error' : 'success'}
+                      size="small"
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>Kinematic Quality Score:</Typography>
+                    <Chip
+                      label={`${injuryReport?.kinematicScore ?? 100}/100`}
+                      color={injuryReport && injuryReport.kinematicScore !== undefined && injuryReport.kinematicScore < 75 ? 'warning' : 'success'}
                       size="small"
                       sx={{ fontWeight: 'bold' }}
                     />

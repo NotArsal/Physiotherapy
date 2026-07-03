@@ -587,6 +587,7 @@ export interface InjuryRiskReport {
     shoulderTilt: number;
   };
   fallDetected?: boolean;
+  kinematicScore?: number; // 0 to 100 quality score (100 - risk)
 }
 
 export function detectInjuryRisk(
@@ -687,7 +688,7 @@ export function detectInjuryRisk(
   if (["squat", "deadlift", "push_up", "plank", "barbell_biceps_curl", "shoulder_press", "glute_bridge", "bird_dog", "wall_slide"].includes(exerciseKey)) {
     if (spineAngle > maxSafeSpine) {
       spineRisk = Math.min(100, ((spineAngle - maxSafeSpine) / 15) * 50 + 50);
-      report.warnings.push("Rounded Back! Keep your spine neutral.");
+      report.warnings.push("Trunk Compensation Detected: Spinal deviation. Keep back neutral.");
     }
   }
 
@@ -921,6 +922,7 @@ export function detectInjuryRisk(
     exerciseCorrectionRisk
   );
   report.riskScore = Math.round(maxRisk);
+  report.kinematicScore = Math.round(100 - Math.min(100, maxRisk));
   
   if (report.riskScore > 50) {
     report.isSafe = false;
