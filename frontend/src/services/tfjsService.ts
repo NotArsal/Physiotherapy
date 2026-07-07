@@ -1,4 +1,5 @@
 import * as tf from '@tensorflow/tfjs';
+import { Landmark } from '../utils/poseDetection';
 
 // The exercise catalog corresponding to the model's output neurons
 const EXERCISES = [
@@ -37,14 +38,14 @@ class TFJSService {
   }
 
   // Safe extraction of landmarks
-  private getLMData(lm: any): [number, number, number] {
+  private getLMData(lm: Landmark): [number, number, number] {
     if (lm && typeof lm.x === 'number') {
       return [lm.x, lm.y, lm.visibility || 0.0];
     }
     return [0.0, 0.0, 0.0];
   }
 
-  private flattenAndImputeFrame(frameLandmarks: any[]): number[] {
+  private flattenAndImputeFrame(frameLandmarks: Landmark[]): number[] {
     if (!frameLandmarks || frameLandmarks.length < 33) {
       return new Array(99).fill(0.0);
     }
@@ -99,7 +100,7 @@ class TFJSService {
     return features;
   }
 
-  async predictExercise(landmarksBuffer: any[][], selectedExercise?: string) {
+  async predictExercise(landmarksBuffer: Landmark[][], selectedExercise?: string) {
     if (!this.model) {
       await this.loadModel();
     }

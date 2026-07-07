@@ -1,5 +1,12 @@
-import { Pose } from '@mediapipe/pose';
+import { Pose, Results } from '@mediapipe/pose';
 import { ExerciseProtocol } from '../services/api';
+
+export interface Landmark {
+  x: number;
+  y: number;
+  z?: number;
+  visibility?: number;
+}
 
 export interface JointAngles {
   leftShoulder: number;
@@ -14,7 +21,7 @@ export interface JointAngles {
 }
 
 // Calculate angle between three points
-function calculateAngle(point1: any, point2: any, point3: any): number {
+function calculateAngle(point1: Landmark, point2: Landmark, point3: Landmark): number {
   const vector1 = {
     x: point1.x - point2.x,
     y: point1.y - point2.y
@@ -40,7 +47,7 @@ function calculateAngle(point1: any, point2: any, point3: any): number {
 }
 
 // Extract joint angles from MediaPipe pose landmarks
-export function extractJointAngles(landmarks: any): number[] {
+export function extractJointAngles(landmarks: Landmark[]): number[] {
   if (!landmarks || landmarks.length < 33) {
     return Array(9).fill(0);
   }
@@ -114,11 +121,11 @@ export function extractJointAngles(landmarks: any): number[] {
 
 // Initialize MediaPipe Pose with CDN-hosted assets and asset loading watchdog support.
 export function initializePoseDetection(
-  onResults: (results: any) => void,
+  onResults: (results: Results) => void,
   onTimeout?: () => void
 ): { pose: Pose; startWatchdog: () => void; clearWatchdog: () => void } {
   let hasReceivedResults = false;
-  let timerId: any = null;
+  let timerId: ReturnType<typeof setTimeout> | null = null;
 
   const pose = new Pose({
     locateFile: (file) => {
@@ -417,8 +424,8 @@ export function getRepQuality(currentCount: number, targetCount: number): string
 }
 
 export function detectFallEmergency(
-  landmarks: any, 
-  previousLandmarks: any, 
+  landmarks: Landmark[], 
+  previousLandmarks: Landmark[], 
   deltaTime: number,
   exerciseName: string,
   isTracking: boolean // True only when the user has actively started the set
@@ -451,7 +458,7 @@ export function detectFallEmergency(
   let headNearFloor = false;
   
   // Ensure ankles are actually visible before comparing
-  if (leftAnkle && rightAnkle && leftAnkle.visibility > 0.5 && rightAnkle.visibility > 0.5) {
+  if (leftAnkle && rightAnkle && (leftAnkle.visibility || 0) > 0.5 && (rightAnkle.visibility || 0) > 0.5) {
     const avgAnkleY = (leftAnkle.y + rightAnkle.y) / 2;
     // Y-Collapse: Is the nose extremely close to the ankle level?
     if (Math.abs(nose.y - avgAnkleY) < 0.20) { 
@@ -591,11 +598,11 @@ export interface InjuryRiskReport {
 }
 
 export function detectInjuryRisk(
-  landmarks: any,
+  landmarks: Landmark[],
   jointAngles: number[],
   exerciseName: string,
   protocol?: ExerciseProtocol | null,
-  previousLandmarks?: any,
+  previousLandmarks?: Landmark[],
   deltaTime?: number // in seconds
 ): InjuryRiskReport {
   const report: InjuryRiskReport = {
@@ -648,8 +655,8 @@ export function detectInjuryRisk(
   ].includes(exerciseKey);
 
   if (isUpperBody) {
-    const wristsMissing = (!leftWrist || leftWrist.visibility < visibilityThreshold) || (!rightWrist || rightWrist.visibility < visibilityThreshold);
-    const elbowsMissing = (!leftElbow || leftElbow.visibility < visibilityThreshold) || (!rightElbow || rightElbow.visibility < visibilityThreshold);
+    const wristsMissing = (!leftWrist || (leftWrist.visibility || 0) < visibilityThreshold) || (!rightWrist || (rightWrist.visibility || 0) < visibilityThreshold);
+    const elbowsMissing = (!leftElbow || (leftElbow.visibility || 0) < visibilityThreshold) || (!rightElbow || (rightElbow.visibility || 0) < visibilityThreshold);
     if (wristsMissing) {
       report.warnings.push("Hands not visible! Adjust camera to show your hands.");
       report.isSafe = false;
@@ -660,17 +667,17 @@ export function detectInjuryRisk(
       report.riskScore = Math.max(report.riskScore, 55);
     }
   } else if (isLowerBody) {
-    const kneesMissing = (!leftKnee || leftKnee.visibility < visibilityThreshold) || (!rightKnee || rightKnee.visibility < visibilityThreshold);
-    const anklesMissing = (!leftAnkle || leftAnkle.visibility < visibilityThreshold) || (!rightAnkle || rightAnkle.visibility < visibilityThreshold);
+    const kneesMissing = (!leftKnee || (leftKnee.visibility || 0) < visibilityThreshold) || (!rightKnee || (rightKnee.visibility || 0) < visibilityThreshold);
+    const anklesMissing = (!leftAnkle || (leftAnkle.visibility || 0) < visibilityThreshold) || (!rightAnkle || (rightAnkle.visibility || 0) < visibilityThreshold);
     if (kneesMissing || anklesMissing) {
       report.warnings.push("Legs not visible! Step back so your legs are in frame.");
       report.isSafe = false;
       report.riskScore = Math.max(report.riskScore, 65);
     }
   } else if (isFullBody) {
-    const elbowsMissing = (!leftElbow || leftElbow.visibility < visibilityThreshold) || (!rightElbow || rightElbow.visibility < visibilityThreshold);
-    const hipsMissing = (!leftHip || leftHip.visibility < visibilityThreshold) || (!rightHip || rightHip.visibility < visibilityThreshold);
-    const kneesMissing = (!leftKnee || leftKnee.visibility < visibilityThreshold) || (!rightKnee || rightKnee.visibility < visibilityThreshold);
+    const elbowsMissing = (!leftElbow || (leftElbow.visibility || 0) < visibilityThreshold) || (!rightElbow || (rightElbow.visibility || 0) < visibilityThreshold);
+    const hipsMissing = (!leftHip || (leftHip.visibility || 0) < visibilityThreshold) || (!rightHip || (rightHip.visibility || 0) < visibilityThreshold);
+    const kneesMissing = (!leftKnee || (leftKnee.visibility || 0) < visibilityThreshold) || (!rightKnee || (rightKnee.visibility || 0) < visibilityThreshold);
     if (elbowsMissing || hipsMissing || kneesMissing) {
       report.warnings.push("Full body not visible! Step back to show your entire body.");
       report.isSafe = false;

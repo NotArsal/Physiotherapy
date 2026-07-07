@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import {
@@ -9,6 +9,7 @@ import {
   Menu,
   MenuItem,
   IconButton,
+  LinearProgress,
 } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -19,14 +20,16 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+
 import Login from './components/Login';
-import ExerciseSelector from './components/ExerciseSelector';
-import ExerciseMonitor from './components/ExerciseMonitor';
-import Dashboard from './components/Dashboard';
-import MediaPipeDebug from './components/MediaPipeDebug';
-import { TherapistPortal } from './components/TherapistPortal';
 import NavHeader, { NavItem } from './components/ui/nav-header';
 import { PremiumToggle } from './components/ui/bouncy-toggle';
+
+const ExerciseSelector = lazy(() => import('./components/ExerciseSelector'));
+const ExerciseMonitor = lazy(() => import('./components/ExerciseMonitor'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const MediaPipeDebug = lazy(() => import('./components/MediaPipeDebug'));
+const TherapistPortal = lazy(() => import('./components/TherapistPortal').then(module => ({ default: module.TherapistPortal })));
 
 type AppView = 'exercises' | 'monitor' | 'dashboard' | 'debug' | 'therapist';
 
@@ -303,18 +306,20 @@ const AppContent: React.FC<AppContentProps> = ({ darkMode, toggleDarkMode }) => 
 
       {/* ── Page content ────────────────────────────────────────────────────── */}
       <Box component="main" sx={{ py: 1 }}>
-        {currentView === 'exercises' && (
-          <ExerciseSelector onExerciseSelect={handleExerciseSelect} />
-        )}
-        {currentView === 'monitor' && selectedExercise && (
-          <ExerciseMonitor
-            selectedExercise={selectedExercise}
-            onBack={handleBackToExercises}
-          />
-        )}
-        {currentView === 'dashboard' && <Dashboard />}
-        {currentView === 'debug' && <MediaPipeDebug />}
-        {currentView === 'therapist' && <TherapistPortal />}
+        <Suspense fallback={<LinearProgress />}>
+          {currentView === 'exercises' && (
+            <ExerciseSelector onExerciseSelect={handleExerciseSelect} />
+          )}
+          {currentView === 'monitor' && selectedExercise && (
+            <ExerciseMonitor
+              selectedExercise={selectedExercise}
+              onBack={handleBackToExercises}
+            />
+          )}
+          {currentView === 'dashboard' && <Dashboard />}
+          {currentView === 'debug' && <MediaPipeDebug />}
+          {currentView === 'therapist' && <TherapistPortal />}
+        </Suspense>
       </Box>
     </Box>
   );

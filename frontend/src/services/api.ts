@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { auth } from '../firebase';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -8,6 +9,25 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Intercept requests to attach Firebase auth token
+api.interceptors.request.use(
+  async (config) => {
+    const user = auth.currentUser;
+    if (user) {
+      try {
+        const token = await user.getIdToken();
+        config.headers.Authorization = `Bearer ${token}`;
+      } catch (error) {
+        console.error('Error fetching Firebase token:', error);
+      }
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 export interface PredictionResponse {
   exercise: string;
