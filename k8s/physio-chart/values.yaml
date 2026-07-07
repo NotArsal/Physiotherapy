@@ -1,0 +1,43 @@
+replicaCount: 1
+
+image:
+  backend: ghcr.io/yourusername/physio-backend:latest
+  frontend: ghcr.io/yourusername/physio-frontend:latest
+  pullPolicy: IfNotPresent
+
+backend:
+  service:
+    type: ClusterIP
+    port: 5000
+  env:
+    MONGO_URI: "mongodb://mongodb-service:27017/physio_db"
+    # Will be mounted from secret
+    FIREBASE_CREDENTIALS: "/etc/secrets/firebase/credentials.json"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+frontend:
+  service:
+    type: LoadBalancer
+    port: 80
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+firebaseSecret:
+  create: false
+  name: "firebase-credentials"
+
+# If using external DB
+databaseSecret:
+  create: false
+  name: "db-credentials"
