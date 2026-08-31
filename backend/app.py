@@ -97,11 +97,25 @@ def require_auth(f):
             decoded_token = auth.verify_id_token(token)
             request.user = decoded_token  # attach to request
         except Exception as e:
-            return jsonify({"error": f"Invalid token: {e}", "success": False}), 401
+            logger.warning(f"Auth token verification failed: {e}")
+            return jsonify({"error": "Invalid or expired authorization token", "success": False}), 401
         
         return f(*args, **kwargs)
     return decorated_function
 
+
+def format_session_doc(doc):
+    session = dict(doc)
+    if "_id" in session:
+        session["id"] = str(session.pop("_id"))
+    if isinstance(session.get("session_data"), str):
+        try:
+            session["session_data"] = json.loads(session["session_data"])
+        except json.JSONDecodeError:
+            session["session_data"] = []
+    elif not session.get("session_data"):
+        session["session_data"] = []
+    return session
 
 
 # Stateless backend - current_exercise_state removed to support multi-worker environments
@@ -248,19 +262,7 @@ def get_user_sessions(user_id):
         
     try:
         rows = list(db.sessions.find({"user_id": user_id}).sort("timestamp", -1))
-        
-        user_sessions = []
-        for row in rows:
-            session = row
-            session["id"] = str(session.pop("_id"))
-            if isinstance(session.get("session_data"), str):
-                try:
-                    session["session_data"] = json.loads(session["session_data"])
-                except:
-                    session["session_data"] = []
-            elif not session.get("session_data"):
-                session["session_data"] = []
-            user_sessions.append(session)
+        user_sessions = [format_session_doc(row) for row in rows]
 
         total_sessions = len(user_sessions)
         total_reps = sum(session["total_reps"] for session in user_sessions)
@@ -294,23 +296,9 @@ def get_user_sessions(user_id):
 @app.route("/sessions", methods=["GET"])
 @require_auth
 def get_all_sessions():
-    # In a real app, you would check if request.user has 'admin' role here
     try:
         rows = list(db.sessions.find().sort("timestamp", -1))
-        
-        all_sessions = []
-        for row in rows:
-            session = row
-            session["id"] = str(session.pop("_id"))
-            if isinstance(session.get("session_data"), str):
-                try:
-                    session["session_data"] = json.loads(session["session_data"])
-                except:
-                    session["session_data"] = []
-            elif not session.get("session_data"):
-                session["session_data"] = []
-            all_sessions.append(session)
-
+        all_sessions = [format_session_doc(row) for row in rows]
         return jsonify({"sessions": all_sessions})
     except Exception as exc:
         return jsonify({"error": f"Failed to retrieve all sessions: {exc}", "success": False}), 500

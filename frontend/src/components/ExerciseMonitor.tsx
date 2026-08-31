@@ -287,6 +287,11 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
     stopVideoStream(webcamRef.current?.video);
   }, []);
 
+  const latestInjuryReportRef = useRef<InjuryRiskReport | null>(null);
+  const lastInjuryFlagAtRef = useRef<number>(0);
+  const lastCorrectionVoicedAtRef = useRef<number>(0);
+  const lastCorrectionVoicedTextRef = useRef<string>('');
+
   // ── Glowing neon skeleton renderer ─────────────────────────────────────────
   const drawGlowingSkeleton = useCallback((
     ctx: CanvasRenderingContext2D,
@@ -443,7 +448,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
 
       // Draw neon skeleton using latest injury report for context
       try {
-        const latestInjury = (window as any).__latestInjuryReport__;
+        const latestInjury = latestInjuryReportRef.current;
         const warnText = latestInjury?.warnings?.join(' ') ?? '';
         const isSafe = latestInjury?.isSafe ?? true;
         drawGlowingSkeleton(ctx, results.poseLandmarks, warnText, isSafe, exerciseMatchRef.current);
@@ -471,9 +476,12 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       }
       lastFrameTimeRef.current = now;
 
-      // Update live phase duration display every frame
+      // Update live phase duration display (throttled to avoid 30fps DOM re-render thrashing)
       if (phaseStartTimeRef.current > 0) {
-        setCurrentPhaseDuration(parseFloat(((now - phaseStartTimeRef.current) / 1000).toFixed(1)));
+        const dur = parseFloat(((now - phaseStartTimeRef.current) / 1000).toFixed(1));
+        if (Math.abs(dur - currentPhaseDuration) >= 0.2) {
+          setCurrentPhaseDuration(dur);
+        }
       }
 
       try {
@@ -498,8 +506,8 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
           deltaTime
         );
 
-        // Cache for skeleton renderer (runs on rAF loop, can't close over state)
-        (window as any).__latestInjuryReport__ = riskReport;
+        // Cache for skeleton renderer via scoped ref
+        latestInjuryReportRef.current = riskReport;
         
         // Evaluate context-aware fall detection
         const isTrackingActive = isActiveRef.current && !isPausedRef.current && !isCalibratingRef.current;
@@ -564,21 +572,20 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
           const isVisibilityWarning = primaryWarning.toLowerCase().includes('not visible') || primaryWarning.toLowerCase().includes('occluded');
 
           if (!riskReport.isSafe && !isVisibilityWarning) {
-            const lastFlagKey = 'last_injury_flag_at';
-            const lastFlag = (window as any)[lastFlagKey] || 0;
+            const lastFlag = lastInjuryFlagAtRef.current;
             if (now - lastFlag > 3500) {
               const newFlags = injuryFlagsRef.current + 1;
               setInjuryFlags(newFlags);
-              (window as any)[lastFlagKey] = now;
+              lastInjuryFlagAtRef.current = now;
               playSpeechCoaching(`Caution: ${primaryWarning}`, true);
             }
           } else if (!isVisibilityWarning) {
-            const lastCorrectionTime = (window as any)['last_correction_voiced_at'] || 0;
-            const lastCorrectionText = (window as any)['last_correction_voiced_text'] || '';
+            const lastCorrectionTime = lastCorrectionVoicedAtRef.current;
+            const lastCorrectionText = lastCorrectionVoicedTextRef.current;
             if (primaryWarning !== lastCorrectionText || now - lastCorrectionTime > 5000) {
               playSpeechCoaching(`Form correction: ${primaryWarning}`, false);
-              (window as any)['last_correction_voiced_at'] = now;
-              (window as any)['last_correction_voiced_text'] = primaryWarning;
+              lastCorrectionVoicedAtRef.current = now;
+              lastCorrectionVoicedTextRef.current = primaryWarning;
             }
           }
         }

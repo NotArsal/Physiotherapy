@@ -93,3 +93,8 @@ venv/
 backend/venv/
 backend/.venv/
 *.db
+
+# Cargo / Rust build targets
+target/
+crates/**/target/
+

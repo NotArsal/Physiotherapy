@@ -41,7 +41,7 @@ jobs:
         run: |
           cd frontend
           npm ci
-          CI=false npm run build
+          npm run build
 
   push-images:
     needs: build-and-test

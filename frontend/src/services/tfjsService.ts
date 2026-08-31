@@ -26,7 +26,8 @@ class TFJSService {
       
       // Warm up the model
       const dummyInput = tf.zeros([1, 30, 99]);
-      this.model.predict(dummyInput);
+      const warmupOutput = this.model.predict(dummyInput) as tf.Tensor;
+      warmupOutput.dispose();
       dummyInput.dispose();
       
     } catch (err) {
@@ -126,36 +127,36 @@ class TFJSService {
     // Process all 30 frames
     const processedSequence = sequence.map(frame => this.flattenAndImputeFrame(frame));
 
-    return tf.tidy(() => {
-      // Create tensor of shape [1, 30, 99]
-      const inputTensor = tf.tensor3d([processedSequence]);
-      
-      // Execute inference
-      const prediction = this.model!.predict(inputTensor) as tf.Tensor;
-      const scores = prediction.dataSync();
-      
-      // Find the highest confidence class
-      let maxConfidence = 0;
-      let maxIndex = 0;
-      
-      for (let i = 0; i < scores.length; i++) {
-        if (scores[i] > maxConfidence) {
-          maxConfidence = scores[i];
-          maxIndex = i;
-        }
+    // Create tensor of shape [1, 30, 99]
+    const inputTensor = tf.tensor3d([processedSequence]);
+    
+    // Execute inference asynchronously to avoid blocking UI thread
+    const prediction = this.model!.predict(inputTensor) as tf.Tensor;
+    const scores = await prediction.data();
+    prediction.dispose();
+    inputTensor.dispose();
+    
+    // Find the highest confidence class
+    let maxConfidence = 0;
+    let maxIndex = 0;
+    
+    for (let i = 0; i < scores.length; i++) {
+      if (scores[i] > maxConfidence) {
+        maxConfidence = scores[i];
+        maxIndex = i;
       }
-      
-      const predictedExercise = EXERCISES[maxIndex];
+    }
+    
+    const predictedExercise = EXERCISES[maxIndex];
 
-      return {
-        exercise: predictedExercise,
-        confidence: maxConfidence,
-        phase: 'N/A',
-        rep_count: 0,
-        joint_angles: [],
-        timestamp: new Date().toISOString()
-      };
-    });
+    return {
+      exercise: predictedExercise,
+      confidence: maxConfidence,
+      phase: 'N/A',
+      rep_count: 0,
+      joint_angles: [],
+      timestamp: new Date().toISOString()
+    };
   }
 }
 
