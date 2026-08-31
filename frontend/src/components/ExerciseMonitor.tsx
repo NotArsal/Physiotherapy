@@ -14,7 +14,9 @@ import {
   FormControlLabel,
   Chip,
   Backdrop,
-  CircularProgress
+  CircularProgress,
+  Breadcrumbs,
+  Link
 } from '@mui/material';
 import StopIcon from '@mui/icons-material/Stop';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -1215,8 +1217,25 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
 
   return (
     <Container maxWidth="xl" sx={{ mt: 2 }}>
+      <Box sx={{ mb: 1 }}>
+        <Breadcrumbs aria-label="breadcrumb" sx={{ fontFamily: '"Inter", sans-serif', fontSize: '0.85rem' }}>
+          <Link
+            underline="hover"
+            color="inherit"
+            href="#"
+            onClick={(e) => { e.preventDefault(); onBack(); }}
+            sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+          >
+            Exercises
+          </Link>
+          <Typography color="text.primary" sx={{ fontFamily: '"Inter", sans-serif', fontSize: '0.85rem', fontWeight: 600 }}>
+            {selectedExercise.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())}
+          </Typography>
+        </Breadcrumbs>
+      </Box>
+
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4" component="h1">
+        <Typography variant="h4" component="h1" sx={{ fontFamily: '"Cormorant Garamond", serif', fontWeight: 500 }}>
           {selectedExercise.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())} Monitor
         </Typography>
         <Button variant="outlined" onClick={onBack}>

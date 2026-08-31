@@ -4,40 +4,62 @@
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#181715" />
+    <title>PhysioTracker | AI Biomechanical Monitoring & Tele-Rehabilitation</title>
     <meta
       name="description"
-      content="Web site created using create-react-app"
+      content="An Edge-Optimized Biomechanical Monitoring Framework for Automated Posture Correction, Real-Time Rehabilitation Tracking, and Wearable-Free Fall Detection."
     />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
+    <link rel="canonical" href="https://physiotherapy-frontend.vercel.app/" />
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
-    <title>React App</title>
+    <!-- Open Graph / Social Media -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://physiotherapy-frontend.vercel.app/" />
+    <meta property="og:title" content="PhysioTracker | AI Biomechanical Monitoring & Tele-Rehabilitation" />
+    <meta property="og:description" content="Edge-Optimized real-time physical therapy feedback using client-side WebGL pose tracking and zero-wearable ambient fall detection." />
+    <meta property="og:image" content="https://physiotherapy-frontend.vercel.app/logo512.png" />
+    <meta property="og:site_name" content="PhysioTracker" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://physiotherapy-frontend.vercel.app/" />
+    <meta name="twitter:title" content="PhysioTracker | AI Biomechanical Monitoring Platform" />
+    <meta name="twitter:description" content="Transforming standard webcams into high-precision, zero-latency physical therapy monitors with WebGL and Rust Wasm." />
+    <meta name="twitter:image" content="https://physiotherapy-frontend.vercel.app/logo512.png" />
+
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <!-- Fonts & CDN Preconnects -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- Schema.org JSON-LD Structured Data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "PhysioTracker",
+        "operatingSystem": "Web",
+        "applicationCategory": "HealthApplication",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "description": "Edge-optimized tele-rehabilitation monitoring system for automated posture correction and wearable-free fall detection.",
+        "author": {
+          "@type": "Organization",
+          "name": "Vishwakarma Institute of Technology",
+          "url": "https://www.vit.edu"
+        }
+      }
+    </script>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <noscript>You need to enable JavaScript to run PhysioTracker.</noscript>
     <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
-
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
   </body>
 </html>

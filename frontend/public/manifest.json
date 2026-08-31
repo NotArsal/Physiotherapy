@@ -1,6 +1,7 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "PhysioTracker",
+  "name": "PhysioTracker Tele-Rehabilitation",
+  "description": "AI-Powered Biomechanical Monitoring & Tele-Rehabilitation Platform",
   "icons": [
     {
       "src": "favicon.ico",
@@ -20,6 +21,6 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#181715",
+  "background_color": "#fbf9f5"
 }

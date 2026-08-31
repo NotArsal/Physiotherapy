@@ -1,0 +1,28 @@
+# PhysioTracker
+
+> Edge-Optimized Biomechanical Monitoring Framework for Automated Posture Correction, Real-Time Rehabilitation Tracking, and Wearable-Free Fall Detection.
+
+## Overview
+PhysioTracker converts standard RGB webcam streams into real-time physical therapy monitors using client-side WebGL (TensorFlow.js), SIMD WebAssembly (`physio_core`), and MediaPipe Pose. It eliminates the need for expensive wearable hardware or high-latency cloud vision APIs.
+
+## Architecture
+- **Frontend Core**: React 18, TypeScript, Material-UI, Tailwind CSS, Recharts.
+- **Client Edge AI**: TensorFlow.js WebGL backend, BiLSTM 30-frame temporal pose classification model (`model/model.json`).
+- **Kinematic Engine (`physio_core`)**: Rust crate compiled to WebAssembly via `wasm-bindgen` for zero-copy 3D joint angle calculation and lower-body bi-acromial distance scalar imputation.
+- **Backend Service**: Stateless Flask API, PyMongo, Firebase Admin Auth (`@require_auth` JWT verification), production Gunicorn WSGI.
+
+## Patent-Pending Algorithms
+1. **Bi-Acromial Distance Scalar Imputation**: Dynamic lower-extremity landmark reconstruction when camera view drops below chest level using shoulder-width ratio $S = \sqrt{\Delta x^2 + \Delta y^2}$.
+2. **Dual-Factor Optical Fall Emergency Detection**: Evaluates $dy/dt$ nose drop velocity combined with 33-point bounding box horizontal collapse ratio ($W/H < 0.8$) near the floor plane.
+3. **Exponential Moving Average (EMA) Joint Filtering**: Smooths jitter in trigonometric joint angle series with factor $\alpha = 0.35$.
+
+## API Endpoints
+- `GET /health` - System status check.
+- `GET /exercises` - Available exercise library list.
+- `POST /log_session` - Log completed exercise session (Requires Bearer Auth).
+- `GET /sessions/<user_id>` - Retrieve user historical analytics (Requires Bearer Auth).
+- `GET /protocols/default` - Retrieve default clinical protocols.
+
+## Source Code & Documentation
+- GitHub Repository: https://github.com/NotArsal/Physiotherapy
+- Patent Specification: docs/patent/patent_draft.md

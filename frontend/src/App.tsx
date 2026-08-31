@@ -30,8 +30,9 @@ const ExerciseMonitor = lazy(() => import('./components/ExerciseMonitor'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const MediaPipeDebug = lazy(() => import('./components/MediaPipeDebug'));
 const TherapistPortal = lazy(() => import('./components/TherapistPortal').then(module => ({ default: module.TherapistPortal })));
+const NotFound = lazy(() => import('./components/NotFound'));
 
-type AppView = 'exercises' | 'monitor' | 'dashboard' | 'debug' | 'therapist';
+type AppView = 'exercises' | 'monitor' | 'dashboard' | 'debug' | 'therapist' | 'not-found';
 
 // ── Nav items per role ────────────────────────────────────────────────────────
 const PATIENT_NAV: NavItem[] = [
@@ -64,7 +65,7 @@ const AppContent: React.FC<AppContentProps> = ({ darkMode, toggleDarkMode }) => 
     const initialRole = (savedRole === 'patient' || savedRole === 'therapist') ? savedRole : 'therapist';
     if (savedView) {
       if (initialRole === 'therapist' && savedView === 'therapist') return 'therapist';
-      if (initialRole === 'patient' && ['exercises', 'monitor', 'dashboard', 'debug'].includes(savedView)) return savedView as AppView;
+      if (initialRole === 'patient' && ['exercises', 'monitor', 'dashboard', 'debug', 'not-found'].includes(savedView)) return savedView as AppView;
     }
     return initialRole === 'therapist' ? 'therapist' : 'exercises';
   });
@@ -74,6 +75,33 @@ const AppContent: React.FC<AppContentProps> = ({ darkMode, toggleDarkMode }) => 
   });
 
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+  // ── Dynamic Page Titles & SEO Metadata per View ──────────────────────────────
+  useEffect(() => {
+    switch (currentView) {
+      case 'exercises':
+        document.title = 'Exercise Library | PhysioTracker AI Tele-Rehabilitation';
+        break;
+      case 'monitor':
+        const name = selectedExercise ? selectedExercise.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Exercise';
+        document.title = `${name} Session | PhysioTracker Biomechanical Monitor`;
+        break;
+      case 'dashboard':
+        document.title = 'Patient Recovery Analytics | PhysioTracker Clinical Dashboard';
+        break;
+      case 'therapist':
+        document.title = 'Therapist Management Portal | PhysioTracker Remote Care';
+        break;
+      case 'debug':
+        document.title = 'MediaPipe WebGL Telemetry Debugger | PhysioTracker';
+        break;
+      case 'not-found':
+        document.title = '404 - Page Not Found | PhysioTracker';
+        break;
+      default:
+        document.title = 'PhysioTracker | AI Biomechanical Monitoring & Tele-Rehabilitation';
+    }
+  }, [currentView, selectedExercise]);
 
   // ── Auto-enroll dynamic active patient and clear mock patients ──────────────
   useEffect(() => {
@@ -319,6 +347,13 @@ const AppContent: React.FC<AppContentProps> = ({ darkMode, toggleDarkMode }) => 
           {currentView === 'dashboard' && <Dashboard />}
           {currentView === 'debug' && <MediaPipeDebug />}
           {currentView === 'therapist' && <TherapistPortal />}
+          {currentView === 'not-found' && (
+            <NotFound onNavigate={(v) => {
+              const nextView = v as AppView;
+              setCurrentView(nextView);
+              localStorage.setItem('physio_current_view', nextView);
+            }} />
+          )}
         </Suspense>
       </Box>
     </Box>
