@@ -742,7 +742,27 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   }, [addToConsoleLog]);
 
   useEffect(() => {
-    const initializePose = async () => {
+    
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+      addToConsoleLog('WebGL context lost. Attempting to recover...');
+      setError('GPU Context Lost. Please refresh or wait for auto-recovery.');
+      stopFrameLoop();
+      setIsCalibrating(false);
+      setIsActive(false);
+      setIsPaused(true);
+    };
+
+    const handleContextRestored = () => {
+      addToConsoleLog('WebGL context restored. Re-initializing...');
+      void initializePose();
+    };
+
+    const canvas = document.createElement('canvas');
+    canvas.addEventListener('webglcontextlost', handleContextLost, false);
+    canvas.addEventListener('webglcontextrestored', handleContextRestored, false);
+
+const initializePose = async () => {
       try {
         setError('');
         addToConsoleLog('Initializing MediaPipe PoseLandmarker...');
@@ -841,6 +861,27 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         setError('Camera not available. Please allow camera permissions.');
         return false;
       }
+      // Check explicitly for permissions first
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        // Release the test stream immediately since Webcam component handles its own stream
+        stream.getTracks().forEach(track => track.stop());
+      } catch (permErr) {
+        setError('Camera permission denied or device unavailable. Please allow access in your browser settings.');
+        addToConsoleLog(`Camera permission error: ${String(permErr)}`);
+        return false;
+      }
+
+      // Add disconnect listener
+      navigator.mediaDevices.ondevicechange = async () => {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const hasVideo = devices.some(d => d.kind === 'videoinput');
+        if (!hasVideo) {
+          setError('Camera disconnected mid-exercise! Please reconnect your camera.');
+          handleStop();
+        }
+      };
+
 
       if (!poseRef.current) {
         setError('Pose detection not ready. Please refresh the page.');
@@ -1258,8 +1299,8 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         </Alert>
       )}
 
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={8}>
+      <Grid container spacing={3} sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' } }}>
+        <Grid item xs={12} md={8} sx={{ order: { xs: 1, md: 1 } }}>
           <Paper sx={{ p: 2, position: 'relative' }}>
             <Box sx={{ position: 'relative', width: '100%', aspectRatio: '4/3' }}>
               <MemoizedWebcam webcamRef={webcamRef} />
@@ -1410,7 +1451,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
           </Paper>
         </Grid>
 
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={4} sx={{ order: { xs: 2, md: 2 } }}>
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <Card>

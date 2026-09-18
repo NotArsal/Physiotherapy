@@ -25,10 +25,12 @@ class TFJSService {
       console.log('TensorFlow.js Edge AI Model loaded successfully');
       
       // Warm up the model
-      const dummyInput = tf.zeros([1, 30, 99]);
-      const warmupOutput = this.model.predict(dummyInput) as tf.Tensor;
-      warmupOutput.dispose();
-      dummyInput.dispose();
+      tf.tidy(() => {
+        const dummyInput = tf.zeros([1, 30, 99]);
+        const warmupOutput = this.model!.predict(dummyInput) as tf.Tensor;
+        // tf.tidy automatically disposes tensors created inside, 
+        // but it doesn't hurt to be explicit if they aren't returned.
+      });
       
     } catch (err) {
       console.error('Failed to load TensorFlow.js model. Falling back to simple heuristic processing.', err);
@@ -127,14 +129,19 @@ class TFJSService {
     // Process all 30 frames
     const processedSequence = sequence.map(frame => this.flattenAndImputeFrame(frame));
 
-    // Create tensor of shape [1, 30, 99]
-    const inputTensor = tf.tensor3d([processedSequence]);
-    
     // Execute inference asynchronously to avoid blocking UI thread
-    const prediction = this.model!.predict(inputTensor) as tf.Tensor;
-    const scores = await prediction.data();
-    prediction.dispose();
-    inputTensor.dispose();
+    let inputTensor: tf.Tensor3D | null = null;
+    let prediction: tf.Tensor | null = null;
+    let scores: Float32Array | Int32Array | Uint8Array;
+    
+    try {
+      inputTensor = tf.tensor3d([processedSequence]);
+      prediction = this.model!.predict(inputTensor) as tf.Tensor;
+      scores = await prediction.data();
+    } finally {
+      if (prediction) prediction.dispose();
+      if (inputTensor) inputTensor.dispose();
+    }
     
     // Find the highest confidence class
     let maxConfidence = 0;

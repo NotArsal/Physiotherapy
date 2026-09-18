@@ -141,19 +141,26 @@ For deployment on Render or local execution, Python 3.10 is required. Node.js is
    cd ../frontend
    npm install
    ```
-4. Create a `.env` file in the `frontend` directory and enter your Firebase config:
+4. Create a `.env` file in the `frontend` directory and enter your Firebase config (If omitted, local dev will fall back to dummy credentials):
    ```env
-   VITE_FIREBASE_API_KEY=your_api_key
-   VITE_FIREBASE_AUTH_DOMAIN=your_domain
-   VITE_FIREBASE_PROJECT_ID=your_project_id
-   VITE_FIREBASE_STORAGE_BUCKET=your_bucket
-   VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-   VITE_FIREBASE_APP_ID=your_app_id
+   REACT_APP_FIREBASE_API_KEY=your_api_key
+   REACT_APP_FIREBASE_AUTH_DOMAIN=your_domain
+   REACT_APP_FIREBASE_PROJECT_ID=your_project_id
+   REACT_APP_FIREBASE_STORAGE_BUCKET=your_bucket
+   REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+   REACT_APP_FIREBASE_APP_ID=your_app_id
+   REACT_APP_API_URL=http://localhost:5000
    ```
 5. Start the React development server
    ```sh
    npm start
    ```
+
+### Docker Deployment
+You can spin up the entire stack (Backend + Frontend) using Docker Compose:
+```sh
+docker-compose up --build
+```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
