@@ -129,9 +129,7 @@ const Dashboard: React.FC = () => {
       // Self-healing database reconciler/sync mechanism
       // If the backend fetch succeeded, reconcile any missing sessions from permanent local backup or offline queue
       if (fetchedSuccessfully && liveResponseData) {
-        const backendTimestamps = new Set(
-          (liveResponseData.sessions || []).map((s: any) => new Date(s.timestamp).getTime().toString())
-        );
+
         
 
 
