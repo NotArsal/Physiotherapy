@@ -98,3 +98,5 @@ backend/.venv/
 target/
 crates/**/target/
 
+dataset
+graphify-out

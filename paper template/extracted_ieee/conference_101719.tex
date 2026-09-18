@@ -78,7 +78,7 @@ Human Activity Recognition (HAR) has evolved toward spatiotemporal skeleton-base
 The system adopts a privacy-by-design threat model: raw video and extracted pose features never leave the local device. The application connects to a backend server strictly for fetching HTML/JS payloads and asynchronously pushing non-identifiable JSON session metadata (e.g., total rep counts) to MongoDB. 
 
 \subsection{Kinematic Extraction and Wasm Imputation}
-Raw video is processed via MediaPipe Pose (JavaScript) to extract 33 3D landmarks. A persistent challenge in single-camera setups is self-occlusion. To maintain model stability, landmark coordinates are passed to a custom Rust module compiled to Wasm. This module utilizes Single Instruction, Multiple Data (SIMD) instructions to dynamically impute occluded lower-limb vectors using horizontal bi-acromial (shoulder) scaling, flattening the result into a 99-feature vector per frame.
+Raw video is processed via MediaPipe Pose (JavaScript) to extract 33 landmarks (x, y, visibility). A persistent challenge in single-camera setups is self-occlusion. To maintain model stability, landmark coordinates are passed to a custom Rust module compiled to Wasm. This module utilizes Single Instruction, Multiple Data (SIMD) instructions to dynamically impute occluded lower-limb vectors using horizontal bi-acromial (shoulder) scaling, flattening the result into a 99-feature vector per frame.
 
 \subsection{Stage 1: Exercise Recognition (BiLSTM-Attention)}
 Temporal features are maintained in a 30-frame cyclic tensor buffer (shape: $30 \times 99$). This tensor is passed to a TensorFlow.js WebGL model comprising two Bidirectional LSTM layers (256 units each), followed by a Temporal Attention mechanism that learns to weight diagnostically critical frames (e.g., maximum extension). A final dense layer utilizes softmax activation to classify the movement into one of 19 exercise categories.
@@ -172,7 +172,7 @@ Cloud WebSocket & Remote Server & High & High \\
 This technical feasibility study evaluates the architecture using a dataset of healthy volunteers mimicking compensatory behaviors. Clinical validation on patient populations with genuine pathologies is required before medical deployment.
 
 \section{Conclusion}
-PhysioCheck demonstrates the technical viability of deploying complex spatiotemporal deep learning models in standard web environments. By integrating a Rust/WebAssembly kinematics core with a TF.js inference engine, the system achieves a median processing latency of 15.7~ms entirely offline. This network-independent architecture mitigates the latency and privacy vulnerabilities of cloud-dependent telehealth platforms, establishing a scalable foundation for accessible, safe home-based physical therapy monitoring.
+PhysioCheck demonstrates the technical viability of deploying complex spatiotemporal deep learning models in standard web environments. By evaluating native acceleration prototypes alongside with a TF.js inference engine, the system achieves a median processing latency of 15.7~ms entirely offline. This network-independent architecture mitigates the latency and privacy vulnerabilities of cloud-dependent telehealth platforms, establishing a scalable foundation for accessible, safe home-based physical therapy monitoring.
 
 \begin{thebibliography}{00}
 \bibitem{de_morais_filho_2012} M. C. de Morais Filho et al., ``Outcomes of correction of internal hip rotation in patients with spastic cerebral palsy,'' \emph{Gait \& Posture}, vol. 36, no. 2, pp. 201--204, 2012.

@@ -821,6 +821,15 @@ export function detectInjuryRisk(
     }
   }
 
+  // B2. Knee Extension: Detect incomplete extension (FNR Safety Mitigation)
+  if (exerciseKey === "leg_extension") {
+    const maxKneeAngle = Math.max(jointAngles[6] || 0, jointAngles[7] || 0);
+    if (maxKneeAngle > 110 && maxKneeAngle < 145) {
+      exerciseCorrectionRisk = Math.max(exerciseCorrectionRisk, Math.min(100, ((145 - maxKneeAngle) / 20) * 50 + 50));
+      report.warnings.push("Incomplete Extension! Fully extend your legs.");
+    }
+  }
+
   // C. Push Ups & Bench Press: Elbow flaring (putting high stress on shoulders)
   if (["push_up", "bench_press", "incline_bench_press", "decline_bench_press"].includes(exerciseKey)) {
     const leftShoulderAngle = jointAngles[0] || 0;

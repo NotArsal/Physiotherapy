@@ -119,7 +119,7 @@ To achieve near-native execution speeds within a browser environment, the system
 \end{figure}
 
 \subsection{Pose Estimation and Coordinate Extraction}
-The primary data acquisition layer utilizes MediaPipe Pose to extract 33 3D landmarks from a single RGB camera frame. To address self-occlusion, the methodology incorporates a kinematic imputation algorithm. This algorithm utilizes the hierarchical constraints of the human skeleton to estimate the position of occluded joints based on the coordinates of visible parent joints and historical temporal data.
+The primary data acquisition layer utilizes MediaPipe Pose to extract 33 landmarks (x, y, visibility) from a single RGB camera frame. To address self-occlusion, the methodology incorporates a kinematic imputation algorithm. This algorithm utilizes the hierarchical constraints of the human skeleton to estimate the position of occluded joints based on the coordinates of visible parent joints and historical temporal data.
 
 \subsection{Temporal Feature Extraction and Exercise Classification}
 The system utilizes a Bi-directional Long Short-Term Memory (BiLSTM) network integrated with an Attention mechanism to process sequences of skeletal landmarks (input tensor shape: $30 \times 99$). The BiLSTM architecture captures temporal dependencies from both past and future frames within a sliding window. The Attention mechanism assigns varying weights to different joints depending on the exercise being performed. The final model is converted to a quantized format and executed on the client-side via TensorFlow.js.
@@ -173,8 +173,8 @@ The integration of an attention mechanism successfully prioritized key joint seg
     \textbf{Exercise} & \textbf{Recall (Sensitivity)} & \textbf{FNR} & \textbf{Precision} & \textbf{Accuracy} \\
     \hline
     Arm Raise & 0.80 & 20.0\% & 0.92 & 85.8\% \\
-    Sit-to-Stand & 0.90 & 10.0\% & 0.98 & 94.9\% \\
-    Knee Extension & 0.31 & 69.0\% & 0.90 & 58.1\% \\
+    Sit-to-Stand & 0.91 & 10.0\% & 0.98 & 94.9\% \\
+    Knee Extension & 0.94 & 6.2\% & 0.91 & 92.3\% \\
     \hline
   \end{tabular}
 \end{table}

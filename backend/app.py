@@ -8,6 +8,9 @@ import json
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from werkzeug.exceptions import HTTPException
 from flask_talisman import Talisman
 from pymongo import MongoClient
 from bson.objectid import ObjectId
@@ -29,6 +32,22 @@ logger.addHandler(logHandler)
 
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB limit
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://",
+)
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    if isinstance(e, HTTPException):
+        return jsonify({"error": e.name, "description": e.description}), e.code
+    logger.error(f"Unhandled Exception: {e}")
+    return jsonify({"error": "Internal server error", "success": False}), 500
+
 Talisman(app, content_security_policy=None) # CSP can be tricky with APIs, so we just add basic headers (HSTS, X-Frame-Options) first.
 
 BASE_DIR = Path(__file__).resolve().parent
