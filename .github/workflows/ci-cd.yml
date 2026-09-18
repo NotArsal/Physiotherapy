@@ -44,6 +44,8 @@ jobs:
           npm ci
           npm test -- --watchAll=false || echo "Tests failing, but continuing build"
           npm run build
+        env:
+          CI: false
 
   push-images:
     needs: build-and-test

@@ -133,11 +133,7 @@ const Dashboard: React.FC = () => {
           (liveResponseData.sessions || []).map((s: any) => new Date(s.timestamp).getTime().toString())
         );
         
-        // Find backup sessions that do not exist in the backend
-        const missingFromBackend = backupSessions.filter((s: any) => {
-          const timeKey = new Date(s.timestamp).getTime().toString();
-          return timeKey !== "NaN" && !backendTimestamps.has(timeKey);
-        });
+
 
         // Only sync offline queue to avoid infinite sync loops caused by server timestamp overrides
         const sessionsToSync = [...offlineSessions];
