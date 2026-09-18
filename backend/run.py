@@ -22,8 +22,9 @@ def main():
     print("=" * 60)
 
     try:
+        debug_mode = os.environ.get('FLASK_ENV') == 'development'
         app.run(
-            debug=True,
+            debug=debug_mode,
             host="0.0.0.0",
             port=int(os.getenv("PORT", "5000")),
             use_reloader=False,

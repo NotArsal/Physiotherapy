@@ -1,4 +1,3 @@
-import { Pose, Results } from '@mediapipe/pose';
 import { ExerciseProtocol } from '../services/api';
 
 export interface Landmark {
@@ -119,57 +118,7 @@ export function extractJointAngles(landmarks: Landmark[]): number[] {
   }
 }
 
-// Initialize MediaPipe Pose with CDN-hosted assets and asset loading watchdog support.
-export function initializePoseDetection(
-  onResults: (results: Results) => void,
-  onTimeout?: () => void
-): { pose: Pose; startWatchdog: () => void; clearWatchdog: () => void } {
-  let hasReceivedResults = false;
-  let timerId: ReturnType<typeof setTimeout> | null = null;
 
-  const pose = new Pose({
-    locateFile: (file) => {
-      return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
-    }
-  });
-  
-  pose.setOptions({
-    modelComplexity: 1,
-    smoothLandmarks: true,
-    enableSegmentation: false,
-    smoothSegmentation: false,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5
-  });
-  
-  pose.onResults((results) => {
-    hasReceivedResults = true;
-    if (timerId) {
-      clearTimeout(timerId);
-      timerId = null;
-    }
-    onResults(results);
-  });
-
-  const startWatchdog = () => {
-    hasReceivedResults = false;
-    if (timerId) clearTimeout(timerId);
-    timerId = setTimeout(() => {
-      if (!hasReceivedResults && onTimeout) {
-        onTimeout();
-      }
-    }, 15000); // 15-second download watchdog threshold
-  };
-
-  const clearWatchdog = () => {
-    if (timerId) {
-      clearTimeout(timerId);
-      timerId = null;
-    }
-  };
-
-  return { pose, startWatchdog, clearWatchdog };
-}
 
 // Voice feedback messages
 interface VoiceFeedback {

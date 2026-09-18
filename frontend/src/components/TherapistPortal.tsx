@@ -96,7 +96,18 @@ const EXERCISES = [
   { id: 'clamshell', name: 'Clamshells (Physio)' },
   { id: 'bird_dog', name: 'Bird Dog (Physio)' },
   { id: 'wall_slide', name: 'Wall Slides (Physio)' },
-  { id: 'straight_leg_raise', name: 'Straight Leg Raise (Physio)' }
+  { id: 'straight_leg_raise', name: 'Straight Leg Raise (Physio)' },
+  { id: 'bench_press', name: 'Bench Press' },
+  { id: 'chest_fly_machine', name: 'Chest Fly Machine' },
+  { id: 'hammer_curl', name: 'Hammer Curl' },
+  { id: 'hip_thrust', name: 'Hip Thrust' },
+  { id: 'incline_bench_press', name: 'Incline Bench Press' },
+  { id: 'lat_pulldown', name: 'Lat Pulldown' },
+  { id: 'leg_extension', name: 'Leg Extension' },
+  { id: 'pull_up', name: 'Pull-Up' },
+  { id: 'romanian_deadlift', name: 'Romanian Deadlift' },
+  { id: 't_bar_row', name: 'T-Bar Row' },
+  { id: 'tricep_dips', name: 'Tricep Dips' }
 ];
 
 export const TherapistPortal: React.FC = () => {

@@ -22,7 +22,7 @@ import StopIcon from '@mui/icons-material/Stop';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import Webcam from 'react-webcam';
-import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose';
+import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { apiService, PredictionResponse, ExerciseProtocol } from '../services/api';
 import { tfjsService } from '../services/tfjsService';
 import {
@@ -99,7 +99,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const { currentUser } = useAuth();
   const webcamRef = useRef<Webcam>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const poseRef = useRef<Pose | null>(null);
+  const poseRef = useRef<PoseLandmarker | null>(null);
   const frameRequestRef = useRef<number | null>(null);
   const isActiveRef = useRef(false);
   const isPausedRef = useRef(false);
@@ -349,7 +349,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
     const blueBone = 'rgba(21, 101, 192, 0.75)'; // Transparent royal blue
 
     // Draw bones (connections)
-    POSE_CONNECTIONS.forEach(([a, b]) => {
+    PoseLandmarker.POSE_CONNECTIONS.forEach(({start: a, end: b}) => {
       const lmA = landmarks[a];
       const lmB = landmarks[b];
       if (!lmA || !lmB) return;
@@ -745,27 +745,29 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
     const initializePose = async () => {
       try {
         setError('');
-        addToConsoleLog('Initializing MediaPipe Pose...');
-        const pose = new Pose({
-          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-        });
+        addToConsoleLog('Initializing MediaPipe PoseLandmarker...');
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm"
+        );
+        const poseLandmarker = await PoseLandmarker.createFromModelPath(
+          vision,
+          "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
+        );
         poseDisposedRef.current = false;
 
-        pose.setOptions({
-          modelComplexity: 0,
-          smoothLandmarks: true,
-          enableSegmentation: false,
-          smoothSegmentation: false,
-          minDetectionConfidence: 0.6,
+        poseLandmarker.setOptions({
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
+          },
+          runningMode: "VIDEO",
+          numPoses: 1,
+          minPoseDetectionConfidence: 0.6,
+          minPosePresenceConfidence: 0.6,
           minTrackingConfidence: 0.5
         });
 
-        pose.onResults((results) => {
-          void onPoseResultsRef.current(results);
-        });
-
-        poseRef.current = pose;
-        addToConsoleLog('MediaPipe Pose initialized successfully');
+        poseRef.current = poseLandmarker;
+        addToConsoleLog('MediaPipe PoseLandmarker initialized successfully');
       } catch (initError) {
         setError('Failed to initialize pose detection. Please refresh the page.');
         addToConsoleLog(`MediaPipe initialization failed: ${String(initError)}`);
@@ -803,7 +805,14 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       if (video && pose && !poseProcessingRef.current) {
         poseProcessingRef.current = true;
         try {
-          await pose.send({ image: video });
+          const startTimeMs = performance.now();
+          const results = pose.detectForVideo(video, startTimeMs);
+          const mappedResults = {
+            poseLandmarks: results.landmarks && results.landmarks.length > 0 ? results.landmarks[0] : undefined,
+            poseWorldLandmarks: results.worldLandmarks && results.worldLandmarks.length > 0 ? results.worldLandmarks[0] : undefined,
+            image: video
+          };
+          void onPoseResultsRef.current(mappedResults);
         } catch (sendError) {
           if (!poseDisposedRef.current) {
             addToConsoleLog(`Pose send error: ${String(sendError)}`);

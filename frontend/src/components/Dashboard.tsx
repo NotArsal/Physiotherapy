@@ -139,8 +139,8 @@ const Dashboard: React.FC = () => {
           return timeKey !== "NaN" && !backendTimestamps.has(timeKey);
         });
 
-        // Combined list of sessions that need to be synchronized
-        const sessionsToSync = [...offlineSessions, ...missingFromBackend];
+        // Only sync offline queue to avoid infinite sync loops caused by server timestamp overrides
+        const sessionsToSync = [...offlineSessions];
         
         // Deduplicate sync candidates
         const uniqueToSyncMap = new Map<string, any>();

@@ -28,7 +28,7 @@ import { PremiumToggle } from './components/ui/bouncy-toggle';
 const ExerciseSelector = lazy(() => import('./components/ExerciseSelector'));
 const ExerciseMonitor = lazy(() => import('./components/ExerciseMonitor'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
-const MediaPipeDebug = lazy(() => import('./components/MediaPipeDebug'));
+
 const TherapistPortal = lazy(() => import('./components/TherapistPortal').then(module => ({ default: module.TherapistPortal })));
 const NotFound = lazy(() => import('./components/NotFound'));
 
@@ -111,8 +111,12 @@ const AppContent: React.FC<AppContentProps> = ({ darkMode, toggleDarkMode }) => 
       if (saved) {
         try {
           patientsList = JSON.parse(saved);
+          if (!Array.isArray(patientsList)) {
+            patientsList = [];
+          }
         } catch (e) {
           console.error("Failed to parse saved patients from localStorage", e);
+          patientsList = [];
         }
       }
 
@@ -345,7 +349,7 @@ const AppContent: React.FC<AppContentProps> = ({ darkMode, toggleDarkMode }) => 
             />
           )}
           {currentView === 'dashboard' && <Dashboard />}
-          {currentView === 'debug' && <MediaPipeDebug />}
+
           {currentView === 'therapist' && <TherapistPortal />}
           {currentView === 'not-found' && (
             <NotFound onNavigate={(v) => {

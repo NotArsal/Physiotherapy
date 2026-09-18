@@ -19,7 +19,7 @@ interface ExerciseDemo {
 
 export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
   bench_press: {
-    images: [`${BASE}/Barbell%20Bench%20Press/0.jpg`, `${BASE}/Barbell%20Bench%20Press/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/0025-EIeI8Vf.gif'],
     description: 'Lie on a flat bench, grip the barbell slightly wider than shoulder-width, lower it to your chest, then press back up.',
     muscles: ['Chest (Pectoralis Major)', 'Front Deltoids', 'Triceps'],
     tips: ['Retract shoulder blades before lifting', 'Keep feet flat on the floor', 'Lower bar to mid-chest', 'Press in a slight arc'],
@@ -27,7 +27,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Position camera to the side so your arms are fully visible',
   },
   incline_bench_press: {
-    images: [`${BASE}/Barbell%20Incline%20Bench%20Press/0.jpg`, `${BASE}/Barbell%20Incline%20Bench%20Press/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/0047-3TZduzM.gif'],
     description: 'Performed on a bench set to 30–45°, this targets the upper chest. Press the bar up and slightly back.',
     muscles: ['Upper Chest', 'Front Deltoids', 'Triceps'],
     tips: ['Set bench to 30–45 degrees', 'Keep wrists straight', 'Lower to upper chest', 'Avoid excessive arch'],
@@ -35,7 +35,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera angle works best to see the incline range of motion',
   },
   decline_bench_press: {
-    images: [`${BASE}/Barbell%20Decline%20Bench%20Press/0.jpg`, `${BASE}/Barbell%20Decline%20Bench%20Press/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/0033-GrO65fd.gif'],
     description: 'On a decline bench, press the barbell upward from your lower chest. Focuses on the lower pectorals.',
     muscles: ['Lower Chest', 'Triceps', 'Front Deltoids'],
     tips: ['Secure feet on the pad', 'Keep elbows at 45–75 degrees', 'Full range of motion', 'Control the descent'],
@@ -43,7 +43,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera so your full arm path is visible',
   },
   push_up: {
-    images: ['/images/push up.jpg'],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/0975-ufaxB52.gif'],
     description: 'A bodyweight pushing exercise. Start in a plank, lower your chest to the floor, then push back up.',
     muscles: ['Chest', 'Triceps', 'Front Deltoids', 'Core'],
     tips: ['Keep body in a straight line', 'Lower chest to near the floor', 'Elbows at 45° to body', 'Engage core throughout'],
@@ -51,7 +51,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Place camera at floor level from the side to see full body alignment',
   },
   chest_fly_machine: {
-    images: [`${BASE}/Butterfly/0.jpg`, `${BASE}/Butterfly/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/1494-bWlZvXh.gif'],
     description: 'Sit in the fly machine, set handles at chest level, and bring both arms together in a hugging motion.',
     muscles: ['Chest (Pectoralis Major)', 'Front Deltoids'],
     tips: ['Slight bend in elbows throughout', 'Squeeze chest at the center', 'Control the stretch outward', 'Keep back against the pad'],
@@ -59,7 +59,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Front or 45° angle so the arm arc motion is visible',
   },
   squat: {
-    images: ['/images/squats.jpg'],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/0043-qXTaZnJ.gif'],
     description: 'Stand with feet shoulder-width apart, drive hips back and down until thighs are parallel, then stand back up.',
     muscles: ['Quadriceps', 'Glutes', 'Hamstrings', 'Core'],
     tips: ['Knees track over toes', 'Chest stays upright', 'Drive through heels', 'Go to at least parallel depth'],
@@ -67,7 +67,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Full-body shot from the side — knees AND ankles must be visible',
   },
   deadlift: {
-    images: [`${BASE}/Barbell%20Deadlift/0.jpg`, `${BASE}/Barbell%20Deadlift/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/0032-ila4NZS.gif'],
     description: 'Hinge at the hips, grip the bar, brace your core and drive through your legs to stand up tall.',
     muscles: ['Hamstrings', 'Glutes', 'Lower Back', 'Traps', 'Core'],
     tips: ['Bar stays close to body', 'Neutral spine throughout', 'Drive hips forward at top', 'Brace core before pulling'],
@@ -75,7 +75,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side or 45° angle — full body from head to feet must be visible',
   },
   romanian_deadlift: {
-    images: [`${BASE}/Romanian%20Deadlift/0.jpg`, `${BASE}/Romanian%20Deadlift/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/0085-wQ2c4XD.gif'],
     description: 'Keep legs nearly straight, hinge forward pushing hips back, feeling a deep hamstring stretch, then drive hips forward.',
     muscles: ['Hamstrings', 'Glutes', 'Lower Back'],
     tips: ['Maintain slight knee bend', 'Feel the hamstring stretch', 'Bar stays close to legs', 'Drive hips forward to stand'],
@@ -83,7 +83,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera — full body visible from head to feet',
   },
   pull_up: {
-    images: ['/images/pull up.jpg'],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/3293-72BC5Za.gif'],
     description: 'Hang from a bar with overhand grip, pull your chest to the bar by driving elbows down, then lower with control.',
     muscles: ['Latissimus Dorsi', 'Biceps', 'Rhomboids', 'Core'],
     tips: ['Start from full dead hang', 'Drive elbows toward hips', 'Pull chest to bar', 'Lower slowly and controlled'],
@@ -91,7 +91,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Full body shot from the front or side — hands must be visible',
   },
   lat_pulldown: {
-    images: ['/images/lat-pulldown.png'],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/2330-LEprlgG.gif'],
     description: 'Grip the bar wider than shoulders, pull it down to your upper chest while squeezing your lats, then control it back up.',
     muscles: ['Latissimus Dorsi', 'Biceps', 'Rear Deltoids'],
     tips: ['Lean slightly back', 'Pull elbows down and back', 'Squeeze lats at bottom', 'Hands must be visible!'],
@@ -99,7 +99,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: '⚠️ Step back so your hands AND the bar are fully visible in frame',
   },
   t_bar_row: {
-    images: [`${BASE}/T-Bar%20Row%20with%20Handle/0.jpg`, `${BASE}/T-Bar%20Row%20with%20Handle/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/1349-BgljGjd.gif'],
     description: 'Straddle the T-bar, hinge forward 45°, row the weight to your lower chest by driving elbows back.',
     muscles: ['Middle Back', 'Latissimus Dorsi', 'Biceps', 'Rear Deltoids'],
     tips: ['Keep back straight', 'Pull elbows past torso', 'Squeeze shoulder blades', 'Control the lowering'],
@@ -107,7 +107,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera — hips, back, and arms should all be visible',
   },
   shoulder_press: {
-    images: [`${BASE}/Barbell%20Shoulder%20Press/0.jpg`, `${BASE}/Barbell%20Shoulder%20Press/1.jpg`],
+    images: [`${BASE}/Barbell_Shoulder_Press/0.jpg`, `${BASE}/Barbell_Shoulder_Press/1.jpg`],
     description: 'Press the bar straight overhead from shoulder height. Core tight, drive through your heels.',
     muscles: ['Front Deltoids', 'Triceps', 'Upper Chest', 'Core'],
     tips: ['Neutral spine, tight core', 'Bar path straight up', 'Lock out overhead', 'Hands wider than shoulders'],
@@ -115,7 +115,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Full body shot from front or side — hands must reach full overhead position',
   },
   lateral_raise: {
-    images: [`${BASE}/Side%20Lateral%20Raise/0.jpg`, `${BASE}/Side%20Lateral%20Raise/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/0334-DsgkuIt.gif'],
     description: 'Stand with dumbbells at sides, raise arms out to shoulder height with slight elbow bend, lower slowly.',
     muscles: ['Lateral Deltoids', 'Supraspinatus'],
     tips: ['Lead with elbows not wrists', 'Stop at shoulder height', 'Avoid momentum or swinging', 'Control the descent'],
@@ -131,7 +131,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Front or side camera — wrists AND elbows must both be visible',
   },
   barbell_biceps_curl: {
-    images: ['/images/barbell curl.webp'],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/0023-Yza7XrQ.gif'],
     description: 'Hold the bar with underhand grip at hip level, curl it up toward your shoulders by contracting biceps.',
     muscles: ['Biceps Brachii', 'Brachialis', 'Forearms'],
     tips: ['Keep elbows pinned to sides', 'Do not swing body', 'Full extension at bottom', 'Squeeze at the top'],
@@ -139,7 +139,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Front or side camera — wrists AND elbows must both be visible',
   },
   hammer_curl: {
-    images: [`${BASE}/Hammer%20Curl/0.jpg`, `${BASE}/Hammer%20Curl/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/0165-HPlPoQA.gif'],
     description: 'Neutral grip (thumbs up) dumbbell curl. Curl to shoulder height, lower slowly. Great for forearm and brachialis.',
     muscles: ['Brachialis', 'Biceps Brachii', 'Brachioradialis'],
     tips: ['Thumbs pointing up throughout', 'Elbows stay at sides', 'No torso lean or swing', 'Full curl and full extension'],
@@ -147,7 +147,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side or front camera — both wrists and elbows visible',
   },
   tricep_dips: {
-    images: [`${BASE}/Dip/0.jpg`, `${BASE}/Dip/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/0019-J60bN17.gif'],
     description: 'Support yourself on parallel bars, lower body by bending elbows to 90°, press back up to full extension.',
     muscles: ['Triceps', 'Lower Chest', 'Front Deltoids'],
     tips: ['Keep body upright for tricep focus', 'Lower to 90° elbow angle', 'Do not flare elbows wide', 'Press to full extension'],
@@ -155,7 +155,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera — full arm from shoulder to wrist should be visible',
   },
   tricep_pushdown: {
-    images: [`${BASE}/Cable%20Pushdown/0.jpg`, `${BASE}/Cable%20Pushdown/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/2406-ThKP69G.gif'],
     description: 'Stand at cable machine, grip the bar, push it straight down until elbows are fully extended, return slowly.',
     muscles: ['Triceps (all three heads)'],
     tips: ['Elbows stay at your sides', 'Push all the way to full extension', 'Control the return', 'Lean slightly forward'],
@@ -163,7 +163,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera — elbows and wrists must be visible throughout',
   },
   plank: {
-    images: [`${BASE}/Plank/0.jpg`, `${BASE}/Plank/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/0464-CosupLu.gif'],
     description: 'Support your body on forearms and toes. Keep a straight line from head to heels. Hold and breathe.',
     muscles: ['Transverse Abdominis', 'Rectus Abdominis', 'Glutes', 'Shoulder Stabilizers'],
     tips: ['Hips neither raised nor sagging', 'Neck neutral, gaze at floor', 'Squeeze glutes and core', 'Breathe steadily'],
@@ -171,7 +171,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera at floor level — full body from head to feet must be visible',
   },
   russian_twist: {
-    images: [`${BASE}/Russian%20Twist/0.jpg`, `${BASE}/Russian%20Twist/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/0014-r7cT9YD.gif'],
     description: 'Sit with knees bent, lean back 45°, rotate torso side to side touching the ground with hands each rep.',
     muscles: ['Obliques', 'Rectus Abdominis', 'Hip Flexors'],
     tips: ['Keep chest lifted', 'Rotate from the torso not arms', 'Feet lifted for more challenge', 'Controlled twisting motion'],
@@ -179,7 +179,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Front or 45° angle camera — both shoulders visible through full rotation',
   },
   leg_extension: {
-    images: [`${BASE}/Leg%20Extensions/0.jpg`, `${BASE}/Leg%20Extensions/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/0585-my33uHU.gif'],
     description: 'Seated on leg extension machine, extend legs to full lockout then slowly lower. Isolates the quadriceps.',
     muscles: ['Quadriceps (all 4 heads)'],
     tips: ['Full lockout at top', 'Slow eccentric (3 sec down)', 'Toes slightly turned out', 'Avoid excessive weight'],
@@ -187,7 +187,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera — full leg from hip to ankle should be visible',
   },
   leg_raises: {
-    images: [`${BASE}/Hanging%20Leg%20Raise/0.jpg`, `${BASE}/Hanging%20Leg%20Raise/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/0472-I3tsCnC.gif'],
     description: 'Hang from a bar with straight legs, raise them to 90° (or higher), lower slowly without swinging.',
     muscles: ['Rectus Abdominis (lower)', 'Hip Flexors', 'Core Stabilizers'],
     tips: ['Keep legs straight', 'No swinging or momentum', 'Lower slowly for max tension', 'Exhale as you raise'],
@@ -195,7 +195,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Full body side or front camera — legs must be fully visible',
   },
   hip_thrust: {
-    images: [`${BASE}/Barbell%20Hip%20Thrust/0.jpg`, `${BASE}/Barbell%20Hip%20Thrust/1.jpg`],
+    images: [`${BASE}/Barbell_Hip_Thrust/0.jpg`, `${BASE}/Barbell_Hip_Thrust/1.jpg`],
     description: 'Shoulders on a bench, bar across hips — drive hips up until body is parallel to floor, squeeze glutes at top.',
     muscles: ['Glutes (Gluteus Maximus)', 'Hamstrings', 'Core'],
     tips: ['Drive through heels', 'Full hip extension at top', 'Chin tucked, neutral neck', 'Squeeze glutes hard at peak'],
@@ -203,7 +203,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera — full body from shoulders to knees should be visible',
   },
   glute_bridge: {
-    images: [`${BASE}/Glute%20Bridge/0.jpg`, `${BASE}/Glute%20Bridge/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/1409-qKBpF7I.gif'],
     description: 'Lie on back with feet flat on the floor. Drive hips toward the ceiling, squeezing glutes. Lower slowly.',
     muscles: ['Glutes', 'Hamstrings', 'Core'],
     tips: ['Drive through heels not toes', 'Squeeze at the top for 1 sec', 'Neutral spine — no excessive arch', 'Keep core tight throughout'],
@@ -211,7 +211,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera at floor level — hips, knees, and feet all visible',
   },
   straight_leg_raise: {
-    images: [`${BASE}/Straight%20Leg%20Raise/0.jpg`, `${BASE}/Straight%20Leg%20Raise/1.jpg`],
+    images: ['https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/videos/1002-bbLR7fB.gif'],
     description: 'Lie on your back with one leg straight. Lift it to 45° while keeping the knee locked, then lower slowly.',
     muscles: ['Hip Flexors', 'Quadriceps', 'Lower Abdominals'],
     tips: ['Keep raised leg COMPLETELY straight', 'Only lift to 45° max', 'Press lower back into floor', 'Lower slowly — 3 second descent'],
@@ -227,7 +227,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera at floor level — full hip and knee range must be visible',
   },
   bird_dog: {
-    images: [`${BASE}/Bird%20Dog/0.jpg`, `${BASE}/Bird%20Dog/1.jpg`],
+    images: [`${BASE}/Bird_Dog/0.jpg`, `${BASE}/Bird_Dog/1.jpg`],
     description: 'On all fours, extend the opposite arm and leg simultaneously, hold briefly, return and switch sides.',
     muscles: ['Erector Spinae', 'Glutes', 'Core Stabilizers', 'Shoulder Stabilizers'],
     tips: ['Keep spine completely neutral', 'Extend limbs to horizontal only', 'Engage abs throughout', 'Slow and controlled movement'],
@@ -235,7 +235,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera at floor level — full body from hands to feet visible',
   },
   wall_slide: {
-    images: [`${BASE}/Wall%20Slides/0.jpg`, `${BASE}/Wall%20Slides/1.jpg`],
+    images: [`${BASE}/Wall_Slides/0.jpg`, `${BASE}/Wall_Slides/1.jpg`],
     description: 'Stand against a wall, arms bent at 90° with elbows touching the wall. Slide arms overhead while maintaining contact.',
     muscles: ['Lower Trapezius', 'Serratus Anterior', 'Rotator Cuff', 'Shoulder Stabilizers'],
     tips: ['Lower back flat against wall', 'Elbows and wrists in contact with wall', 'Slide arms slowly overhead', 'Feel the shoulder blade movement'],

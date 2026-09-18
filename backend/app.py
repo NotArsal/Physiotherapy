@@ -1,7 +1,6 @@
 import os
 from dotenv import load_dotenv
 load_dotenv()
-import pickle
 import re
 from datetime import datetime
 from pathlib import Path
@@ -60,7 +59,7 @@ if frontend_env:
 CORS(
     app,
     resources={r"/*": {
-        "origins": allowed_origins + [re.compile(r"^https://.*\.vercel\.app$")],
+        "origins": allowed_origins,
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
         "expose_headers": ["Access-Control-Allow-Origin"]
@@ -123,6 +122,7 @@ def format_session_doc(doc):
 def init_db():
     try:
         db.protocols.create_index([("user_id", 1), ("exercise", 1)], unique=True)
+        db.sessions.create_index([("user_id", 1), ("timestamp", -1)])
         # Check if default protocols exist to prevent redundant bulk upserts on every boot
         if db.protocols.count_documents({"user_id": "default"}) < 10:
             default_protocols = [
@@ -165,9 +165,8 @@ def handle_internal_server_error(e):
     logger.error("Internal Server Error", extra={"traceback": error_details, "exception": str(e)})
     return jsonify(
         {
-            "error": str(e.original_exception) if hasattr(e, 'original_exception') else str(e),
-            "type": "Internal Server Error",
-            "traceback": error_details.split('\n')
+            "error": "An internal server error occurred.",
+            "success": False
         }
     ), 500
 
@@ -293,17 +292,6 @@ def get_user_sessions(user_id):
         return jsonify({"error": f"Failed to retrieve sessions: {exc}", "success": False}), 500
 
 
-@app.route("/sessions", methods=["GET"])
-@require_auth
-def get_all_sessions():
-    try:
-        rows = list(db.sessions.find().sort("timestamp", -1))
-        all_sessions = [format_session_doc(row) for row in rows]
-        return jsonify({"sessions": all_sessions})
-    except Exception as exc:
-        return jsonify({"error": f"Failed to retrieve all sessions: {exc}", "success": False}), 500
-
-
 @app.route("/protocols/default", methods=["GET"])
 def get_default_protocols():
     try:
@@ -353,6 +341,9 @@ def save_protocol():
         if not protocols_list:
             return jsonify({"error": "No data provided", "success": False}), 400
             
+        if len(protocols_list) > 50:
+            return jsonify({"error": "Too many protocols provided at once. Max is 50.", "success": False}), 400
+            
         # Verify schema validity first, before opening connection
         for item in protocols_list:
             exercise = item.get("exercise")
@@ -362,23 +353,36 @@ def save_protocol():
         # Ignore client user_id and use token identity
         user_id = request.user.get("uid")
         
+        from pymongo import UpdateOne
+        operations = []
+        
         for item in protocols_list:
             exercise = item.get("exercise")
+            
+            try:
+                target_reps = int(item.get("target_reps", 10))
+                safe_spine_angle = float(item.get("safe_spine_angle", 30.0))
+                safe_knee_angle = float(item.get("safe_knee_angle", 90.0))
+            except (ValueError, TypeError):
+                return jsonify({"error": "Invalid data type for numerical fields", "success": False}), 400
             
             doc = {
                 "user_id": user_id,
                 "exercise": exercise,
-                "target_reps": int(item.get("target_reps", 10)),
-                "safe_spine_angle": float(item.get("safe_spine_angle", 30.0)),
-                "safe_knee_angle": float(item.get("safe_knee_angle", 90.0)),
+                "target_reps": target_reps,
+                "safe_spine_angle": safe_spine_angle,
+                "safe_knee_angle": safe_knee_angle,
                 "safety_sensitivity": item.get("safety_sensitivity", "medium")
             }
             
-            db.protocols.update_one(
+            operations.append(UpdateOne(
                 {"user_id": user_id, "exercise": exercise},
                 {"$set": doc},
                 upsert=True
-            )
+            ))
+            
+        if operations:
+            db.protocols.bulk_write(operations)
         
         return jsonify({"message": "Protocols saved successfully", "success": True})
     except Exception as exc:
@@ -393,4 +397,6 @@ except Exception as db_err:
 
 if __name__ == "__main__":
     logger.info("Starting Physiotherapy API Backend...")
-    app.run(debug=True, host="0.0.0.0", port=int(os.getenv("PORT", "5000")))
+    port = int(os.environ.get('PORT', 5000))
+    debug_mode = os.environ.get('FLASK_ENV') == 'development'
+    app.run(debug=debug_mode, host='0.0.0.0', port=port)
