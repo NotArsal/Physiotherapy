@@ -51,13 +51,18 @@ def handle_exception(e):
 Talisman(app, content_security_policy=None) # CSP can be tricky with APIs, so we just add basic headers (HSTS, X-Frame-Options) first.
 
 BASE_DIR = Path(__file__).resolve().parent
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/physio_db")
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/physio_db")
 
+db = None
 try:
     client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    client.admin.command('ping') # Validate connection
     db = client.get_default_database(default="physio_db")
 except Exception as e:
-    print(f"Failed to connect to MongoDB: {e}")
+    logger.error(f"Failed to connect to MongoDB: {e}")
+    if os.environ.get("FLASK_ENV") == "production":
+        raise # Fail fast in production if DB is down
+
 
 allowed_origins = [
     "http://localhost:3000",
@@ -139,6 +144,9 @@ def format_session_doc(doc):
 # Stateless backend - current_exercise_state removed to support multi-worker environments
 
 def init_db():
+    if db is None:
+        logger.warning("Database is not connected. Skipping initialization.")
+        return
     try:
         db.protocols.create_index([("user_id", 1), ("exercise", 1)], unique=True)
         db.sessions.create_index([("user_id", 1), ("timestamp", -1)])
@@ -231,6 +239,8 @@ def get_exercises():
 @app.route("/log_session", methods=["POST"])
 @require_auth
 def log_session():
+    if db is None:
+        return jsonify({"error": "Database not available", "success": False}), 503
     try:
         data = request.get_json(silent=True) or {}
 
@@ -275,6 +285,8 @@ def log_session():
 @app.route("/sessions/<user_id>", methods=["GET"])
 @require_auth
 def get_user_sessions(user_id):
+    if db is None:
+        return jsonify({"error": "Database not available", "success": False}), 503
     if request.user.get("uid") != user_id:
         return jsonify({"error": "Forbidden: You cannot access sessions for another user", "success": False}), 403
         
@@ -313,6 +325,8 @@ def get_user_sessions(user_id):
 
 @app.route("/protocols/default", methods=["GET"])
 def get_default_protocols():
+    if db is None:
+        return jsonify({"error": "Database not available", "success": False}), 503
     try:
         rows = list(db.protocols.find({"user_id": "default"}))
         protocols = []
@@ -327,6 +341,8 @@ def get_default_protocols():
 @app.route("/protocols/<user_id>", methods=["GET"])
 @require_auth
 def get_user_protocols(user_id):
+    if db is None:
+        return jsonify({"error": "Database not available", "success": False}), 503
     if request.user.get("uid") != user_id:
         return jsonify({"error": "Forbidden", "success": False}), 403
         
@@ -349,6 +365,8 @@ def get_user_protocols(user_id):
 @app.route("/protocols", methods=["POST"])
 @require_auth
 def save_protocol():
+    if db is None:
+        return jsonify({"error": "Database not available", "success": False}), 503
     try:
         data = request.get_json(silent=True) or {}
         

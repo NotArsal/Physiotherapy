@@ -16,6 +16,14 @@ env:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    
+    # Add mongodb service for tests
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,12 +34,14 @@ jobs:
           python-version: '3.10'
 
       - name: Install backend dependencies and test
+        env:
+          MONGO_URI: mongodb://localhost:27017/physio_db_test
         run: |
           cd backend
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest
+          pip install -r requirements.txt pytest mongomock
           python -m compileall .
-          python -m pytest test_api.py || echo "Tests failing, but continuing build"
+          python -m pytest test_api.py -v
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -42,7 +52,7 @@ jobs:
         run: |
           cd frontend
           npm ci
-          npm test -- --watchAll=false || echo "Tests failing, but continuing build"
+          npm test -- --watchAll=false --passWithNoTests
           npm run build
         env:
           CI: false
