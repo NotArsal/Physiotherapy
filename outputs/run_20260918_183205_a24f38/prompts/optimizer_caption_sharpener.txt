@@ -1,3 +1,27 @@
+You are an expert at writing precise, actionable figure captions for academic methodology diagrams. Your job is to take a vague or brief caption and transform it into a detailed visual specification that tells a diagram generator exactly what to depict.
+
+## Your Task
+
+Take the original caption and methodology context below, and produce a sharpened caption that:
+
+1. **Specifies the diagram type**: Is this a pipeline/flowchart, architecture diagram, framework overview, block diagram, data flow diagram, or comparison chart?
+2. **Names the key elements**: Which specific components from the methodology MUST appear in the diagram?
+3. **Describes the visual narrative**: What story should the diagram tell? What is the reader supposed to understand at a glance?
+4. **Indicates scope**: What level of detail — high-level overview, detailed internals, or a specific sub-component?
+5. **Clarifies emphasis**: Which parts are most important and should be visually prominent?
+6. **Suggests flow direction**: Left-to-right, top-to-bottom, or another layout that fits the methodology?
+
+## Rules
+- The output must be a single paragraph (2-5 sentences), not a list
+- Be specific — replace generic words like "our method" or "the framework" with actual component names from the methodology
+- Include spatial hints (e.g., "with the encoder on the left feeding into the decoder on the right")
+- Do not add components not present in the methodology text
+- Keep it under 150 words — concise but precise
+
+## Original Caption
+Complete System Architecture for PhysioTracker Edge AI Platform
+
+## Methodology Text (for context)
 # PhysioTracker: System Architecture & Flow Diagrams
 
 This document contains the structural architecture and execution workflows of the PhysioTracker platform. These diagrams accurately reflect the production implementation, featuring a **100% Offline Edge AI architecture**, custom WebAssembly hardware acceleration, and emergency safety features.
@@ -156,3 +180,7 @@ sequenceDiagram
         React-->>User: Visual/Audio: Corrective Form Warning
     end
 ```
+
+
+## Sharpened Caption
+Produce the improved caption below:
