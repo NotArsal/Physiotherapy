@@ -48,7 +48,7 @@ def handle_exception(e):
     logger.error(f"Unhandled Exception: {e}")
     return jsonify({"error": "Internal server error", "success": False}), 500
 
-Talisman(app, content_security_policy=None) # CSP can be tricky with APIs, so we just add basic headers (HSTS, X-Frame-Options) first.
+Talisman(app, content_security_policy=None, force_https=False) # CSP can be tricky with APIs, so we just add basic headers (HSTS, X-Frame-Options) first.
 
 BASE_DIR = Path(__file__).resolve().parent
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/physio_db")
