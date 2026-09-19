@@ -48,6 +48,8 @@ export interface SessionData {
   total_reps: number;
   duration: number;
   session_data?: any[];
+  timestamp?: string;
+  run_hash?: string;
 }
 
 export interface UserSession {
@@ -134,6 +136,15 @@ class ApiService {
   // Log exercise session
   async logSession(sessionData: SessionData) {
     try {
+      if (sessionData.user_id && sessionData.exercise && sessionData.timestamp) {
+        const payloadStr = `${sessionData.user_id}:${sessionData.exercise}:${sessionData.timestamp}:${Math.floor(sessionData.total_reps)}:${Math.floor(sessionData.duration)}`;
+        const encoder = new TextEncoder();
+        const data = encoder.encode(payloadStr);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        sessionData.run_hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+
       const response = await api.post('/log_session', sessionData);
       return response.data;
     } catch (error) {

@@ -1,34 +1,28 @@
 /* tslint:disable */
 /* eslint-disable */
 
-/**
- * Calculate the angle between three points (vertex is p2)
- */
-export function calculate_angle_wasm(p1_x: number, p1_y: number, p2_x: number, p2_y: number, p3_x: number, p3_y: number): number;
+export function compress_trajectory(flat_points: Float32Array, epsilon: number): Float32Array;
 
-/**
- * Extracts the 9 critical joint angles from a 33-point MediaPipe array.
- * Passing JSON overhead is minimized by using serde_wasm_bindgen.
- */
-export function extract_joint_angles_wasm(flat_landmarks: Float32Array): Float64Array;
+export function compute_compensations(): Float32Array;
 
-/**
- * Set up the panic hook so errors bubble up to JS console beautifully
- */
-export function main_js(): void;
+export function get_landmark_buffer_ptr(): number;
+
+export function init_filters(rate: number): void;
+
+export function process_current_frame(rate: number): Float32Array;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
-    readonly calculate_angle_wasm: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
-    readonly extract_joint_angles_wasm: (a: number, b: number) => [number, number, number, number];
-    readonly main_js: () => void;
-    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
-    readonly __wbindgen_malloc: (a: number, b: number) => number;
-    readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+    readonly compress_trajectory: (a: number, b: number, c: number) => [number, number];
+    readonly compute_compensations: () => [number, number];
+    readonly get_landmark_buffer_ptr: () => number;
+    readonly init_filters: (a: number) => void;
+    readonly process_current_frame: (a: number) => [number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
-    readonly __externref_table_dealloc: (a: number) => void;
+    readonly __wbindgen_malloc: (a: number, b: number) => number;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_start: () => void;
 }
 

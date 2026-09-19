@@ -1,14 +1,19 @@
 import { ExerciseProtocol } from '../services/api';
-import init, { extract_joint_angles_wasm } from '../wasm-biomechanics/pkg/wasm_biomechanics.js';
+import init, { process_current_frame, get_landmark_buffer_ptr, init_filters, compute_compensations, compress_trajectory } from '../wasm-biomechanics/pkg/wasm_biomechanics.js';
 
 let wasmReady = false;
+let wasmMemory: WebAssembly.Memory | null = null;
+let landmarkBufferPtr: number = 0;
 
 // Initialize the WebAssembly module (should be called on app startup, but we'll lazy load it here)
 export const initWasm = async () => {
   if (!wasmReady) {
     try {
-      await init();
+      const wasm = await init();
+      wasmMemory = wasm.memory;
       wasmReady = true;
+      landmarkBufferPtr = get_landmark_buffer_ptr();
+      init_filters(60.0);
       console.log('🦀 Rust WebAssembly Biomechanics engine loaded!');
     } catch (err) {
       console.error('Failed to initialize Wasm module:', err);
@@ -33,6 +38,18 @@ export interface JointAngles {
   leftKnee: number;
   rightKnee: number;
   spine: number;
+}
+
+export function compressTrajectoryWasm(trajectory: number[], epsilon: number): number[] {
+  try {
+    if (wasmReady && trajectory.length > 0) {
+      const inputArr = new Float32Array(trajectory);
+      return Array.from(compress_trajectory(inputArr, epsilon));
+    }
+  } catch (err) {
+    console.error('Compression error:', err);
+  }
+  return trajectory;
 }
 
 // Keep the old calculateAngle around for legacy calls (if any)
@@ -64,19 +81,19 @@ export function calculateAngle(point1: Landmark, point2: Landmark, point3: Landm
   return angleRad * (180 / Math.PI);
 }
 
-export function extractJointAngles(landmarks: Landmark[]): number[] {
+export function extractJointAngles(landmarks: Landmark[], fps: number = 60.0): number[] {
   try {
     // 1. Check if Wasm is loaded and we have enough landmarks
-    if (wasmReady && landmarks && landmarks.length >= 33) {
-      // The Rust module now takes a flat Float32Array for zero-copy memory transfer
-      const flat = new Float32Array(landmarks.length * 4);
-      for (let i = 0; i < landmarks.length; i++) {
+    if (wasmReady && wasmMemory && landmarks && landmarks.length >= 33) {
+      // Direct write into Rust's linear memory for zero-copy
+      const flat = new Float32Array(wasmMemory.buffer, landmarkBufferPtr, 33 * 4);
+      for (let i = 0; i < 33; i++) {
         flat[i * 4] = landmarks[i].x;
         flat[i * 4 + 1] = landmarks[i].y;
         flat[i * 4 + 2] = landmarks[i].z || 0;
         flat[i * 4 + 3] = landmarks[i].visibility || 0;
       }
-      return Array.from(extract_joint_angles_wasm(flat));
+      return Array.from(process_current_frame(fps));
     }
 
     // 2. Fallback to TypeScript implementation if Wasm isn't ready
@@ -149,7 +166,16 @@ export function extractJointAngles(landmarks: Landmark[]): number[] {
   }
 }
 
-
+export function getMultiPlanarCompensations(): number[] {
+  try {
+    if (wasmReady && wasmMemory) {
+      return Array.from(compute_compensations());
+    }
+  } catch (err) {
+    console.error(err);
+  }
+  return [];
+}
 
 // Voice feedback messages
 interface VoiceFeedback {
@@ -475,10 +501,33 @@ export function normalizeExerciseName(exerciseName: string | null | undefined): 
   return String(exerciseName).trim().toLowerCase().replace(/-/g, "_").replace(/ /g, "_");
 }
 
+interface AdaptiveROMState {
+  lastAngle: number;
+  velocity: number;
+  smoothedVelocity: number;
+  minAngle: number;
+  maxAngle: number;
+  activeROM: number;
+}
+const romState: Record<string, AdaptiveROMState> = {};
+
+function getAdaptiveROMState(exerciseKey: string): AdaptiveROMState {
+  if (!romState[exerciseKey]) {
+    romState[exerciseKey] = {
+      lastAngle: -1,
+      velocity: 0,
+      smoothedVelocity: 0,
+      minAngle: 180,
+      maxAngle: 0,
+      activeROM: 0
+    };
+  }
+  return romState[exerciseKey];
+}
+
 /**
  * Detects the current phase of an exercise based on joint angles.
- * Returns the new phase ('up', 'down', or 'hold').
- * Uses hysteresis (High/Low thresholds) to prevent flickering and improve rep counting.
+ * Uses a statistical online peak-detector with sliding first-derivative sign changes.
  */
 export function detectExercisePhase(
   jointAngles: number[], 
@@ -487,77 +536,75 @@ export function detectExercisePhase(
 ): string {
   if (!jointAngles || jointAngles.length < 9) return previousPhase;
 
-  const shoulderAngle = jointAngles[0]; // Left shoulder (Hip-Shoulder-Elbow)
-  const elbowAngle = jointAngles[2];    // Left elbow (Shoulder-Elbow-Wrist)
-  const hipAngle = jointAngles[4];      // Left hip (Shoulder-Hip-Knee)
-  const kneeAngle = jointAngles[6];     // Left knee (Hip-Knee-Ankle)
-
   const exerciseKey = normalizeExerciseName(exercise);
-  let newPhase = previousPhase;
-
-  // Hysteresis logic: Requires crossing a significantly different threshold to change phase.
-  // This prevents flickering near a single threshold point.
   
-  if (["bench_press", "incline_bench_press", "decline_bench_press", "push_up"].includes(exerciseKey)) {
-    // Going Down: Angle decreases | Going Up: Angle increases
-    if (elbowAngle < 90) newPhase = "down";
-    else if (elbowAngle > 140) newPhase = "up";
-  } else if (["barbell_biceps_curl", "hammer_curl", "biceps_curl"].includes(exerciseKey)) {
-    // Concentric (curled up): elbow angle decreases below 65
-    // Eccentric (extended down): elbow angle increases above 145
-    if (elbowAngle < 65) newPhase = "up";
-    else if (elbowAngle > 145) newPhase = "down";
-  } else if (["tricep_dips", "tricep_pushdown"].includes(exerciseKey)) {
-    if (elbowAngle < 90) newPhase = "down";
-    else if (elbowAngle > 140) newPhase = "up";
-  } else if (exerciseKey === "shoulder_press") {
-    if (shoulderAngle < 80) newPhase = "down";
-    else if (shoulderAngle > 150) newPhase = "up";
-  } else if (exerciseKey === "lateral_raise") {
-    if (shoulderAngle < 35) newPhase = "down";
-    else if (shoulderAngle > 85) newPhase = "up";
-  } else if (["squat", "leg_extension"].includes(exerciseKey)) {
-    if (kneeAngle < 100) newPhase = "down";
-    else if (kneeAngle > 150) newPhase = "up";
-  } else if (["deadlift", "romanian_deadlift"].includes(exerciseKey)) {
-    if (hipAngle < 125) newPhase = "down";
-    else if (hipAngle > 165) newPhase = "up";
-  } else if (exerciseKey === "hip_thrust") {
-    if (hipAngle < 115) newPhase = "down";
-    else if (hipAngle > 155) newPhase = "up";
-  } else if (exerciseKey === "leg_raises") {
-    if (hipAngle > 160) newPhase = "down";
-    else if (hipAngle < 110) newPhase = "up";
-  } else if (exerciseKey === "glute_bridge") {
-    if (hipAngle < 125) newPhase = "down";
-    else if (hipAngle > 160) newPhase = "up";
-  } else if (exerciseKey === "clamshell") {
-    if (hipAngle < 115) newPhase = "down";
-    else if (hipAngle > 135) newPhase = "up";
-  } else if (exerciseKey === "bird_dog") {
-    if (shoulderAngle < 100) newPhase = "down";
-    else if (shoulderAngle > 145) newPhase = "up";
-  } else if (exerciseKey === "wall_slide") {
-    if (shoulderAngle < 95) newPhase = "down";
-    else if (shoulderAngle > 145) newPhase = "up";
-  } else if (exerciseKey === "straight_leg_raise") {
-    if (hipAngle > 165) newPhase = "down";
-    else if (hipAngle < 135) newPhase = "up";
-  } else if (["pull_up", "lat_pulldown", "t_bar_row"].includes(exerciseKey)) {
-    if (elbowAngle > 150) newPhase = "down";
-    else if (elbowAngle < 80) newPhase = "up";
-  } else if (exerciseKey === "russian_twist") {
-    if (shoulderAngle < 75) newPhase = "down";
-    else if (shoulderAngle > 110) newPhase = "up";
+  // 1. Identify Primary Angle based on exercise
+  let primaryAngle = 0;
+  let angleIncreasesOnUp = true;
+
+  if (["squat", "leg_extension"].includes(exerciseKey)) {
+    primaryAngle = jointAngles[6]; // Knee
+    angleIncreasesOnUp = true;
+  } else if (["bench_press", "incline_bench_press", "decline_bench_press", "push_up", "tricep_dips", "tricep_pushdown"].includes(exerciseKey)) {
+    primaryAngle = jointAngles[2]; // Elbow
+    angleIncreasesOnUp = true;
+  } else if (["barbell_biceps_curl", "hammer_curl", "biceps_curl", "pull_up", "lat_pulldown", "t_bar_row"].includes(exerciseKey)) {
+    primaryAngle = jointAngles[2]; // Elbow
+    angleIncreasesOnUp = false; // Angle decreases as you pull/curl up
+  } else if (["deadlift", "romanian_deadlift", "hip_thrust", "glute_bridge"].includes(exerciseKey)) {
+    primaryAngle = jointAngles[4]; // Hip
+    angleIncreasesOnUp = true;
+  } else if (["leg_raises", "straight_leg_raise"].includes(exerciseKey)) {
+    primaryAngle = jointAngles[4]; // Hip
+    angleIncreasesOnUp = false; 
+  } else if (["shoulder_press", "lateral_raise", "chest_fly_machine", "wall_slide", "bird_dog", "russian_twist"].includes(exerciseKey)) {
+    primaryAngle = jointAngles[0]; // Shoulder
+    angleIncreasesOnUp = true;
   } else if (exerciseKey === "plank") {
-    newPhase = "hold";
-  } else if (exerciseKey === "chest_fly_machine") {
-    if (shoulderAngle > 130) newPhase = "down";
-    else if (shoulderAngle < 80) newPhase = "up";
+    return "hold";
+  } else if (exerciseKey === "clamshell") {
+    primaryAngle = jointAngles[4]; // Hip
+    angleIncreasesOnUp = true;
   } else {
     // Default fallback
-    if (shoulderAngle < 90) newPhase = "down";
-    else if (shoulderAngle > 140) newPhase = "up";
+    primaryAngle = jointAngles[0];
+    angleIncreasesOnUp = true;
+  }
+
+  const state = getAdaptiveROMState(exerciseKey);
+  
+  if (state.lastAngle === -1) {
+    state.lastAngle = primaryAngle;
+    state.minAngle = primaryAngle;
+    state.maxAngle = primaryAngle;
+    return previousPhase;
+  }
+
+  // 2. Track dθ/dt (velocity)
+  const dt = 1.0; 
+  const currentVelocity = (primaryAngle - state.lastAngle) / dt;
+  
+  // Smooth velocity (EMA)
+  const alpha = 0.3;
+  state.smoothedVelocity = alpha * currentVelocity + (1 - alpha) * state.smoothedVelocity;
+  state.lastAngle = primaryAngle;
+
+  // 3. Track Dynamic ROM
+  if (primaryAngle < state.minAngle) state.minAngle = primaryAngle;
+  if (primaryAngle > state.maxAngle) state.maxAngle = primaryAngle;
+  state.activeROM = state.maxAngle - state.minAngle;
+
+  // 4. Statistical Zero-Crossing Peak Detection
+  let newPhase = previousPhase;
+  const MIN_ENERGY_THRESHOLD = 15.0; // Needs at least 15 degrees of movement to detect transitions
+
+  if (state.activeROM > MIN_ENERGY_THRESHOLD) {
+    const VELOCITY_THRESHOLD = 1.5;
+    if (state.smoothedVelocity > VELOCITY_THRESHOLD) {
+      newPhase = angleIncreasesOnUp ? "up" : "down";
+    } else if (state.smoothedVelocity < -VELOCITY_THRESHOLD) {
+      newPhase = angleIncreasesOnUp ? "down" : "up";
+    }
   }
 
   return newPhase;
@@ -583,7 +630,8 @@ export function detectInjuryRisk(
   exerciseName: string,
   protocol?: ExerciseProtocol | null,
   previousLandmarks?: Landmark[],
-  deltaTime?: number // in seconds
+  deltaTime?: number, // in seconds
+  multiPlanarComps?: number[]
 ): InjuryRiskReport {
   const report: InjuryRiskReport = {
     isSafe: true,
@@ -735,7 +783,26 @@ export function detectInjuryRisk(
 
   // 2. Knee Valgus Collapse Analysis (Knees caving inwards)
   let kneeValgusRisk = 0;
-  if (leftAnkle && rightAnkle && leftKnee && rightKnee) {
+  if (multiPlanarComps && multiPlanarComps.length >= 2) {
+    const lumbarArching = multiPlanarComps[0];
+    const valgusRatio = multiPlanarComps[1];
+    
+    report.metrics.kneeValgusRatio = valgusRatio;
+    
+    let valgusThreshold = 0.82; // medium
+    if (sensitivity === 'high') valgusThreshold = 0.90;
+    else if (sensitivity === 'low') valgusThreshold = 0.75;
+    
+    if (valgusRatio < valgusThreshold && ["squat", "deadlift"].includes(exerciseKey)) {
+      kneeValgusRisk = Math.min(100, ((valgusThreshold - valgusRatio) / 0.15) * 50 + 50);
+      report.warnings.push("Knees Caving In! Keep knees aligned.");
+    }
+    
+    if (lumbarArching > 0.12 && ["barbell_biceps_curl", "shoulder_press"].includes(exerciseKey)) {
+      report.warnings.push("Lumbar Arching! Keep your back straight.");
+    }
+  } else if (leftAnkle && rightAnkle && leftKnee && rightKnee) {
+    // Fallback if multiPlanarComps not provided
     const ankleWidth = Math.abs(leftAnkle.x - rightAnkle.x);
     const kneeWidth = Math.abs(leftKnee.x - rightKnee.x);
     if (ankleWidth > 0) {

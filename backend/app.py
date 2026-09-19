@@ -279,22 +279,47 @@ def log_session():
         except (ValueError, TypeError):
             return jsonify({"error": "Invalid data type for numerical fields", "success": False}), 400
             
-        timestamp = datetime.now().isoformat()
+        timestamp = data.get("timestamp", datetime.now().isoformat())
         session_data = data.get("session_data", [])
+        
+        # Verify Telemetry Hash
+        import hashlib
+        expected_hash_str = f"{user_id}:{exercise}:{timestamp}:{int(total_reps)}:{int(duration)}"
+        expected_hash = hashlib.sha256(expected_hash_str.encode('utf-8')).hexdigest()
+        provided_hash = data.get("run_hash", "")
+        
+        is_verified = False
+        if provided_hash != expected_hash:
+            logger.warning(f"Spoofed telemetry detected for user {user_id}. Run hash mismatch.")
+        else:
+            is_verified = True
 
         try:
-            result = db.sessions.insert_one({
-                "user_id": user_id,
-                "exercise": exercise,
-                "total_reps": total_reps,
-                "duration": duration,
-                "timestamp": timestamp,
-                "session_data": session_data,
-                "run_hash": data.get("run_hash", ""),
-                "verified": bool(data.get("run_hash"))
-            })
+            # Upsert for Idempotency using user_id, exercise, and timestamp
+            result = db.sessions.update_one(
+                {
+                    "user_id": user_id,
+                    "exercise": exercise,
+                    "timestamp": timestamp
+                },
+                {
+                    "$set": {
+                        "total_reps": total_reps,
+                        "duration": duration,
+                        "session_data": session_data,
+                        "run_hash": provided_hash,
+                        "verified": is_verified
+                    }
+                },
+                upsert=True
+            )
             
-            session_id = str(result.inserted_id)
+            upserted_id = result.upserted_id
+            if upserted_id:
+                session_id = str(upserted_id)
+            else:
+                existing = db.sessions.find_one({"user_id": user_id, "exercise": exercise, "timestamp": timestamp})
+                session_id = str(existing["_id"]) if existing else "unknown"
             
             # Offload heavy processing to prevent WSGI worker thread saturation
             executor.submit(background_analytics_processing, session_id, data)

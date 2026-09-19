@@ -33,7 +33,8 @@ import {
   detectExercisePhase,
   detectInjuryRisk,
   detectFallEmergency,
-  InjuryRiskReport
+  InjuryRiskReport,
+  getMultiPlanarCompensations
 } from '../utils/poseDetection';
 import { useAuth } from '../contexts/AuthContext';
 import ExerciseDemoOverlay from './ExerciseDemoOverlay';
@@ -565,7 +566,8 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         const smoothed = rawAngles.map((v, i) => EMA_ALPHA * v + (1 - EMA_ALPHA) * prev[i]);
         smoothedAnglesRef.current = smoothed;
         const jointAngles = smoothed;
-
+        const compensations = getMultiPlanarCompensations();
+        
         // Proactive Injury Risk Detection
         const riskReport = detectInjuryRisk(
           results.poseLandmarks,
@@ -573,7 +575,8 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
           selectedExerciseRef.current,
           activeProtocolRef.current,
           previousLandmarksRef.current,
-          deltaTime
+          deltaTime,
+          compensations
         );
 
         // Cache for skeleton renderer via scoped ref
@@ -904,7 +907,7 @@ const initializePose = async () => {
             poseWorldLandmarks: results.worldLandmarks && results.worldLandmarks.length > 0 ? results.worldLandmarks[0] : undefined,
             image: video
           };
-          void onPoseResultsRef.current(mappedResults);
+          await onPoseResultsRef.current(mappedResults);
         } catch (sendError) {
           if (!poseDisposedRef.current) {
             addToConsoleLog(`Pose send error: ${String(sendError)}`);
