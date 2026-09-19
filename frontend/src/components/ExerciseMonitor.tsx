@@ -22,7 +22,6 @@ import StopIcon from '@mui/icons-material/Stop';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import Webcam from 'react-webcam';
-import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { apiService, PredictionResponse, ExerciseProtocol } from '../services/api';
 import { tfjsService } from '../services/tfjsService';
 import {
@@ -99,7 +98,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const { currentUser } = useAuth();
   const webcamRef = useRef<Webcam>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const poseRef = useRef<PoseLandmarker | null>(null);
+  const poseRef = useRef<any>(null);
   const frameRequestRef = useRef<number | null>(null);
   const isActiveRef = useRef(false);
   const isPausedRef = useRef(false);
@@ -766,6 +765,10 @@ const initializePose = async () => {
       try {
         setError('');
         addToConsoleLog('Initializing MediaPipe PoseLandmarker...');
+        
+        // Dynamically import MediaPipe to save initial bundle size
+        const { FilesetResolver, PoseLandmarker } = await import('@mediapipe/tasks-vision');
+
         const vision = await FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm"
         );

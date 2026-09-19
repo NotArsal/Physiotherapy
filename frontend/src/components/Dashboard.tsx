@@ -322,6 +322,15 @@ const Dashboard: React.FC = () => {
     const filtered = filterSessionsByPeriod(sessionData.sessions);
     const sum = getFilteredSummary(filtered);
 
+    const sanitizeCSV = (val: string | number) => {
+      let str = String(val);
+      // Prevent CSV Injection (OWASP CWE-1236)
+      if (/^[=+\-@\t\r\n]/.test(str)) {
+        str = "'" + str;
+      }
+      return str.replace(/"/g, '""');
+    };
+
     let csv = "PHYSIOTHERAPY PROGRESS REPORT\n";
     csv += `Patient Email / ID,${currentUser?.email || currentUser?.uid || 'N/A'}\n`;
     csv += `Report Generated,${new Date().toLocaleString()}\n`;
@@ -337,7 +346,7 @@ const Dashboard: React.FC = () => {
     csv += "Exercise,Sessions Completed,Total Reps,Total Duration\n";
     Object.entries(sum.exercise_breakdown).forEach(([exercise, data]) => {
       const name = exercise.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      csv += `"${name}",${data.sessions},${data.total_reps},"${formatDuration(data.total_duration)}"\n`;
+      csv += `"${sanitizeCSV(name)}",${data.sessions},${data.total_reps},"${sanitizeCSV(formatDuration(data.total_duration))}"\n`;
     });
     csv += "\n";
 
@@ -354,7 +363,7 @@ const Dashboard: React.FC = () => {
         const warnings = detail.injury_flags ?? 0;
         const accuracy = detail.accuracy_score !== undefined ? `${detail.accuracy_score}%` : 'N/A';
         
-        csv += `"${dateStr}","${exName}",${s.total_reps},${Math.round(s.duration)},${warnings},"${accuracy}"\n`;
+        csv += `"${sanitizeCSV(dateStr)}","${sanitizeCSV(exName)}",${s.total_reps},${Math.round(s.duration)},${warnings},"${sanitizeCSV(accuracy)}"\n`;
       });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

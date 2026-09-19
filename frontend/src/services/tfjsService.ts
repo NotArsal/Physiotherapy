@@ -1,4 +1,3 @@
-import * as tf from '@tensorflow/tfjs';
 import { Landmark } from '../utils/poseDetection';
 
 // The exercise catalog corresponding to the model's output neurons
@@ -11,30 +10,40 @@ const EXERCISES = [
 ];
 
 class TFJSService {
-  private model: tf.LayersModel | null = null;
+  private model: any = null; // Use any to avoid static tf.LayersModel type dependency
   private isInitializing: boolean = false;
   private loadFailed: boolean = false;
+  private tf: any = null; // Store dynamically imported tf
 
   async loadModel() {
     if (this.model) return;
     if (this.isInitializing || this.loadFailed) return;
+
     this.isInitializing = true;
     try {
-      // The model.json will be located in the public/model folder
-      this.model = await tf.loadLayersModel('/model/model.json');
-      console.log('TensorFlow.js Edge AI Model loaded successfully');
+      console.log('Loading TensorFlow.js locally dynamically...');
       
-      // Warm up the model
-      tf.tidy(() => {
-        const dummyInput = tf.zeros([1, 30, 99]);
-        const warmupOutput = this.model!.predict(dummyInput) as tf.Tensor;
-        // tf.tidy automatically disposes tensors created inside, 
-        // but it doesn't hurt to be explicit if they aren't returned.
-      });
+      // Dynamically import to save initial bundle size
+      const tf = await import('@tensorflow/tfjs');
+      this.tf = tf;
+
+      // The weights are hosted in the public directory
+      const modelUrl = '/tfjs_model/model.json';
+      this.model = await tf.loadLayersModel(modelUrl);
       
-    } catch (err) {
-      console.error('Failed to load TensorFlow.js model. Falling back to simple heuristic processing.', err);
-      this.loadFailed = true; // Prevent infinite retries and browser freezing
+      console.log('TFJS model loaded successfully!');
+      
+      // Warmup the model
+      const dummyInput = this.tf.zeros([1, 30, 99]); // Shape: [batch, frames, coords]
+      const warmupOutput = this.model.predict(dummyInput);
+      dummyInput.dispose();
+      // warmupOutput.dispose() would be proper if it was a tensor, but we'll let it be GC'd.
+      if (warmupOutput && (warmupOutput as any).dispose) {
+        (warmupOutput as any).dispose();
+      }
+    } catch (error) {
+      console.error('Failed to load TFJS model:', error);
+      this.loadFailed = true;
     } finally {
       this.isInitializing = false;
     }

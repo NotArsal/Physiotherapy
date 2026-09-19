@@ -39,9 +39,9 @@ jobs:
         run: |
           cd backend
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest mongomock
+          pip install -r requirements.txt pytest mongomock pytest-cov
           python -m compileall .
-          python -m pytest test_api.py -v
+          python -m pytest test_api.py -v --cov=. --cov-fail-under=25
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -52,10 +52,10 @@ jobs:
         run: |
           cd frontend
           npm ci
-          npm test -- --watchAll=false --passWithNoTests
+          npm test -- --watchAll=false
           npm run build
         env:
-          CI: false
+          CI: true
 
   push-images:
     needs: build-and-test

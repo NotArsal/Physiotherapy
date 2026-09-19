@@ -293,7 +293,13 @@ def log_session():
 def get_user_sessions(user_id):
     if db is None:
         return jsonify({"error": "Database not available", "success": False}), 503
-    if request.user.get("uid") != user_id:
+        
+    token_uid = request.user.get("uid")
+    # Check if the requesting user is the owner, or if they are a registered therapist
+    is_owner = (token_uid == user_id)
+    is_therapist = db.therapists.find_one({"uid": token_uid}) is not None
+    
+    if not is_owner and not is_therapist:
         return jsonify({"error": "Forbidden: You cannot access sessions for another user", "success": False}), 403
         
     try:
@@ -349,7 +355,12 @@ def get_default_protocols():
 def get_user_protocols(user_id):
     if db is None:
         return jsonify({"error": "Database not available", "success": False}), 503
-    if request.user.get("uid") != user_id:
+        
+    token_uid = request.user.get("uid")
+    is_owner = (token_uid == user_id)
+    is_therapist = db.therapists.find_one({"uid": token_uid}) is not None
+    
+    if not is_owner and not is_therapist:
         return jsonify({"error": "Forbidden", "success": False}), 403
         
     try:

@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback, MutableRefObject } from 'react';
-import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { initWasm } from '../utils/poseDetection';
 
 interface PoseDetectionResult {
@@ -13,7 +12,7 @@ export const usePoseDetection = (
   onPoseResults: (results: PoseDetectionResult) => Promise<void>,
   videoRef: MutableRefObject<HTMLVideoElement | null>
 ) => {
-  const poseRef = useRef<PoseLandmarker | null>(null);
+  const poseRef = useRef<any>(null); // Use any to avoid static import dependency
   const frameRequestRef = useRef<number | null>(null);
   const poseDisposedRef = useRef(false);
   
@@ -41,6 +40,9 @@ export const usePoseDetection = (
       
       // Load Rust Wasm Biomechanics
       await initWasm();
+
+      // Dynamically import MediaPipe to reduce initial bundle size
+      const { FilesetResolver, PoseLandmarker } = await import('@mediapipe/tasks-vision');
 
       const vision = await FilesetResolver.forVisionTasks(
         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm"
