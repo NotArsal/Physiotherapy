@@ -435,9 +435,11 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
 
       // Synchronize CSS dimensions with raw hardware aspect ratio to eliminate coordinate drift
       if (results.image) {
-        if (canvas.width !== results.image.width || canvas.height !== results.image.height) {
-          canvas.width = results.image.width;
-          canvas.height = results.image.height;
+        const sourceWidth = (results.image as HTMLVideoElement).videoWidth || results.image.width;
+        const sourceHeight = (results.image as HTMLVideoElement).videoHeight || results.image.height;
+        if (sourceWidth && sourceHeight && (canvas.width !== sourceWidth || canvas.height !== sourceHeight)) {
+          canvas.width = sourceWidth;
+          canvas.height = sourceHeight;
         }
       }
 
