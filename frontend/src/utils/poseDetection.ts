@@ -1,5 +1,23 @@
 import { ExerciseProtocol } from '../services/api';
 
+/* 
+ * =========================================================================
+ * 🦀 RUST WEBASSEMBLY (WASM) INTEGRATION
+ * =========================================================================
+ * We have scaffolded a high-performance Rust module for these calculations 
+ * in `frontend/wasm-biomechanics`.
+ * 
+ * To switch from this TypeScript math to native-speed Rust math:
+ * 1. Whitelist `cargo` in Windows Security/Application Control.
+ * 2. Run: `cargo install wasm-pack`
+ * 3. Run: `cd wasm-biomechanics && wasm-pack build --target web`
+ * 4. Uncomment the import below and replace the TS functions!
+ * 
+ * // import init, { calculate_angle_wasm, extract_joint_angles_wasm } from '../../wasm-biomechanics/pkg/wasm_biomechanics.js';
+ * // await init(); // Call this once at app startup
+ * =========================================================================
+ */
+
 export interface Landmark {
   x: number;
   y: number;
