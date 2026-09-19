@@ -136,6 +136,10 @@ class ApiService {
   // Log exercise session
   async logSession(sessionData: SessionData) {
     try {
+      if (!sessionData.timestamp) {
+        sessionData.timestamp = new Date().toISOString();
+      }
+      
       if (sessionData.user_id && sessionData.exercise && sessionData.timestamp) {
         const payloadStr = `${sessionData.user_id}:${sessionData.exercise}:${sessionData.timestamp}:${Math.floor(sessionData.total_reps)}:${Math.floor(sessionData.duration)}`;
         const encoder = new TextEncoder();

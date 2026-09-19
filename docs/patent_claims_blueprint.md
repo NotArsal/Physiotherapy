@@ -22,7 +22,7 @@ The system utilizes a dual-factor temporal analysis pipeline running locally in 
 **The Innovation:** A real-time fallback mechanism that maintains deep learning inference accuracy even when the camera's field of view is obstructed or incomplete (e.g., lower body occluded by furniture).
 
 ### Technical Implementation Details
-When raw MediaPipe landmarks drop below a visibility confidence threshold, the `pose_utils.py` preprocessing pipeline intervenes before sending data to the BiLSTM model:
+When raw MediaPipe landmarks drop below a visibility confidence threshold, the Rust `physio_core` WebAssembly module intervenes before sending data to the BiLSTM model:
 1. **Anatomical Anchor Points:** The system identifies high-confidence, rigid anchor points, primarily the bi-acromial distance (shoulder width).
 2. **Proportional Estimation:** Using standard human biomechanical ratios, the system scales the expected locations of missing joints. For instance, if the knees are occluded during a lat-pulldown, the system calculates the hip-to-knee vector based on the measured shoulder width.
 3. **Data Integrity Conservation:** Rather than feeding `0.0` or `NaN` coordinates to the BiLSTM (which would cause massive prediction drift), the imputed coordinates preserve the spatial structure of the tensor.

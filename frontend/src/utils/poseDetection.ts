@@ -456,6 +456,10 @@ export function detectFallEmergency(
   const rightAnkle = landmarks[28];
   const prevNose = previousLandmarks[0];
 
+  if (!nose || !prevNose || (nose.visibility || 0) < 0.5 || (prevNose.visibility || 0) < 0.5) {
+    return false;
+  }
+
   // 3. Calculate Head Drop Velocity
   const dy = nose.y - prevNose.y; 
   const headDropVelocity = dy / Math.max(deltaTime, 0.01); 
@@ -472,8 +476,8 @@ export function detectFallEmergency(
     }
   }
 
-  // 5. Trigger only on violent drops that end near the floor
-  if (headDropVelocity > 3.0 && headNearFloor) {
+  // 5. Trigger only on violent drops that end near the floor (nose.y > 0.7)
+  if (headDropVelocity > 3.0 && headNearFloor && nose.y > 0.7) {
     return true; 
   }
 

@@ -97,6 +97,9 @@ esearch/.
 
 ### Core Features
 
+* **Zero-copy WASM memory buffer**: Optimized Javascript and WASM interaction for zero-latency execution.
+* **Adaptive ROM**: Integrated dynamically adjusting range-of-motion tracking baselines.
+* **Telemetry hashing**: Implemented secure telemetry data hashing to ensure data privacy and integrity.
 * **Zero-Latency Edge AI Inference**: Deep learning classification (BiLSTM) is executed entirely within the browser via **TensorFlow.js (WebGL)**, eliminating backend network latency and massive RAM usage.
 * **Ambient Fall Detection**: Optical, zero-wearable safety monitoring that calculates $dy/dt$ nose drop velocity combined with 33-point bounding box horizontal aspect ratio collapse to detect medical emergencies. Includes a 10-second therapist alert protocol.
 * **Adaptive Hysteresis-Based Form Tracking**: Incorporates a 10-second mandatory calibration phase to calculate personal Range of Motion (ROM) baselines. Uses an Exponential Moving Average (EMA) and dual-threshold state machine to guarantee true repetition counts.

@@ -11,8 +11,8 @@ For visual diagrams of the system infrastructure and client-server flow, please 
 The **PhysioTracker** system has been re-architected into a **100% Offline Edge AI** framework, designed to optimize rendering performance, ensure patient privacy, and eliminate network latency.
 
 - **Zero-Latency Edge AI**: Heavy inference using the 30-frame temporal BiLSTM-Attention classifier is performed entirely in the browser using **TensorFlow.js (WebGL)**. This eliminates network round-trips and preserves absolute privacy (GDPR/HIPAA compliant).
-- **Rust/WebAssembly (Wasm) Core**: Joint angle calculations and lower-body occlusion imputations are offloaded to a custom Rust crate (`physio_core`) compiled to WebAssembly. This SIMD-accelerated module executes in **0.092 $\mu$s**, providing an 8.3x speedup over native JavaScript and preventing UI thread blocking.
-- **Fail-Safe Local Storage**: Sessions are logged locally and only synced as lightweight structured JSON to the MongoDB backend, never transmitting raw video data.
+- **Rust/WebAssembly (Wasm) Core**: Joint angle calculations and lower-body occlusion imputations are offloaded to a custom Rust crate (`physio_core`) compiled to WebAssembly. Utilizing a **Zero-copy WASM memory buffer**, JS and Wasm share linear memory without serialization overhead. This SIMD-accelerated module executes in **0.092 $\mu$s**, providing an 8.3x speedup over native JavaScript and preventing UI thread blocking.
+- **Fail-Safe Local Storage**: Sessions are logged locally and only synced as lightweight structured JSON to the MongoDB backend, authenticated via **Cryptographic Telemetry Hashing** (SHA-256 signatures of session timestamps, reps, and exercise metadata) to prevent spoofing and guarantee data integrity without transmitting raw video data.
 
 ---
 
@@ -63,7 +63,8 @@ Standard single-threshold rep-counters flicker and double-count when a patient p
 To solve this, PhysioTracker implements an **Adaptive Calibration Phase** followed by a **Finite State Machine (FSM)** with **hysteresis (dual boundaries)**:
 
 1. **Calibration (10 Seconds)**: Before a session begins, the user performs a test repetition. The system scans the continuous data stream to identify the global minimum and maximum angles for the active joints, establishing personalized boundaries.
-2. **Hysteresis Counters**: For example, during a **Knee Squat**:
+2. **Adaptive ROM (Range of Motion)**: The system continually tracks the active dynamic Range of Motion dynamically in-session. Using a statistical online peak-detector with sliding first-derivative (velocity) sign changes, the system adjusts minimum and maximum flexions automatically.
+3. **Hysteresis Counters**: For example, during a **Knee Squat**:
    - **Concentric Phase ('up' -> 'down')**: Triggered only when the knee angle falls below the personalized deep threshold.
    - **Eccentric Phase ('down' -> 'up')**: Triggered only when the knee angle rises above the personalized standing threshold.
    - **Hysteresis Zone**: The space between boundaries where the system holds the previous phase, safely absorbing postural tremors without false counts.

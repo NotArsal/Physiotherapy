@@ -4,6 +4,9 @@ This file records the system audit, fixes, cleanup, and follow-up recommendation
 
 ## Completed Changes
 
+- **Zero-copy WASM memory buffer**: Optimized data handling between Javascript and WASM to minimize memory overhead.
+- **Adaptive ROM**: Integrated adaptive range-of-motion tracking to adjust user baselines dynamically.
+- **Telemetry hashing**: Implemented secure telemetry data hashing to ensure data privacy and integrity.
 - **Fall Detection False-Positive Fix**: Clamped the `deltaTime` division (`Math.max(deltaTime, 0.01)`) and adjusted the bounding box Aspect Ratio (`nose.y > 0.7`) to completely eliminate instant critical fall detection alerts when starting a session or performing seated exercises.
 - **Final Backend Pruning**: Removed obsolete `load_models()` try/catch invocation block from `backend/app.py` and passed a full `flake8` audit, ensuring zero Python syntax or variable reference errors remain.
 - **Edge AI Migration (TensorFlow.js)**: Ported the entire BiLSTM inference engine to the React frontend, enabling zero-latency predictions locally in the browser memory.
