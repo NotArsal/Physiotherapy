@@ -73,26 +73,31 @@ fn calc_angle_from_pts(p1: &Point, p2: &Point, p3: &Point) -> f64 {
 /// Extracts the 9 critical joint angles from a 33-point MediaPipe array.
 /// Passing JSON overhead is minimized by using serde_wasm_bindgen.
 #[wasm_bindgen]
-pub fn extract_joint_angles_wasm(landmarks_val: JsValue) -> Result<Vec<f64>, JsValue> {
-    // Deserialize JS array to Rust struct
-    let landmarks: Vec<Landmark> = serde_wasm_bindgen::from_value(landmarks_val)?;
-    
-    if landmarks.len() < 33 {
+pub fn extract_joint_angles_wasm(flat_landmarks: &[f32]) -> Result<Vec<f64>, JsValue> {
+    if flat_landmarks.len() < 33 * 4 {
         return Ok(vec![0.0; 9]);
     }
     
-    let l_shoulder = Point::from_landmark(&landmarks[11]);
-    let r_shoulder = Point::from_landmark(&landmarks[12]);
-    let l_elbow = Point::from_landmark(&landmarks[13]);
-    let r_elbow = Point::from_landmark(&landmarks[14]);
-    let l_wrist = Point::from_landmark(&landmarks[15]);
-    let r_wrist = Point::from_landmark(&landmarks[16]);
-    let l_hip = Point::from_landmark(&landmarks[23]);
-    let r_hip = Point::from_landmark(&landmarks[24]);
-    let l_knee = Point::from_landmark(&landmarks[25]);
-    let r_knee = Point::from_landmark(&landmarks[26]);
-    let l_ankle = Point::from_landmark(&landmarks[27]);
-    let r_ankle = Point::from_landmark(&landmarks[28]);
+    let get_pt = |idx: usize| -> Point {
+        let base = idx * 4;
+        Point {
+            x: *flat_landmarks.get(base).unwrap_or(&0.0) as f64,
+            y: *flat_landmarks.get(base + 1).unwrap_or(&0.0) as f64,
+        }
+    };
+
+    let l_shoulder = get_pt(11);
+    let r_shoulder = get_pt(12);
+    let l_elbow = get_pt(13);
+    let r_elbow = get_pt(14);
+    let l_wrist = get_pt(15);
+    let r_wrist = get_pt(16);
+    let l_hip = get_pt(23);
+    let r_hip = get_pt(24);
+    let l_knee = get_pt(25);
+    let r_knee = get_pt(26);
+    let l_ankle = get_pt(27);
+    let r_ankle = get_pt(28);
     
     let mut angles = Vec::with_capacity(9);
     
@@ -117,18 +122,14 @@ pub fn extract_joint_angles_wasm(landmarks_val: JsValue) -> Result<Vec<f64>, JsV
     angles.push(calc_angle_from_pts(&r_hip, &r_knee, &r_ankle));
     
     // 8: Spine angle (approximation)
-    let shoulder_mid = Point {
-        x: (l_shoulder.x + r_shoulder.x) / 2.0,
-        y: (l_shoulder.y + r_shoulder.y) / 2.0,
-    };
-    let hip_mid = Point {
-        x: (l_hip.x + r_hip.x) / 2.0,
-        y: (l_hip.y + r_hip.y) / 2.0,
-    };
-    let vertical_ref = Point {
-        x: shoulder_mid.x,
-        y: shoulder_mid.y - 1.0,
-    };
+    let shoulder_mid_x = (l_shoulder.x + r_shoulder.x) / 2.0;
+    let shoulder_mid_y = (l_shoulder.y + r_shoulder.y) / 2.0;
+    let hip_mid_x = (l_hip.x + r_hip.x) / 2.0;
+    let hip_mid_y = (l_hip.y + r_hip.y) / 2.0;
+    
+    let shoulder_mid = Point { x: shoulder_mid_x, y: shoulder_mid_y };
+    let hip_mid = Point { x: hip_mid_x, y: hip_mid_y };
+    let vertical_ref = Point { x: shoulder_mid_x, y: shoulder_mid_y - 1.0 };
     
     angles.push(calc_angle_from_pts(&vertical_ref, &shoulder_mid, &hip_mid));
     

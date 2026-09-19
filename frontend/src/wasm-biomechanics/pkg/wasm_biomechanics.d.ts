@@ -10,7 +10,7 @@ export function calculate_angle_wasm(p1_x: number, p1_y: number, p2_x: number, p
  * Extracts the 9 critical joint angles from a 33-point MediaPipe array.
  * Passing JSON overhead is minimized by using serde_wasm_bindgen.
  */
-export function extract_joint_angles_wasm(landmarks_val: any): Float64Array;
+export function extract_joint_angles_wasm(flat_landmarks: Float32Array): Float64Array;
 
 /**
  * Set up the panic hook so errors bubble up to JS console beautifully
@@ -22,14 +22,12 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly calculate_angle_wasm: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
-    readonly extract_joint_angles_wasm: (a: any) => [number, number, number, number];
+    readonly extract_joint_angles_wasm: (a: number, b: number) => [number, number, number, number];
     readonly main_js: () => void;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
-    readonly __wbindgen_exn_store: (a: number) => void;
-    readonly __externref_table_alloc: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
-    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __externref_table_dealloc: (a: number) => void;
     readonly __wbindgen_start: () => void;
 }

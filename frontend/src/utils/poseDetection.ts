@@ -55,7 +55,7 @@ export function calculateAngle(point1: Landmark, point2: Landmark, point3: Landm
   const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
   const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
 
-  if (mag1 === 0 || mag2 === 0) return 0;
+  if (mag1 < 1e-6 || mag2 < 1e-6) return NaN;
   
   let cosAngle = dot / (mag1 * mag2);
   cosAngle = Math.max(-1, Math.min(1, cosAngle)); // clamp
@@ -68,8 +68,15 @@ export function extractJointAngles(landmarks: Landmark[]): number[] {
   try {
     // 1. Check if Wasm is loaded and we have enough landmarks
     if (wasmReady && landmarks && landmarks.length >= 33) {
-      // The Rust module returns a Float64Array. Convert it to a normal JS Array for the rest of the app.
-      return Array.from(extract_joint_angles_wasm(landmarks));
+      // The Rust module now takes a flat Float32Array for zero-copy memory transfer
+      const flat = new Float32Array(landmarks.length * 4);
+      for (let i = 0; i < landmarks.length; i++) {
+        flat[i * 4] = landmarks[i].x;
+        flat[i * 4 + 1] = landmarks[i].y;
+        flat[i * 4 + 2] = landmarks[i].z || 0;
+        flat[i * 4 + 3] = landmarks[i].visibility || 0;
+      }
+      return Array.from(extract_joint_angles_wasm(flat));
     }
 
     // 2. Fallback to TypeScript implementation if Wasm isn't ready
