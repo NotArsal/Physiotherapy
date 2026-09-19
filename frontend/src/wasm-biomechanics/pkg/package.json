@@ -1,0 +1,19 @@
+{
+  "name": "wasm-biomechanics",
+  "type": "module",
+  "collaborators": [
+    "AI Assistant"
+  ],
+  "description": "A WebAssembly module for high-performance biomechanical calculations",
+  "version": "0.1.0",
+  "files": [
+    "wasm_biomechanics_bg.wasm",
+    "wasm_biomechanics.js",
+    "wasm_biomechanics.d.ts"
+  ],
+  "main": "wasm_biomechanics.js",
+  "types": "wasm_biomechanics.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
