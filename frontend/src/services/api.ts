@@ -16,7 +16,7 @@ api.interceptors.request.use(
     const user = auth.currentUser;
     if (user) {
       try {
-        const token = await user.getIdToken();
+        const token = await user.getIdToken(true); // Force refresh to prevent 401 Unauthorized from stale tokens
         config.headers.Authorization = `Bearer ${token}`;
       } catch (error) {
         console.error('Error fetching Firebase token:', error);
