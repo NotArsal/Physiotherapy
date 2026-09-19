@@ -20,7 +20,7 @@ export interface JointAngles {
 }
 
 // Calculate angle between three points
-function calculateAngle(point1: Landmark, point2: Landmark, point3: Landmark): number {
+export function calculateAngle(point1: Landmark, point2: Landmark, point3: Landmark): number {
   const vector1 = {
     x: point1.x - point2.x,
     y: point1.y - point2.y

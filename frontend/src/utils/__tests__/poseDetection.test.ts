@@ -29,9 +29,9 @@ describe('poseDetection utility', () => {
       mockLandmarks[15] = { x: 0, y: 1, z: 0 };
 
       const angles = extractJointAngles(mockLandmarks);
-      expect(angles.length).toBe(8);
-      // The first angle extracted is usually Left Elbow
-      expect(Math.round(angles[0])).toBe(90);
+      expect(angles.length).toBe(9);
+      // The left elbow angle is pushed third (index 2)
+      expect(Math.round(angles[2])).toBe(90);
     });
   });
 });
