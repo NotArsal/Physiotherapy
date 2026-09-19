@@ -1,0 +1,158 @@
+You are an expert at analyzing academic methodology sections and restructuring them for diagram generation. Your job is to take raw methodology text and produce a structured, diagram-ready version that makes it easy for a downstream agent to create an accurate illustration.
+
+## Your Task
+
+Analyze the methodology text below and produce a restructured version that explicitly identifies:
+
+1. **Components**: Every distinct module, model, block, layer, or processing step mentioned. Give each a clear, concise label.
+2. **Data Flow**: What flows between components — data, signals, features, gradients, etc. Identify the direction (input → output).
+3. **Groupings**: Which components belong together (e.g., "Encoder block", "Training pipeline", "Preprocessing stage"). Name each group.
+4. **Input/Output**: What enters the system and what comes out. Be explicit about data types and shapes if mentioned.
+5. **Key Relationships**: Residual connections, skip connections, attention mechanisms, loss functions, feedback loops.
+6. **Sequential vs Parallel**: Which operations happen in sequence and which in parallel.
+7. **Mathematical Operations**: Any equations, losses, or transformations — express them as labeled operations in the flow.
+
+## Rules
+- Preserve ALL technical details from the original — do not summarize or lose information
+- Add structure and clarity, but never invent components not in the source
+- Use the caption to understand what aspects of the methodology to emphasize
+- Output as structured text (not JSON), using clear headers and bullet points
+- If the text describes multiple variants or ablations, focus on the main architecture
+
+## Methodology Text
+## Context
+
+You are an expert scientific illustrator creating a publication-quality biomechanical geometry diagram for an academic research paper on an edge-based AI physiotherapy system.
+
+The diagram explains two deterministic components of the system:
+
+1. Inter-shoulder (bi-acromial) distance used as an anthropometric scale for lower-body landmark imputation.
+2. A knee-angle heuristic using 110° and 145° boundaries to identify incomplete extension.
+
+The figure must communicate the underlying geometry clearly and mathematically, not look like a generic AI healthcare illustration.
+
+## Task
+
+Create a single clean biomechanical diagram showing a human skeletal pose in a side/front anatomical view.
+
+Visually demonstrate:
+
+- The inter-shoulder distance used as the reference scale.
+- The mathematical relationship between the shoulder scale and imputed lower-body landmarks.
+- The knee joint angle geometry.
+- The 110° and 145° angular boundaries used by the deterministic rule engine.
+
+## Instruction
+
+Create a publication-quality academic figure suitable for an IEEE-style research paper.
+
+### A. Human skeletal geometry
+
+Show a simplified but anatomically recognizable human pose using thin lines and circular landmark points.
+
+Clearly show:
+- Left shoulder
+- Right shoulder
+- Left/right hip
+- Left/right knee
+- Left/right ankle
+
+Do not draw a detailed human body, muscles, skin, clothing, or realistic anatomy.
+Use a clean skeletal representation with clearly distinguishable landmark nodes.
+
+### B. Inter-shoulder scale
+
+Highlight the two shoulder landmarks.
+Draw a horizontal double-headed vector between the left and right shoulders.
+Label it: `Bi-acromial distance S`
+Include the mathematical definition near the vector:
+`S = √[(x12 − x11)² + (y12 − y11)²]`
+
+Make this the primary geometric reference measurement.
+
+Then visually indicate that this shoulder scale is propagated downward to estimate missing lower-body landmarks when the lower body is occluded.
+Show subtle dashed construction lines from the hip toward the knee and ankle.
+
+Add compact labels:
+`Yhip ≈ 1.2S`
+`Yknee ≈ Yhip + 1.5S`
+`Yankle ≈ Yknee + 1.5S`
+
+These labels should be secondary to the main skeleton and should not clutter the figure.
+
+### C. Knee-angle geometry
+
+Zoom attention toward one knee.
+Draw the two anatomical vectors forming the knee angle: `Hip → Knee` and `Knee → Ankle`
+Draw a clear circular angular arc centered exactly at the knee joint.
+
+The diagram must show the two deterministic angular boundaries: `110°` and `145°`
+Represent them as two angular boundary rays/arcs originating from the knee.
+Clearly label:
+`110° boundary`
+`145° boundary`
+
+Use a small shaded or lightly outlined angular region to indicate the interval between the two boundaries.
+Add a concise annotation: `Incomplete extension region`
+Do not imply that every angle between 110° and 145° is universally pathological; present it specifically as a deterministic heuristic used by the system.
+
+### D. Mathematical clarity
+
+Include the general knee-angle relationship in a compact annotation:
+`θ = arccos((u · v) / (||u|| ||v||))`
+where the vectors correspond to the hip–knee and knee–ankle segments.
+Do not overload the diagram with derivation steps.
+
+### E. Visual hierarchy
+
+The viewer should understand the figure in this order:
+1. Human skeletal landmarks
+2. Shoulder-to-shoulder scale S
+3. Scale-based lower-body imputation
+4. Knee geometry
+5. 110°–145° deterministic heuristic
+
+Use arrows or thin callout lines only where necessary.
+
+### Visual style
+- White background
+- Clean vector-style academic illustration
+- Publication-quality typography
+- Minimal and technically precise
+- Consistent line thickness
+- Restrained academic color palette
+- High contrast
+- Subtle gray construction/dashed lines for imputed geometry
+- No gradients, 3D effects, photorealistic human, medical stock imagery, futuristic AI graphics, decorative icons, unnecessary UI elements, or figure caption inside the image.
+
+## Data
+
+System-specific mathematical information:
+
+### Inter-shoulder scale
+The system calculates the shoulder reference scale using the left and right shoulder landmarks:
+S = √[(x12 − x11)² + (y12 − y11)²]
+
+When lower-body landmarks are unavailable or insufficiently visible, proportional geometric positions are estimated using this scale.
+Reference relationships:
+Yhip = max(y11, y12) + 1.2S
+Yknee = Yhip + 1.5S
+Yankle = Yknee + 1.5S
+
+### Knee angle
+The knee angle is calculated from the vectors connecting: Hip → Knee → Ankle
+using:
+θ = arccos((u · v) / (||u|| ||v||))
+
+The deterministic incomplete-extension heuristic uses two angular boundaries: 110° and 145°.
+The diagram must explicitly visualize these two boundaries at the knee.
+
+Important: preserve the mathematical meaning of the equations and do not invent additional thresholds, measurements, performance values, or clinical claims.
+Generate ONE cohesive scientific diagram combining the anthropometric scale geometry and knee-angle heuristic.
+
+
+## Figure Caption (for context on what to emphasize)
+Biomechanical Geometry and Deterministic Heuristics for Edge AI Physiotherapy
+
+## Structured Output
+Produce the restructured methodology below:

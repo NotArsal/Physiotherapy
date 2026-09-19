@@ -51,7 +51,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Place camera at floor level from the side to see full body alignment',
   },
   chest_fly_machine: {
-    images: ['/exercises/gifs/1494-bWlZvXh.gif'],
+    images: ['/exercises/gifs/chest-fly.gif'],
     description: 'Sit in the fly machine, set handles at chest level, and bring both arms together in a hugging motion.',
     muscles: ['Chest (Pectoralis Major)', 'Front Deltoids'],
     tips: ['Slight bend in elbows throughout', 'Squeeze chest at the center', 'Control the stretch outward', 'Keep back against the pad'],
@@ -83,7 +83,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera — full body visible from head to feet',
   },
   pull_up: {
-    images: ['/exercises/gifs/3293-72BC5Za.gif'],
+    images: ['/exercises/gifs/pull-up.gif'],
     description: 'Hang from a bar with overhand grip, pull your chest to the bar by driving elbows down, then lower with control.',
     muscles: ['Latissimus Dorsi', 'Biceps', 'Rhomboids', 'Core'],
     tips: ['Start from full dead hang', 'Drive elbows toward hips', 'Pull chest to bar', 'Lower slowly and controlled'],
@@ -91,7 +91,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Full body shot from the front or side — hands must be visible',
   },
   lat_pulldown: {
-    images: ['/exercises/gifs/2330-LEprlgG.gif'],
+    images: ['/exercises/gifs/lat-pull-down.gif'],
     description: 'Grip the bar wider than shoulders, pull it down to your upper chest while squeezing your lats, then control it back up.',
     muscles: ['Latissimus Dorsi', 'Biceps', 'Rear Deltoids'],
     tips: ['Lean slightly back', 'Pull elbows down and back', 'Squeeze lats at bottom', 'Hands must be visible!'],
@@ -107,7 +107,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Side camera — hips, back, and arms should all be visible',
   },
   shoulder_press: {
-    images: [`${BASE}/Barbell_Shoulder_Press/0.jpg`, `${BASE}/Barbell_Shoulder_Press/1.jpg`],
+    images: ['/exercises/gifs/shoulder-press.gif'],
     description: 'Press the bar straight overhead from shoulder height. Core tight, drive through your heels.',
     muscles: ['Front Deltoids', 'Triceps', 'Upper Chest', 'Core'],
     tips: ['Neutral spine, tight core', 'Bar path straight up', 'Lock out overhead', 'Hands wider than shoulders'],
@@ -123,7 +123,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Front-facing camera — both arms must be visible at the same time',
   },
   biceps_curl: {
-    images: ['/images/barbell curl.webp'],
+    images: ['/exercises/gifs/barbell-curl.webp'],
     description: 'Hold the bar with underhand grip at hip level, curl it up toward your shoulders by contracting biceps.',
     muscles: ['Biceps Brachii', 'Brachialis', 'Forearms'],
     tips: ['Keep elbows pinned to sides', 'Do not swing body', 'Full extension at bottom', 'Squeeze at the top'],
@@ -131,7 +131,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Front or side camera — wrists AND elbows must both be visible',
   },
   barbell_biceps_curl: {
-    images: ['/exercises/gifs/0023-Yza7XrQ.gif'],
+    images: ['/exercises/gifs/Barbell-Bicep-Curl.gif'],
     description: 'Hold the bar with underhand grip at hip level, curl it up toward your shoulders by contracting biceps.',
     muscles: ['Biceps Brachii', 'Brachialis', 'Forearms'],
     tips: ['Keep elbows pinned to sides', 'Do not swing body', 'Full extension at bottom', 'Squeeze at the top'],
@@ -139,7 +139,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Front or side camera — wrists AND elbows must both be visible',
   },
   hammer_curl: {
-    images: ['/exercises/gifs/0165-HPlPoQA.gif'],
+    images: ['/exercises/gifs/hammer-curl.gif'],
     description: 'Neutral grip (thumbs up) dumbbell curl. Curl to shoulder height, lower slowly. Great for forearm and brachialis.',
     muscles: ['Brachialis', 'Biceps Brachii', 'Brachioradialis'],
     tips: ['Thumbs pointing up throughout', 'Elbows stay at sides', 'No torso lean or swing', 'Full curl and full extension'],
@@ -195,7 +195,7 @@ export const EXERCISE_DEMOS: Record<string, ExerciseDemo> = {
     cameraHint: 'Full body side or front camera — legs must be fully visible',
   },
   hip_thrust: {
-    images: [`${BASE}/Barbell_Hip_Thrust/0.jpg`, `${BASE}/Barbell_Hip_Thrust/1.jpg`],
+    images: ['/exercises/gifs/Hip-Thrust_Hips.gif'],
     description: 'Shoulders on a bench, bar across hips — drive hips up until body is parallel to floor, squeeze glutes at top.',
     muscles: ['Glutes (Gluteus Maximus)', 'Hamstrings', 'Core'],
     tips: ['Drive through heels', 'Full hip extension at top', 'Chin tucked, neutral neck', 'Squeeze glutes hard at peak'],
