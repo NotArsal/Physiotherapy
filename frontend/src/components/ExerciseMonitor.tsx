@@ -518,6 +518,28 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
         }
       }
 
+      // Keypoint Inversion & Lateral Swapping (Reject tracking spikes)
+      const prevLandmarks = previousLandmarksRef.current;
+      if (prevLandmarks && prevLandmarks.length > 24 && results.poseLandmarks && results.poseLandmarks.length > 24) {
+        const p11 = results.poseLandmarks[11];
+        const p23 = results.poseLandmarks[23];
+        // Calculate torso height as baseline
+        const torsoHeight = Math.hypot(p11.x - p23.x, p11.y - p23.y);
+        const maxDist = 0.25 * torsoHeight;
+        
+        // Check distal joints (wrists, ankles) for impossible teleportation (> 350ms speed in 33ms)
+        let isSwapped = false;
+        for (const i of [15, 16, 27, 28]) {
+          const dist = Math.hypot(results.poseLandmarks[i].x - prevLandmarks[i].x, results.poseLandmarks[i].y - prevLandmarks[i].y);
+          if (dist > maxDist) isSwapped = true;
+        }
+        
+        if (isSwapped) {
+          // Drop frame to prevent FSM jitter and bad form warnings
+          return;
+        }
+      }
+
       try {
         const rawAngles = extractJointAngles(results.poseLandmarks);
         if (rawAngles.length !== 9 || rawAngles.some((a) => a < 0 || a > 180 || Number.isNaN(a))) {
@@ -687,7 +709,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
             ? (now - phaseStartTimeRef.current) / 1000
             : 0;
 
-          if (phaseDurationSec > 0.15) { // ignore noise
+          if (phaseDurationSec > 0.35) { // Enforce 350ms physiological temporal lockout (reject phantom reversals)
             lastCompletedPhaseRef.current = previousPhase;
             lastCompletedDurationRef.current = phaseDurationSec;
             setLastPhaseDuration(parseFloat(phaseDurationSec.toFixed(1)));

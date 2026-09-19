@@ -37,6 +37,11 @@ export interface JointAngles {
 
 // Keep the old calculateAngle around for legacy calls (if any)
 export function calculateAngle(point1: Landmark, point2: Landmark, point3: Landmark): number {
+  // Reject occluded keypoints to prevent zero-snapping spikes (c < 0.40)
+  if (point1.visibility !== undefined && point1.visibility < 0.40) return NaN;
+  if (point2.visibility !== undefined && point2.visibility < 0.40) return NaN;
+  if (point3.visibility !== undefined && point3.visibility < 0.40) return NaN;
+
   const v1 = {
     x: point1.x - point2.x,
     y: point1.y - point2.y
@@ -723,11 +728,11 @@ export function detectInjuryRisk(
 
   // 2. Knee Valgus Collapse Analysis (Knees caving inwards)
   let kneeValgusRisk = 0;
-  if (leftHip && rightHip && leftKnee && rightKnee) {
-    const hipWidth = Math.abs(leftHip.x - rightHip.x);
+  if (leftAnkle && rightAnkle && leftKnee && rightKnee) {
+    const ankleWidth = Math.abs(leftAnkle.x - rightAnkle.x);
     const kneeWidth = Math.abs(leftKnee.x - rightKnee.x);
-    if (hipWidth > 0) {
-      const kneeValgusRatio = kneeWidth / hipWidth;
+    if (ankleWidth > 0) {
+      const kneeValgusRatio = kneeWidth / ankleWidth;
       report.metrics.kneeValgusRatio = kneeValgusRatio;
       
       let valgusThreshold = 0.82; // medium
