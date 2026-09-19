@@ -1,22 +1,20 @@
 import { ExerciseProtocol } from '../services/api';
+import init, { extract_joint_angles_wasm } from '../wasm-biomechanics/pkg/wasm_biomechanics.js';
 
-/* 
- * =========================================================================
- * 🦀 RUST WEBASSEMBLY (WASM) INTEGRATION
- * =========================================================================
- * We have scaffolded a high-performance Rust module for these calculations 
- * in `frontend/wasm-biomechanics`.
- * 
- * To switch from this TypeScript math to native-speed Rust math:
- * 1. Whitelist `cargo` in Windows Security/Application Control.
- * 2. Run: `cargo install wasm-pack`
- * 3. Run: `cd wasm-biomechanics && wasm-pack build --target web`
- * 4. Uncomment the import below and replace the TS functions!
- * 
- * // import init, { calculate_angle_wasm, extract_joint_angles_wasm } from '../../wasm-biomechanics/pkg/wasm_biomechanics.js';
- * // await init(); // Call this once at app startup
- * =========================================================================
- */
+let wasmReady = false;
+
+// Initialize the WebAssembly module (should be called on app startup, but we'll lazy load it here)
+export const initWasm = async () => {
+  if (!wasmReady) {
+    try {
+      await init();
+      wasmReady = true;
+      console.log('🦀 Rust WebAssembly Biomechanics engine loaded!');
+    } catch (err) {
+      console.error('Failed to initialize Wasm module:', err);
+    }
+  }
+};
 
 export interface Landmark {
   x: number;
@@ -37,40 +35,43 @@ export interface JointAngles {
   spine: number;
 }
 
-// Calculate angle between three points
+// Keep the old calculateAngle around for legacy calls (if any)
 export function calculateAngle(point1: Landmark, point2: Landmark, point3: Landmark): number {
-  const vector1 = {
+  const v1 = {
     x: point1.x - point2.x,
     y: point1.y - point2.y
   };
-  
-  const vector2 = {
+  const v2 = {
     x: point3.x - point2.x,
     y: point3.y - point2.y
   };
-  
-  const dotProduct = vector1.x * vector2.x + vector1.y * vector2.y;
-  const magnitude1 = Math.sqrt(vector1.x * vector1.x + vector1.y * vector1.y);
-  const magnitude2 = Math.sqrt(vector2.x * vector2.x + vector2.y * vector2.y);
 
-  if (magnitude1 === 0 || magnitude2 === 0) {
-    return 0;
-  }
+  const dot = (v1.x * v2.x) + (v1.y * v2.y);
+  const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
+  const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
+
+  if (mag1 === 0 || mag2 === 0) return 0;
   
-  const cosAngle = dotProduct / (magnitude1 * magnitude2);
-  const angle = Math.acos(Math.max(-1, Math.min(1, cosAngle)));
+  let cosAngle = dot / (mag1 * mag2);
+  cosAngle = Math.max(-1, Math.min(1, cosAngle)); // clamp
   
-  return (angle * 180) / Math.PI;
+  const angleRad = Math.acos(cosAngle);
+  return angleRad * (180 / Math.PI);
 }
 
-// Extract joint angles from MediaPipe pose landmarks
 export function extractJointAngles(landmarks: Landmark[]): number[] {
-  if (!landmarks || landmarks.length < 33) {
-    return Array(9).fill(0);
-  }
-  
   try {
-    // MediaPipe Pose landmark indices
+    // 1. Check if Wasm is loaded and we have enough landmarks
+    if (wasmReady && landmarks && landmarks.length >= 33) {
+      // The Rust module returns a Float64Array. Convert it to a normal JS Array for the rest of the app.
+      return Array.from(extract_joint_angles_wasm(landmarks));
+    }
+
+    // 2. Fallback to TypeScript implementation if Wasm isn't ready
+    if (!landmarks || landmarks.length < 33) {
+      return Array(9).fill(0);
+    }
+    
     const leftShoulder = landmarks[11];
     const rightShoulder = landmarks[12];
     const leftElbow = landmarks[13];

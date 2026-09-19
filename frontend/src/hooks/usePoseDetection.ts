@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, MutableRefObject } from 'react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
+import { initWasm } from '../utils/poseDetection';
 
 interface PoseDetectionResult {
   poseLandmarks: any[];
@@ -32,11 +33,15 @@ export const usePoseDetection = (
   const [error, setError] = useState('');
   const [isReady, setIsReady] = useState(false);
 
-  // Initialize MediaPipe
+  // Initialize MediaPipe and Rust Wasm
   const initializePose = useCallback(async () => {
     try {
       setError('');
-      console.log('Initializing MediaPipe PoseLandmarker...');
+      console.log('Initializing MediaPipe PoseLandmarker and Wasm Core...');
+      
+      // Load Rust Wasm Biomechanics
+      await initWasm();
+
       const vision = await FilesetResolver.forVisionTasks(
         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm"
       );
