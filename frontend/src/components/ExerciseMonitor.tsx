@@ -448,7 +448,13 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
               setInjuryReport({
                 isSafe: false,
                 riskScore: 100,
-                warnings: [warnMsg]
+                warnings: [warnMsg],
+                metrics: {
+                  spineAngle: 0,
+                  kneeValgusRatio: 1.0,
+                  dropVelocity: 0,
+                  shoulderTilt: 0
+                }
               });
               lastInjuryWarningsRef.current = warnMsg;
               playSpeechCoaching("No person detected. Stand in frame and ensure good lighting.", true);
