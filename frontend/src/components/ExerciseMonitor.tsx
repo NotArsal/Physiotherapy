@@ -114,6 +114,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const lastInjuryWarningsRef = useRef<string>('');
   const poseDisposedRef = useRef(false);
   const poseProcessingRef = useRef(false);
+  const noPersonFrameCountRef = useRef(0);
   const lastPredictionAtRef = useRef(0);
   const repCountRef = useRef(0);
   const currentPhaseRef = useRef('');
@@ -438,8 +439,26 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
       }
 
       if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
+        if (isActiveRef.current && !isPausedRef.current && !isCalibratingRef.current) {
+          noPersonFrameCountRef.current += 1;
+          
+          if (noPersonFrameCountRef.current > 30) {
+            const warnMsg = "No person detected! Stand in frame and ensure good lighting.";
+            if (lastInjuryWarningsRef.current !== warnMsg) {
+              setInjuryReport({
+                isSafe: false,
+                riskScore: 100,
+                warnings: [warnMsg]
+              });
+              lastInjuryWarningsRef.current = warnMsg;
+              playSpeechCoaching("No person detected. Stand in frame and ensure good lighting.", true);
+            }
+          }
+        }
+        
         if (poseDetectedRef.current) {
           setPoseDetected(false);
+          poseDetectedRef.current = false;
         }
         ctx.fillStyle = '#c62828';
         ctx.font = 'bold 16px Inter, Arial';
@@ -453,6 +472,8 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
 
       // Push to 30-frame rolling window of raw landmarks for temporal prediction
       if (results.poseLandmarks) {
+        noPersonFrameCountRef.current = 0;
+        
         historyBufferRef.current.push(results.poseLandmarks);
         if (historyBufferRef.current.length > 30) {
           historyBufferRef.current.shift();

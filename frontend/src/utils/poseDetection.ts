@@ -600,6 +600,37 @@ export function detectInjuryRisk(
 
   // 0. Joint Visibility and Camera Calibration Warnings
   const visibilityThreshold = 0.45;
+  
+  // Edge Case: Poor Lighting or Severe Occlusion
+  let totalVisibility = 0;
+  let headVisibility = 0;
+  let bodyVisibility = 0;
+  
+  landmarks.forEach((lm, index) => {
+    const v = lm.visibility || 0;
+    totalVisibility += v;
+    if (index <= 10) headVisibility += v; // Nose to mouth edges
+    else bodyVisibility += v;
+  });
+  
+  const avgVisibility = totalVisibility / landmarks.length;
+  const avgHeadVis = headVisibility / 11;
+  const avgBodyVis = bodyVisibility / (landmarks.length - 11);
+  
+  if (avgVisibility < 0.20) {
+    report.warnings.push("Poor lighting or extremely occluded. Ensure room is well-lit.");
+    report.isSafe = false;
+    report.riskScore = 100;
+    return report;
+  }
+  
+  if (avgHeadVis > 0.6 && avgBodyVis < 0.25) {
+    report.warnings.push("Body not visible! Only your head is detected. Step back.");
+    report.isSafe = false;
+    report.riskScore = 100;
+    return report;
+  }
+
   const leftElbow = landmarks[13];
   const rightElbow = landmarks[14];
   const leftWrist = landmarks[15];
