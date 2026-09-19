@@ -451,7 +451,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
                       }
                     }}
                   >
-                    <Box sx={{ position: 'relative', height: 160, overflow: 'hidden', bgcolor: '#000000' }}>
+                    <Box sx={{ position: 'relative', height: 220, overflow: 'hidden', bgcolor: '#ffffff', borderRadius: '12px 12px 0 0' }}>
                       <Box
                         component="img"
                         src={imageUrl}
@@ -459,8 +459,8 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
                         sx={{
                           width: '100%',
                           height: '100%',
-                          objectFit: 'cover',
-                          opacity: 0.85,
+                          objectFit: 'contain',
+                          opacity: 1,
                           transition: 'transform 0.3s ease',
                           '&:hover': {
                             transform: 'scale(1.05)'
@@ -647,7 +647,7 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
                   }
                 }}
               >
-                <Box sx={{ position: 'relative', height: 160, overflow: 'hidden', bgcolor: '#000000' }}>
+                <Box sx={{ position: 'relative', height: 220, overflow: 'hidden', bgcolor: '#ffffff', borderRadius: '12px 12px 0 0' }}>
                   <Box
                     component="img"
                     src={imageUrl}
@@ -655,8 +655,8 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
                     sx={{
                       width: '100%',
                       height: '100%',
-                      objectFit: 'cover',
-                      opacity: 0.85,
+                      objectFit: 'contain',
+                      opacity: 1,
                       transition: 'transform 0.3s ease',
                       '&:hover': {
                         transform: 'scale(1.05)'
