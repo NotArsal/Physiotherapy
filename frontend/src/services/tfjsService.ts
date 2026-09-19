@@ -1,3 +1,4 @@
+import type * as tf from '@tensorflow/tfjs';
 import { Landmark } from '../utils/poseDetection';
 
 // The exercise catalog corresponding to the model's output neurons
@@ -144,7 +145,7 @@ class TFJSService {
     let scores: Float32Array | Int32Array | Uint8Array;
     
     try {
-      inputTensor = tf.tensor3d([processedSequence]);
+      inputTensor = this.tf!.tensor3d([processedSequence]);
       prediction = this.model!.predict(inputTensor) as tf.Tensor;
       scores = await prediction.data();
     } finally {

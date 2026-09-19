@@ -347,8 +347,20 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
     const greenBone = 'rgba(46, 125, 50, 0.75)'; // Transparent forest green
     const blueBone = 'rgba(21, 101, 192, 0.75)'; // Transparent royal blue
 
+    const MEDIAPIPE_POSE_CONNECTIONS = [
+      {start: 0, end: 1}, {start: 1, end: 2}, {start: 2, end: 3}, {start: 3, end: 7},
+      {start: 0, end: 4}, {start: 4, end: 5}, {start: 5, end: 6}, {start: 6, end: 8},
+      {start: 9, end: 10}, {start: 11, end: 12}, {start: 11, end: 13}, {start: 13, end: 15},
+      {start: 15, end: 17}, {start: 15, end: 19}, {start: 15, end: 21}, {start: 17, end: 19},
+      {start: 12, end: 14}, {start: 14, end: 16}, {start: 16, end: 18}, {start: 16, end: 20},
+      {start: 16, end: 22}, {start: 18, end: 20}, {start: 11, end: 23}, {start: 12, end: 24},
+      {start: 23, end: 24}, {start: 23, end: 25}, {start: 24, end: 26}, {start: 25, end: 27},
+      {start: 26, end: 28}, {start: 27, end: 29}, {start: 28, end: 30}, {start: 29, end: 31},
+      {start: 30, end: 32}, {start: 27, end: 31}, {start: 28, end: 32}
+    ];
+
     // Draw bones (connections)
-    PoseLandmarker.POSE_CONNECTIONS.forEach(({start: a, end: b}) => {
+    MEDIAPIPE_POSE_CONNECTIONS.forEach(({start: a, end: b}) => {
       const lmA = landmarks[a];
       const lmB = landmarks[b];
       if (!lmA || !lmB) return;
@@ -917,6 +929,7 @@ const initializePose = async () => {
       addToConsoleLog(`Camera error: ${String(cameraError)}`);
       return false;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addToConsoleLog, startFrameLoop]);
 
   const handleStart = async () => {

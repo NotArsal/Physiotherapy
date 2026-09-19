@@ -1,3 +1,4 @@
+/* eslint-disable */
 /* @ts-self-types="./wasm_biomechanics.d.ts" */
 
 /**
