@@ -81,7 +81,7 @@ export const useExerciseMetrics = (
       setCurrentPhaseDuration(0);
 
       // Rep counting
-      if (previousPhase === 'down' && newPhase === 'up') {
+      if ((previousPhase === 'down' || previousPhase === 'hold') && newPhase === 'up') {
         setRepCount(prev => {
           const newRepCount = prev + 1;
           

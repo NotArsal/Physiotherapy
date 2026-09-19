@@ -10,6 +10,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.exceptions import HTTPException
 from flask_talisman import Talisman
 from pymongo import MongoClient
@@ -32,6 +33,7 @@ logger.addHandler(logHandler)
 
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB limit
 
 limiter = Limiter(
@@ -252,11 +254,15 @@ def log_session():
         # Ignore client-provided user_id and use the verified token uid
         user_id = request.user.get("uid")
         
-        exercise = data["exercise"]
-        total_reps = data["total_reps"]
-        duration = data["duration"]
+        try:
+            exercise = str(data["exercise"])
+            total_reps = int(data["total_reps"])
+            duration = float(data["duration"])
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid data type for numerical fields", "success": False}), 400
+            
         timestamp = datetime.now().isoformat()
-        session_data = json.dumps(data.get("session_data", []))
+        session_data = data.get("session_data", [])
 
         try:
             result = db.sessions.insert_one({
@@ -384,8 +390,8 @@ def save_protocol():
         # Verify schema validity first, before opening connection
         for item in protocols_list:
             exercise = item.get("exercise")
-            if not exercise:
-                return jsonify({"error": "Missing exercise in protocol data", "success": False}), 400
+            if not exercise or not isinstance(exercise, str):
+                return jsonify({"error": "Missing or invalid exercise in protocol data", "success": False}), 400
             
         # Ignore client user_id and use token identity
         user_id = request.user.get("uid")

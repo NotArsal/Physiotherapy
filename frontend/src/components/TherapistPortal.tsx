@@ -531,12 +531,20 @@ export const TherapistPortal: React.FC = () => {
         }).length / sessions.length) * 100)
       : 100;
 
+    const escapeCSV = (value: any) => {
+      let str = String(value);
+      if (/^[=+\-@]/.test(str)) {
+        str = "'" + str; // Mitigate CSV Injection
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
     let csv = "CLINICAL PHYSIOTHERAPY PROGRESS REPORT\n";
-    csv += `Patient Name,${selectedPatient.name}\n`;
-    csv += `Patient ID/Email,${selectedPatient.id}\n`;
-    csv += `Patient Age,${selectedPatient.age}\n`;
-    csv += `Assigned Condition,${selectedPatient.condition}\n`;
-    csv += `Risk Profile,${selectedPatient.riskProfile}\n`;
+    csv += `Patient Name,${escapeCSV(selectedPatient.name)}\n`;
+    csv += `Patient ID/Email,${escapeCSV(selectedPatient.id)}\n`;
+    csv += `Patient Age,${escapeCSV(selectedPatient.age)}\n`;
+    csv += `Assigned Condition,${escapeCSV(selectedPatient.condition)}\n`;
+    csv += `Risk Profile,${escapeCSV(selectedPatient.riskProfile)}\n`;
     csv += `Report Generated,${new Date().toLocaleString()}\n\n`;
 
     csv += "PRESCRIBED PROTOCOL PARAMETERS\n";
