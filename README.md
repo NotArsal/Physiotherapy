@@ -73,16 +73,15 @@ By pushing heavy Deep Learning inference entirely to the **Edge (Client's Browse
 
 
 
-## 🚀 Version 1.1.0 Updates: Research & Production Readiness
+## 🚀 Version 1.1.1 Updates: Final Audits & Production Readiness
 
 We have successfully overhauled the repository for both **IEEE scientific publication** and **production-grade deployment**:
+* **Final Code Cleanup**: Executed rigorous linting and ponytail-debt audits across all modules (React/TypeScript, Flask/Python, and Rust WASM) resolving any dead code, unused dependencies, and unused variables.
 * **Clinically Verified Form Heuristics**: Mitigated a 69.0% False Negative Rate in Knee Extension down to **6.2%** (raising accuracy to 93.6%) by introducing an incomplete-extension tracking heuristic, validated against the 339-clip WLU Rehabilitation Posture Dataset.
-* **Production SEO & Web Optimization**: Implemented 
-obots.txt, sitemap.xml, OpenGraph headers, JSON-LD schemas, disabled source maps, and built a custom NotFound.tsx catch-all.
+* **Production SEO & Web Optimization**: Implemented robots.txt, sitemap.xml, OpenGraph headers, JSON-LD schemas, disabled source maps, and built a custom NotFound.tsx catch-all.
 * **Backend API Hardening**: Secured the Flask/MongoDB microservice with Flask-Limiter (API limits), Flask-Talisman (security headers), 10MB upload limits, and structured JSON error logging.
 
-For full details, see the [CHANGELOG.md](CHANGELOG.md) and the newly generated metrics in 
-esearch/.
+For full details, see the [CHANGELOG.md](CHANGELOG.md) and the generated metrics.
 
 ### Built With
 

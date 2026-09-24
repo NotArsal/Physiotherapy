@@ -9,8 +9,6 @@ import sys
 
 from app import app
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
 def main():
     print("=" * 60)
     print("PhysioTracker - AI Exercise Monitoring Backend")
