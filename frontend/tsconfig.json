@@ -23,7 +23,7 @@
     "paths": {
       "@/*": ["src/*"]
     },
-    "types": ["vite/client", "node", "jest"]
+    "types": ["vite/client", "node", "vitest/globals"]
   },
   "include": [
     "src"
