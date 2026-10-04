@@ -36,7 +36,7 @@ app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB limit
 
-redis_uri = os.environ.get("REDIS_URI", "redis://localhost:6379")
+redis_uri = os.environ.get("REDIS_URI", "memory://")
 limiter = Limiter(
     get_remote_address,
     app=app,
