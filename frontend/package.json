@@ -12,8 +12,6 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@tensorflow/tfjs": "^4.22.0",
     "@testing-library/dom": "^10.4.0",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
     "@types/jest": "^27.5.2",
     "@types/node": "^16.18.126",
@@ -39,11 +37,16 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "@vitejs/plugin-react": "^4.2.1",
     "cross-env": "^10.1.0",
-    "vite": "^5.1.4"
+    "jsdom": "^30.1.2",
+    "vite": "^5.1.4",
+    "vitest": "^2.1.9"
   }
 }

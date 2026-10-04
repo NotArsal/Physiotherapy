@@ -1,9 +1,9 @@
 import { calculateAngle, extractJointAngles } from '../poseDetection';
 
-jest.mock('../../wasm-biomechanics/pkg/wasm_biomechanics.js', () => ({
+vi.mock('../../wasm-biomechanics/pkg/wasm_biomechanics.js', () => ({
   __esModule: true,
-  default: jest.fn().mockResolvedValue(undefined),
-  extract_joint_angles_wasm: jest.fn().mockReturnValue(new Float64Array(9).fill(0)),
+  default: vi.fn().mockResolvedValue(undefined),
+  extract_joint_angles_wasm: vi.fn().mockReturnValue(new Float64Array(9).fill(0)),
 }));
 
 describe('poseDetection utility', () => {
