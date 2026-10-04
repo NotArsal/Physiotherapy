@@ -12,7 +12,8 @@ from flask_limiter.util import get_remote_address
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.exceptions import HTTPException
 from flask_talisman import Talisman
-from pymongo import MongoClient
+from pymongo import MongoClient, ReturnDocument
+import traceback
 
 
 import firebase_admin
@@ -35,11 +36,12 @@ app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB limit
 
+redis_uri = os.environ.get("REDIS_URI", "redis://localhost:6379")
 limiter = Limiter(
     get_remote_address,
     app=app,
     default_limits=["200 per day", "50 per hour"],
-    storage_uri="memory://",
+    storage_uri=redis_uri,
 )
 
 @app.errorhandler(Exception)
@@ -69,8 +71,6 @@ allowed_origins = [
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://physiotherapy-frontend.vercel.app",
-    "https://physiotherapy-frontend.vercel.app",
 ]
 frontend_env = os.getenv("FRONTEND_URL")
 if frontend_env:
@@ -187,7 +187,6 @@ def init_db():
 
 @app.errorhandler(500)
 def handle_internal_server_error(e):
-    import traceback
     error_details = traceback.format_exc()
     logger.error("Internal Server Error", extra={"traceback": error_details, "exception": str(e)})
     return jsonify(
@@ -276,7 +275,7 @@ def log_session():
 
         try:
             # Upsert for Idempotency using user_id, exercise, and timestamp
-            result = db.sessions.update_one(
+            result = db.sessions.find_one_and_update(
                 {
                     "user_id": user_id,
                     "exercise": exercise,
@@ -291,15 +290,11 @@ def log_session():
                         "verified": is_verified
                     }
                 },
-                upsert=True
+                upsert=True,
+                return_document=ReturnDocument.AFTER
             )
             
-            upserted_id = result.upserted_id
-            if upserted_id:
-                session_id = str(upserted_id)
-            else:
-                existing = db.sessions.find_one({"user_id": user_id, "exercise": exercise, "timestamp": timestamp})
-                session_id = str(existing["_id"]) if existing else "unknown"
+            session_id = str(result["_id"]) if result else "unknown"
 
             return jsonify(
                 {

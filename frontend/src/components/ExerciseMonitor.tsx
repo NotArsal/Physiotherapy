@@ -107,9 +107,7 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
   const isCalibratingRef = useRef(false);
   const fallDismissTimerRef = useRef<NodeJS.Timeout | null>(null);
   const calibrationTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const minKneeAngleRef = useRef(180);
-  const minHipAngleRef = useRef(180);
-  const maxSpineAngleRef = useRef(0);
+  const [calibrationMetrics, setCalibrationMetrics] = useState({ minKneeAngle: 180, minHipAngle: 180, maxSpineAngle: 0 });
   const concentricDurationsRef = useRef<number[]>([]);
   const eccentricDurationsRef = useRef<number[]>([]);
   const lastInjuryWarningsRef = useRef<string>('');
@@ -635,9 +633,11 @@ const ExerciseMonitor: React.FC<ExerciseMonitorProps> = ({ selectedExercise, onB
           const hipAngle = Math.min(jointAngles[4], jointAngles[5]);
           const spineAngle = jointAngles[8] || 0;
           
-          if (kneeAngle > 0 && kneeAngle < minKneeAngleRef.current) minKneeAngleRef.current = kneeAngle;
-          if (hipAngle > 0 && hipAngle < minHipAngleRef.current) minHipAngleRef.current = hipAngle;
-          if (spineAngle > maxSpineAngleRef.current) maxSpineAngleRef.current = spineAngle;
+          setCalibrationMetrics(prev => ({
+            minKneeAngle: kneeAngle > 0 ? Math.min(prev.minKneeAngle, kneeAngle) : prev.minKneeAngle,
+            minHipAngle: hipAngle > 0 ? Math.min(prev.minHipAngle, hipAngle) : prev.minHipAngle,
+            maxSpineAngle: Math.max(prev.maxSpineAngle, spineAngle)
+          }));
           return; // Skip normal exercise logic during calibration
         }
 
@@ -884,6 +884,8 @@ const initializePose = async () => {
         poseRef.current.close();
         poseRef.current = null;
       }
+      if (calibrationTimerRef.current) clearInterval(calibrationTimerRef.current);
+      if (fallDismissTimerRef.current) clearInterval(fallDismissTimerRef.current);
     };
   }, [addToConsoleLog, stopCameraStream, stopFrameLoop]);
 
@@ -1072,18 +1074,7 @@ const initializePose = async () => {
                 }
               }
               
-              // 2. Fall back to legacy assignedExercise attributes
-              if (!localOverride && patient.assignedExercise && 
-                  patient.assignedExercise.toLowerCase().trim().replace(/[-\s]+/g, '_') === normalizedSelected) {
-                localOverride = {
-                  id: patient.id,
-                  exercise: patient.assignedExercise,
-                  targetReps: patient.targetReps,
-                  safeSpineAngle: patient.safeSpineAngle,
-                  safeKneeAngle: patient.safeKneeAngle,
-                  safetySensitivity: patient.safetySensitivity
-                };
-              }
+              // Removed legacy fallback
             }
           } catch (e) {
             console.error("Failed to parse local patient list inside ExerciseMonitor", e);
@@ -1161,7 +1152,6 @@ const initializePose = async () => {
       setTempoStatus('idle');
       setLastPhaseDuration(0);
       setCurrentPhaseDuration(0);
-      (window as any).__latestInjuryReport__ = null;
 
       const started = await startCamera();
       if (!started) {
@@ -1174,9 +1164,7 @@ const initializePose = async () => {
       isCalibratingRef.current = true;
       let calTime = 10;
       setCalibrationTimeLeft(calTime);
-      minKneeAngleRef.current = 180;
-      minHipAngleRef.current = 180;
-      maxSpineAngleRef.current = 0;
+      setCalibrationMetrics({ minKneeAngle: 180, minHipAngle: 180, maxSpineAngle: 0 });
       
       if (voiceEnabledRef.current) {
         speak(`Calibration started. Please perform one full repetition slowly in the next 10 seconds.`);
@@ -1191,21 +1179,24 @@ const initializePose = async () => {
           setIsCalibrating(false);
           isCalibratingRef.current = false;
           
-          if (activeProtocolRef.current) {
-            const newProtocol = { ...activeProtocolRef.current };
-            if (minKneeAngleRef.current < 180) {
-              newProtocol.safe_knee_angle = Math.max(minKneeAngleRef.current - 15, 60);
+          setCalibrationMetrics(metrics => {
+            if (activeProtocolRef.current) {
+              const newProtocol = { ...activeProtocolRef.current };
+              if (metrics.minKneeAngle < 180) {
+                newProtocol.safe_knee_angle = Math.max(metrics.minKneeAngle - 15, 60);
+              }
+              if (metrics.minHipAngle < 180) {
+                // Can adjust other thresholds similarly if needed
+              }
+              if (metrics.maxSpineAngle > 0) {
+                // Create dynamic personalized baseline
+                newProtocol.safe_spine_angle = Math.max(metrics.maxSpineAngle + 10, 25);
+              }
+              setActiveProtocol(newProtocol);
+              activeProtocolRef.current = newProtocol;
             }
-            if (minHipAngleRef.current < 180) {
-              // Can adjust other thresholds similarly if needed
-            }
-            if (maxSpineAngleRef.current > 0) {
-              // Create dynamic personalized baseline
-              newProtocol.safe_spine_angle = Math.max(maxSpineAngleRef.current + 10, 25);
-            }
-            setActiveProtocol(newProtocol);
-            activeProtocolRef.current = newProtocol;
-          }
+            return metrics;
+          });
           
           addToConsoleLog(`Dynamic Personalized Biomechanical Calibration complete. New baselines -> Knee: ${activeProtocolRef.current?.safe_knee_angle?.toFixed(1)}°, Spine: ${activeProtocolRef.current?.safe_spine_angle?.toFixed(1)}°`);
           if (voiceEnabledRef.current) {

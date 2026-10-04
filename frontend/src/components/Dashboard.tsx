@@ -107,7 +107,7 @@ const Dashboard: React.FC = () => {
       const unique = new Map<string, any>();
       for (const s of allSessions) {
         if (s && s.timestamp) {
-          const timeKey = new Date(s.timestamp).getTime().toString();
+          const timeKey = new Date(s.timestamp).getTime().toString() + `_${s.exercise}`;
           if (timeKey !== "NaN") {
             unique.set(timeKey, s);
           }
@@ -139,7 +139,7 @@ const Dashboard: React.FC = () => {
         // Deduplicate sync candidates
         const uniqueToSyncMap = new Map<string, any>();
         for (const s of sessionsToSync) {
-          const timeKey = new Date(s.timestamp).getTime().toString();
+          const timeKey = new Date(s.timestamp).getTime().toString() + `_${s.exercise}`;
           if (timeKey !== "NaN") {
             uniqueToSyncMap.set(timeKey, s);
           }
@@ -186,7 +186,7 @@ const Dashboard: React.FC = () => {
                 const updatedUnique = new Map<string, any>();
                 for (const s of updatedSessions) {
                   if (s && s.timestamp) {
-                    const timeKey = new Date(s.timestamp).getTime().toString();
+                    const timeKey = new Date(s.timestamp).getTime().toString() + `_${s.exercise}`;
                     if (timeKey !== "NaN") {
                       updatedUnique.set(timeKey, s);
                     }

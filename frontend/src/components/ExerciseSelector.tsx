@@ -51,15 +51,6 @@ const ExerciseSelector: React.FC<ExerciseSelectorProps> = ({ onExerciseSelect })
           if (patient) {
             if (patient.prescriptions && Array.isArray(patient.prescriptions) && patient.prescriptions.length > 0) {
               setPrescribedExercises(patient.prescriptions);
-            } else if (patient.assignedExercise) {
-              // Legacy fallback
-              setPrescribedExercises([{
-                exercise: patient.assignedExercise,
-                targetReps: patient.targetReps || 10,
-                safeSpineAngle: patient.safeSpineAngle,
-                safeKneeAngle: patient.safeKneeAngle,
-                safetySensitivity: patient.safetySensitivity || '50'
-              }]);
             } else {
               setPrescribedExercises([]);
             }

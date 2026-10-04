@@ -23,14 +23,14 @@ The app runs on `http://localhost:3000`.
 Create a `.env` file in the root of the `frontend` directory:
 
 ```env
-REACT_APP_API_BASE_URL=https://physiotherapy-backend-gw5s.onrender.com
-REACT_APP_FIREBASE_API_KEY=your_key
-REACT_APP_FIREBASE_AUTH_DOMAIN=your_domain
-REACT_APP_FIREBASE_PROJECT_ID=your_id
-REACT_APP_FIREBASE_STORAGE_BUCKET=your_bucket
-REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-REACT_APP_FIREBASE_APP_ID=your_app_id
-REACT_APP_FIREBASE_MEASUREMENT_ID=your_measurement_id
+VITE_API_BASE_URL=https://physiotherapy-backend-gw5s.onrender.com
+VITE_FIREBASE_API_KEY=your_key
+VITE_FIREBASE_AUTH_DOMAIN=your_domain
+VITE_FIREBASE_PROJECT_ID=your_id
+VITE_FIREBASE_STORAGE_BUCKET=your_bucket
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
 ```
 
 ## Main Components
