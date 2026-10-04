@@ -1,13 +1,11 @@
-FROM node:18-alpine AS build
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY package*.json .npmrc ./
 RUN npm ci
 
 COPY . .
-# Setting CI=false to ignore CI treating warnings as errors in React Scripts
-ENV CI=false
 RUN npm run build
 
 FROM nginx:alpine
